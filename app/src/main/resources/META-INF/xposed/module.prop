@@ -1,0 +1,12 @@
+# api102 模块标识（LSPosed 读取）
+# minApiVersion=101 最低 API 版本
+# targetApiVersion=102 目标 API 版本
+# staticScope=true 静态作用域（作用域由 scope.list 声明, 无需用户勾选）
+# autoHotReload=true 支持热重载（配合 onHotReloading 返回 true）
+# exceptionMode=protective hook 内异常由框架吞掉并放行原方法。框架默认值就是 protective，这里显式写出：
+#   入口落在 system_server（NotificationManagerService / ActiveServices 一类调用链）时，异常一旦穿透就是打崩系统服务
+minApiVersion=101
+targetApiVersion=102
+staticScope=true
+autoHotReload=true
+exceptionMode=protective

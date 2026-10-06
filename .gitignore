@@ -1,0 +1,15 @@
+# ==== token 密钥（dev-project/tokens 符号链接→/workspace/tokens 统一凭证中心, 绝不进仓库）====
+dev-project/tokens
+
+# ==== 构建产物 / 中间文件 ====
+build/
+.gradle/
+dev-project/releases/
+*.idsig
+local.properties
+
+# ==== 开发记录 / 日志箱 ====
+dev-project/
+
+# ==== 项目状态标记 ====
+.deving
