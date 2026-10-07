@@ -460,7 +460,7 @@ jobs:
           # 富脚注由 workflow 拼（页面语义因项目而异）；脚本自带的部分见其 FOOTER_EXTRA 说明。
           FOOTER_EXTRA="$(
             echo "- 各包共用同一把固定钥（${SIGN_SCHEMES:-未读取到}），可互相覆盖安装。"
-            echo "- debug 包调试日志最全（由 \`BuildConfig.DEBUG\` 在编译期决定），排障优先用它；release 包 R8 已裁剪、与正式版同构建类型，可用来验证 minify/keep 规则。"
+            echo "- debug 包调试日志最全（由 \`BuildConfig.DEBUG\` 在编译期决定），排障优先用它；release 包与正式版同构建类型，调试日志已在编译期裁掉。"
             echo "- 作用域 \`${SCOPE:-未读取到}\` 已在 \`META-INF/xposed/scope.list\` 静态声明，LSPosed 里无需手动勾选。"
           )" \
           "$REFRESH_SCRIPT"
