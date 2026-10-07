@@ -18,7 +18,19 @@ data class Rule(
     val keywords: List<String> = emptyList(),
     val pattern: String? = null,
     val packages: Set<String> = emptySet(),
-)
+) {
+    companion object {
+        /**
+         * 「自定义关键词」这条规则的固定 id：App 侧的规则编辑界面把它当作**关键词输入框的唯一落点**，
+         * 改关键词时替换这条、不动 `rules` 里的其它条目。
+         *
+         * 换 id 的后果是旧的这条永远留在配置里、而界面改的是新那条（关键词看起来「改了不生效」）。
+         */
+        const val CUSTOM_KEYWORDS_ID = "custom-keywords"
+
+        const val CUSTOM_KEYWORDS_NAME = "自定义关键词"
+    }
+}
 
 data class ProtectSwitches(
     val call: Boolean = true,

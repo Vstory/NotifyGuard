@@ -1,55 +1,51 @@
 package io.github.vstory.notifyguard.ui.screen
 
-import android.content.Intent
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.judge.Config
-import io.github.vstory.notifyguard.ui.ConfigActivity
+import io.github.vstory.notifyguard.sync.ConfigCodec
 
 /**
- * 设置屏（M4）：判定开关、AI 开关与阈值、六类保护开关。
+ * 设置屏（M4）：判定开关、AI 开关与阈值、六类保护开关、只读的生效配置。
  *
  * 提交口径沿用 M1f —— 开关拨动即下发、阈值松手下发（见 [SettingsViewModel]）。
  *
- * 关键词规则与白名单仍只在旧配置页可改（规则屏未落地），故本屏底部保留过渡入口；
- * 「安全模式（熔断状态）」需要模块端回传状态，随状态通道另立一片。
+ * 关键词与白名单归规则屏；屏内说明文字**刻意不重复**被产物门禁断言的字面量（见 build-ci.yml ③h、③i）：
+ * 说明文字顺带覆盖了断言词，那条断言就变成「被两处同时撑着」，任一处单独失效都发现不了。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
     val state = viewModel.state
-    val ctx = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
+    // 展开状态跨旋转存活：配置 JSON 是排查时才看的，转一下屏要重新展开很烦
+    var showConfig by rememberSaveable { mutableStateOf(false) }
 
     // 订阅只在屏活着时有效。切 tab 回来会重新订阅并立刻拿到当前状态，不需要额外的进屏刷新
     DisposableEffect(Unit) {
@@ -81,6 +77,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             StatusCard(state.serviceText, connected, cfg != null)
 
             GroupCard("拦截") {
+                Note("开关拨动即下发、阈值松手下发，模块端立刻生效 —— 这一屏没有「保存」按钮。")
                 SwitchRow(
                     label = "启用拦截判定",
                     note = "关闭后判定链直接放行（记录照写）",
@@ -119,20 +116,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     steps = SettingsViewModel.THRESHOLD_STEPS - 1,
                     enabled = connected && cfg?.spamEnabled == true,
                 )
-                Text(
-                    text = "分数 ≥ 阈值即拦，松手才下发（拖动途中的中间值会被当场拿去判定）。" +
-                        "关掉上面的开关时本滑杆置灰：这个值不参与判定。调低更激进，0 等于全拦。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Note("分数 ≥ 阈值即拦。关掉上面的开关时本滑杆置灰：这个值不参与判定。调低更激进，0 等于全拦。")
             }
 
             GroupCard("保护类型") {
-                Text(
-                    text = "命中即放行，不进入规则与 AI：被误拦的代价远大于漏掉一条广告。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Note("命中即放行，不进入规则与 AI：被误拦的代价远大于漏掉一条广告。")
                 SettingsViewModel.ProtectItem.entries.forEach { item ->
                     SwitchRow(
                         label = item.label,
@@ -144,99 +132,24 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                 }
             }
 
-            GroupCard("关键词 / 白名单") {
-                Text(
-                    text = "这两项还没有新入口（规则屏未落地），暂时仍在旧配置页改：" +
-                        "关键词命中即拦；白名单中的应用只跳过 AI 段，用户规则照常生效。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            GroupCard("已生效配置") {
+                Note("模块端此刻实际读到的那份配置（只读）。界面上的开关就是按它渲染的，排查「改了没生效」时先看这里。")
                 OutlinedButton(
-                    onClick = { ctx.startActivity(Intent(ctx, ConfigActivity::class.java)) },
+                    onClick = { showConfig = !showConfig },
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
-                    Text("打开旧配置页（临时）")
+                    Text(if (showConfig) "收起配置 JSON" else "展开配置 JSON")
+                }
+                if (showConfig) {
+                    Text(
+                        text = cfg?.let { ConfigCodec.encode(it) } ?: "（未连接，读不到生效配置）",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(top = 4.dp),
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun StatusCard(serviceText: String, connected: Boolean, loaded: Boolean) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = serviceText,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (connected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-            )
-            if (connected && !loaded) {
-                Text(
-                    text = "连上了框架服务，但读不出生效配置（配置内容损坏？）—— 下面显示的是默认值，改动仍可下发。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            Text(
-                text = "开关拨动即下发、阈值松手下发，模块端立刻生效。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@Composable
-private fun GroupCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            content()
-        }
-    }
-}
-
-/**
- * 整行可点、`Switch` 自身不吃事件（`onCheckedChange = null`）：读屏会把这一行当一个带名字的开关念，
- * 而不是只念一个无标签的「开关」。
- */
-@Composable
-private fun SwitchRow(
-    label: String,
-    checked: Boolean,
-    enabled: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    note: String? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            note?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
     }
 }
