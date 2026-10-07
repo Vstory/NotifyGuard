@@ -13,6 +13,10 @@ val localProps = Properties().apply {
 val signStoreFile = localProps.getProperty("storeFile")
 val hasSigning = !signStoreFile.isNullOrBlank()
 
+// CI 渠道（build-ci.yml）传 `-PciVersionSuffix=ci-<变体>.<短号>`：同一 versionCode 的多次构建在系统
+// 应用信息页完全同形、认不出是哪次提交。`+` 之后属 semver 的构建元数据段，不参与版本比较。
+val ciVersionSuffix = providers.gradleProperty("ciVersionSuffix").orNull?.trim()?.takeIf { it.isNotEmpty() }
+
 android {
     namespace = "io.github.vstory.notifyguard"
     compileSdk = 37
@@ -26,6 +30,9 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
+        // 刻意「后赋值覆盖」而非改写上面那行字面量：CI 工作流用 sed 取本文件**第一处** versionName，
+        // 字面量必须保持可被解析
+        ciVersionSuffix?.let { versionName = "${android.defaultConfig.versionName}+$it" }
     }
     // 未配签名时不建该配置，纯构建照常可跑
     signingConfigs {
