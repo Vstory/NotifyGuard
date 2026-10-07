@@ -4,9 +4,11 @@ import android.app.Notification
 import io.github.libxposed.api.XposedInterface
 import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.judge.Judge
+import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.judge.NotifySnapshot
 import io.github.vstory.notifyguard.judge.RecordSink
 import io.github.vstory.notifyguard.sync.ConfigReader
+import io.github.vstory.notifyguard.sync.LogSink
 import java.lang.reflect.Method
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -66,6 +68,7 @@ object EntryHook {
 
     private val owner = AtomicReference(Slot.NONE)
     private val handles = CopyOnWriteArrayList<XposedInterface.HookHandle>()
+    @Volatile private var judgingStopped = false
 
     private val extHits = AtomicLong()
     private val funnelJudgeHits = AtomicLong()
@@ -74,14 +77,19 @@ object EntryHook {
 
     fun install(iface: XposedInterface, cl: ClassLoader): InstallReport {
         reset()
-        CrashGuard.onStorm = {
-            owner.set(Slot.NONE)
-            ModuleLogger.error("判定已停用：hook 保留直通，不再记录")
+        CrashGuard.onStorm = { stopJudging("异常风暴") }
+        CrashGuard.onTrip = { stopJudging("崩溃环路熔断") }
+        // 恢复走 install 自身：它开头先 reset（unhook + 停 watcher）再装，天然幂等，不会叠加
+        CrashGuard.onCleared = {
+            ModuleLogger.info("safe_mode 已清除 ⇒ 重装 hooks")
+            runCatching { install(iface, cl) }
         }
 
         val report = InstallReport()
+        // 先于 safe_mode 检查：标志存在时也要能看见用户把它删掉，否则恢复只剩重启一条路
+        CrashGuard.attach(iface, cl, report::markOk, report::markSkip)
         if (CrashGuard.isSafeMode()) {
-            report.markSkip("safe_mode 标志存在 ⇒ 不装 hook")
+            report.markSkip("safe_mode 标志存在 ⇒ 本代不装拦截")
             return report
         }
 
@@ -101,10 +109,21 @@ object EntryHook {
         return report
     }
 
+    /**
+     * 熔断后只能靠这个标志拦住判定：`owner` 回到 NONE 会让 [onFunnel] 误以为「扩展槽还没装」而重新装它，
+     * 等于熔断被自己解除。
+     */
+    private fun stopJudging(reason: String) {
+        judgingStopped = true
+        owner.set(Slot.NONE)
+        ModuleLogger.error("判定已停用（$reason）：hook 保留直通，不再记录")
+    }
+
     fun reset() {
         handles.forEach { runCatching { it.unhook() } }
         handles.clear()
         owner.set(Slot.NONE)
+        judgingStopped = false
         extHits.set(0)
         funnelJudgeHits.set(0)
         funnelPassHits.set(0)
@@ -114,7 +133,8 @@ object EntryHook {
 
     fun statsLine(): String =
         "owner=${owner.get()} 扩展槽命中=${extHits.get()} 漏斗判定=${funnelJudgeHits.get()} " +
-            "漏斗直通=${funnelPassHits.get()} ROM已拦=${romBlocked.get()} 异常=${CrashGuard.errorCount()}"
+            "漏斗直通=${funnelPassHits.get()} ROM已拦=${romBlocked.get()} 异常=${CrashGuard.errorCount()} " +
+            LogSink.statsLine()
 
     // ===== 装配 =====
 
@@ -215,6 +235,9 @@ object EntryHook {
     // ===== hooker =====
 
     private fun onFunnel(iface: XposedInterface, nms: Class<*>, chain: XposedInterface.Chain): Any? {
+        // 漏斗必然先于扩展槽被触发（ROM 是在它内部调扩展方法的），这里是取 system_server Context 的时机
+        runCatching { ServiceContext.bindFrom(chain.thisObject) }
+        if (judgingStopped) return chain.proceed()
         if (owner.get() != Slot.EXT_SLOT) {
             // 走到这里说明 NMS 类必已初始化：用实例补装扩展槽（clinit 钩子已无机会触发的情况）
             runCatching { tryInstallExtSlot(iface, nms, chain.thisObject, "funnel-first-call") }
@@ -244,7 +267,7 @@ object EntryHook {
             romBlocked.incrementAndGet()
             return true
         }
-        if (owner.get() != Slot.EXT_SLOT) return romResult
+        if (owner.get() != Slot.EXT_SLOT || judgingStopped) return romResult
 
         val blocked = runCatching { decideAndRecord(chain.args, Slot.EXT_SLOT) }
             .getOrElse { t ->
@@ -259,6 +282,7 @@ object EntryHook {
         val snapshot = NotifySnapshot.from(args)
         val decision = Judge.decide(snapshot, ConfigReader.config())
         RecordSink.record(snapshot, decision)
+        LogSink.submit(LogRecord.from(snapshot, decision, slot.name, System.currentTimeMillis()))
         if (decision.block) {
             ModuleLogger.info("BLOCK[$slot] pkg=${snapshot?.pkg} reason=${decision.reason}")
         } else if (decision.wouldBlock) {

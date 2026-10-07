@@ -28,8 +28,8 @@ android {
         applicationId = "io.github.vstory.notifyguard"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         // 刻意「后赋值覆盖」而非改写上面那行字面量：CI 工作流用 sed 取本文件**第一处** versionName，
         // 字面量必须保持可被解析
         ciVersionSuffix?.let { versionName = "${android.defaultConfig.versionName}+$it" }

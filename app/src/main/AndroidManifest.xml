@@ -21,5 +21,13 @@
             android:name="io.github.libxposed.service.XposedProvider"
             android:authorities="${applicationId}.XposedService"
             android:exported="true" />
+
+        <!-- 记录回流（system_server → App）。exported 是必需的：跨 uid 访问非 exported 的 provider 会被系统拒；
+             访问控制只能写在 provider 代码里（只收 SYSTEM_UID 与自身） -->
+        <provider
+            android:name="io.github.vstory.notifyguard.provider.LogProvider"
+            android:authorities="${applicationId}.logs"
+            android:exported="true"
+            android:grantUriPermissions="false" />
     </application>
 </manifest>

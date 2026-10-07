@@ -10,12 +10,16 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.Rule
 import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigCodec
 import io.github.vstory.notifyguard.sync.ConfigWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * App 侧配置入口（M1a 的最小可用版）。
@@ -31,6 +35,8 @@ class ConfigActivity : Activity() {
     private lateinit var ruleSwitch: Switch
     private lateinit var keywordsInput: EditText
     private lateinit var jsonView: TextView
+    private lateinit var recordInfo: TextView
+    private lateinit var recordView: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +47,7 @@ class ConfigActivity : Activity() {
         super.onResume()
         // 框架服务从 Binder 线程回调，触碰 UI 必须回主线程
         ConfigWriter.observe { svc -> runOnUiThread { onService(svc) } }
+        renderRecords()
     }
 
     override fun onPause() {
@@ -98,6 +105,26 @@ class ConfigActivity : Activity() {
         if (ok) jsonView.text = ConfigCodec.encode(next)
     }
 
+    private fun renderRecords() {
+        val store = LogStore.get(this)
+        val list = store.recent(RECENT_LIMIT)
+        recordInfo.text = "共 ${store.size()} 条（上限 ${LogStore.MAX_RECORDS}），下列最近 ${list.size} 条"
+        recordView.text = if (list.isEmpty()) {
+            "（暂无记录。模块端有判定后 30 秒内回传；一直为空就去看框架日志有无「记录回流失败」）"
+        } else {
+            list.joinToString("\n\n") { r ->
+                val mark = when {
+                    r.block -> "拦截"
+                    r.would -> "本应拦"
+                    else -> "放行"
+                }
+                "${TIME.format(Date(r.ts))} [$mark] ${r.pkg} · ${r.slot.orEmpty()}\n" +
+                    listOfNotNull(r.title, r.text).joinToString(" / ").ifEmpty { "(无文本)" } + "\n" +
+                    r.reason + (r.ruleId?.let { " · $it" } ?: "")
+            }
+        }
+    }
+
     private fun buildUi(): ScrollView {
         val pad = (16 * resources.displayMetrics.density).toInt()
         val root = LinearLayout(this).apply {
@@ -135,6 +162,27 @@ class ConfigActivity : Activity() {
         jsonView = TextView(this).apply { textSize = 10f }
         root.addView(jsonView)
 
+        root.addView(label("记录（模块端回流）"))
+        recordInfo = TextView(this)
+        root.addView(recordInfo)
+        root.addView(
+            Button(this).apply {
+                text = "刷新记录"
+                setOnClickListener { renderRecords() }
+            },
+        )
+        root.addView(
+            Button(this).apply {
+                text = "清空记录"
+                setOnClickListener {
+                    LogStore.get(this@ConfigActivity).clear()
+                    renderRecords()
+                }
+            },
+        )
+        recordView = TextView(this).apply { textSize = 12f }
+        root.addView(recordView)
+
         return ScrollView(this).apply {
             addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
@@ -142,5 +190,7 @@ class ConfigActivity : Activity() {
 
     private companion object {
         const val CUSTOM_RULE_ID = "custom-keywords"
+        const val RECENT_LIMIT = 20
+        val TIME = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
     }
 }

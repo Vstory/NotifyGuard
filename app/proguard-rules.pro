@@ -14,3 +14,7 @@
 # 再显式保名：CI 产物门禁拿 java_init.list 里的类名去 dex 里找，保名后这条断言不依赖
 # `-adaptresourcefilecontents` 是否在 AGP 的资源链路上生效
 -keep class io.github.vstory.notifyguard.MainHook { *; }
+
+# LogProvider 由系统按 manifest 里的类名实例化（AGP 虽会自动保 manifest 组件，
+# 但那是隐式行为；显式写死才能让「provider 在 dex」这条门禁成为确定性断言）
+-keep class io.github.vstory.notifyguard.provider.LogProvider { *; }
