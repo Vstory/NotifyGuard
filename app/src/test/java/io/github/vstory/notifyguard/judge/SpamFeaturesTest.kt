@@ -4,7 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 特征化：归一化各条规则、gram 计数口径、码元切分。与 `ml/features.py` 的一致性由 parity 测试守。 */
+/** 特征化：归一化各条规则、gram 计数口径、码元切分。与 `training/features.py` 的一致性由 parity 测试守。 */
 class SpamFeaturesTest {
 
     private val buckets = 1 shl 18

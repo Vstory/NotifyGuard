@@ -11,9 +11,9 @@ local.properties
 # ==== 开发记录 / 日志箱 ====
 dev-project/
 
-# ==== 训练语料与虚拟环境（只在本机，见 ml/README.md）====
-ml/data/
-ml/.venv/
+# ==== 训练环境与自采语料（只在本机，见 training/README.md）====
+training/.venv/
+training/data/
 __pycache__/
 
 # ==== 项目状态标记 ====
