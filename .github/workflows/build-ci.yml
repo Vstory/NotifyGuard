@@ -356,6 +356,14 @@ jobs:
             done
             echo "  ✅ 记录通道 action 契约在 dex"
 
+            # ③d 内置 AI 模型必须真在包内且体量正确。resources/model/model.bin 走 java 资源
+            #     （不是 assets —— 判定进程是 system_server，拿不到模块的 AssetManager）。
+            #     它丢了的后果是「模块照常加载、判定链照常跑，只是 AI 段永远放行」，静默到没人发现。
+            MODEL_BYTES="$(unzip -l "$APK" | awk '$4 == "model/model.bin" {print $1}' | head -1)"
+            [ -n "$MODEL_BYTES" ] || { echo "::error::$NAME 里没有 model/model.bin —— 训练产物没进 app/src/main/resources？"; exit 1; }
+            [ "$MODEL_BYTES" -gt 204800 ] || { echo "::error::$NAME 的 model/model.bin 只有 ${MODEL_BYTES} 字节（<200 KB）—— 文件被截断"; exit 1; }
+            echo "  ✅ 内置模型在包内（${MODEL_BYTES} 字节）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在

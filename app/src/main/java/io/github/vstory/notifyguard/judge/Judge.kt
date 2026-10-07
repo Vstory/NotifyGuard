@@ -1,12 +1,17 @@
 package io.github.vstory.notifyguard.judge
 
+import io.github.vstory.notifyguard.ai.ModelHolder
+import io.github.vstory.notifyguard.core.ModuleLogger
+import java.util.Locale
+
 /**
  * 判定链（设计方案.md §6）。
  *
  * 任一步「放行」即短路；配置取一次快照传入，避免热更新落在两步之间。
  * [Decision.wouldBlock] 与 [Decision.block] 分开：观察模式下判定照跑、原因照出，只有真正拦截被压掉。
  *
- * 模型相关两步（打分与阈值）属 M2，M1 在 [no_model] 处短路放行。
+ * AI 段（第 8–9 步）取的是 [ModelHolder] 的快照，判定里不做任何 IO；打分异常一律放行——
+ * 打分跑在 system_server 的通知入队路径上，异常穿透的代价是通知直接发不出来。
  */
 object Judge {
 
@@ -19,6 +24,7 @@ object Judge {
         val reason: String,
         val wouldBlock: Boolean = block,
         val ruleId: String? = null,
+        val score: Double? = null,
     )
 
     fun decide(s: NotifySnapshot?, cfg: Config): Decision {
@@ -38,10 +44,27 @@ object Judge {
         if (lowered.trim().length < MIN_AI_LEN) return pass("text_too_short")
         if (ProtectGuard.hasHardWord(lowered)) return pass("hard_word")
 
-        // 白名单只跳过 AI 段，不影响规则；M2 在下一行接 SpamModel 打分与阈值比较
+        // 白名单只跳过 AI 段，不影响规则
         if (s.pkg in cfg.whitelist) return pass("whitelisted")
-        return pass("no_model")
+        if (!cfg.spamEnabled) return pass("ai_off")
+        val scorer = ModelHolder.current ?: return pass("no_model")
+        val score = runCatching { scorer.score(raw) }.getOrElse { t ->
+            ModuleLogger.error("AI 打分失败（放行）：${t.javaClass.simpleName}: ${t.message}")
+            return pass("ai_error")
+        }
+        // 分数写进 reason：观察模式下没有第二个地方能看到分数分布，标定阈值全靠它
+        if (score >= cfg.threshold) {
+            return Decision(
+                block = !cfg.observe,
+                reason = "ai:${fmt(score)}",
+                wouldBlock = true,
+                score = score,
+            )
+        }
+        return Decision(false, "below_threshold:${fmt(score)}", score = score)
     }
+
+    private fun fmt(score: Double): String = String.format(Locale.ROOT, "%.2f", score)
 
     private fun pass(reason: String) = Decision(false, reason)
 

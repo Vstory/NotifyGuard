@@ -43,6 +43,8 @@ class Config(
     val whitelist: Set<String> = emptySet(),
     val rules: List<Rule> = emptyList(),
     val threshold: Double = DEFAULT_THRESHOLD,
+    /** AI 段总开关。默认关：先观察模式跑分数分布，再谈默认开（M2 验收）。 */
+    val spamEnabled: Boolean = false,
 ) {
 
     val compiledRules: List<CompiledRule> by lazy { RuleMatcher.compile(rules) }

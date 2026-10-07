@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.core
 import android.app.Notification
 import io.github.libxposed.api.XposedInterface
 import io.github.vstory.notifyguard.BuildConfig
+import io.github.vstory.notifyguard.ai.ModelHolder
 import io.github.vstory.notifyguard.judge.Judge
 import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.judge.NotifySnapshot
@@ -96,6 +97,10 @@ object EntryHook {
         // 先于 hook 装配：判定链要读配置，且框架只向「已取过该组」的进程推送变更
         ConfigReader.start(iface)
         report.markOk("配置通道 ${ConfigReader.GROUP}（observe=${ConfigReader.config().observe}）")
+
+        // 同步加载一次（262 KB 解析，毫秒级）：判定链里绝不做 IO，装不上就整个 AI 段放行
+        ModelHolder.loadBundled()
+        report.markOk("AI 模型 ${if (ModelHolder.current == null) "不可用 ⇒ 放行" else "已就绪"}")
 
         val nms = runCatching { cl.loadClass(NMS_CLASS) }.getOrElse {
             report.markSkip("$NMS_CLASS 加载失败: ${it.message}")

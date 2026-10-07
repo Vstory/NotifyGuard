@@ -30,6 +30,7 @@ object ConfigCodec {
             whitelist = stringSet(o.optJSONArray("whitelist")),
             rules = rules(o.optJSONArray("rules")),
             threshold = o.optDouble("threshold", Config.DEFAULT_THRESHOLD),
+            spamEnabled = o.optBoolean("spamEnabled", false),
         )
     }
 
@@ -52,6 +53,7 @@ object ConfigCodec {
         o.put("whitelist", JSONArray(c.whitelist.toList()))
         o.put("rules", JSONArray().apply { c.rules.forEach { put(ruleToJson(it)) } })
         o.put("threshold", c.threshold)
+        o.put("spamEnabled", c.spamEnabled)
         return o.toString(2)
     }
 

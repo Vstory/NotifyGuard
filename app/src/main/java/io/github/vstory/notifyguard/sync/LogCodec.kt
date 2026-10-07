@@ -22,6 +22,7 @@ object LogCodec {
         r.slot?.let { put("slot", it) }
         r.ruleId?.let { put("ruleId", it) }
         r.score?.let { put("score", it) }
+        r.aiText?.let { put("aiText", it) }
     }
 
     fun fromJson(o: JSONObject): LogRecord? {
@@ -39,6 +40,7 @@ object LogCodec {
             slot = o.optString("slot").takeIf { it.isNotEmpty() },
             ruleId = o.optString("ruleId").takeIf { it.isNotEmpty() },
             score = if (o.isNull("score")) null else o.optDouble("score"),
+            aiText = o.optString("aiText").takeIf { it.isNotEmpty() },
         )
     }
 

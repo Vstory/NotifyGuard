@@ -33,6 +33,7 @@ class ConfigActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var observeSwitch: Switch
     private lateinit var enabledSwitch: Switch
+    private lateinit var spamSwitch: Switch
     private lateinit var ruleSwitch: Switch
     private lateinit var keywordsInput: EditText
     private lateinit var jsonView: TextView
@@ -69,6 +70,7 @@ class ConfigActivity : Activity() {
         val cfg = ConfigWriter.load() ?: return
         enabledSwitch.isChecked = cfg.enabled
         observeSwitch.isChecked = cfg.observe
+        spamSwitch.isChecked = cfg.spamEnabled
         val custom = cfg.rules.firstOrNull { it.id == CUSTOM_RULE_ID }
         ruleSwitch.isChecked = custom?.enabled ?: true
         keywordsInput.setText(custom?.keywords?.joinToString("\n").orEmpty())
@@ -96,6 +98,7 @@ class ConfigActivity : Activity() {
             whitelist = base.whitelist,
             rules = if (keywords.isEmpty()) others else others + custom,
             threshold = base.threshold,
+            spamEnabled = spamSwitch.isChecked,
         )
         val ok = ConfigWriter.save(next)
         Toast.makeText(
@@ -161,6 +164,7 @@ class ConfigActivity : Activity() {
 
         enabledSwitch = Switch(this).apply { text = "启用拦截判定" }
         observeSwitch = Switch(this).apply { text = "观察模式（只记录，不拦截）" }
+        spamSwitch = Switch(this).apply { text = "AI 识别垃圾通知（记录页 reason 里的分数就是它给的）" }
         ruleSwitch = Switch(this).apply { text = "启用「自定义关键词」规则" }
         keywordsInput = EditText(this).apply {
             hint = "每行一个关键词，命中即拦"
@@ -176,6 +180,7 @@ class ConfigActivity : Activity() {
         root.addView(label("开关"))
         root.addView(enabledSwitch)
         root.addView(observeSwitch)
+        root.addView(spamSwitch)
         root.addView(label("规则"))
         root.addView(ruleSwitch)
         root.addView(keywordsInput)
