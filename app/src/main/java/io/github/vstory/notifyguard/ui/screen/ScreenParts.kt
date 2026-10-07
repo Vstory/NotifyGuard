@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
@@ -110,4 +111,15 @@ internal fun Note(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * 服务状态行的「事实 → 文案」映射，用到状态卡的屏共用一份。
+ *
+ * 两处各拼一遍的代价不是重复而是**分歧**：改文案只改到一处时，另一处就成了假话（同 FitLine 的取舍）。
+ */
+internal fun serviceTextOf(svc: XposedService?): UiText = if (svc == null) {
+    UiText.Res(R.string.service_disconnected)
+} else {
+    UiText.Res(R.string.service_connected, listOf(svc.frameworkName, svc.frameworkVersion))
 }

@@ -185,11 +185,7 @@ class SettingsViewModel : ViewModel() {
     private fun onService(svc: XposedService?) {
         state = state.copy(
             connected = svc != null,
-            serviceText = if (svc == null) {
-                UiText.Res(R.string.service_disconnected)
-            } else {
-                UiText.Res(R.string.service_connected, listOf(svc.frameworkName, svc.frameworkVersion))
-            },
+            serviceText = serviceTextOf(svc),
             draftThreshold = null,
         )
         // 生效值只在连上时才有得读；连不上就保持 null，界面显示「未读到」而不是默认值

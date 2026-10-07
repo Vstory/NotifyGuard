@@ -12,7 +12,19 @@
     <string name="nav_learning">学习</string>
     <string name="nav_settings">设置</string>
 
-    <string name="home_plan">规划：拦截统计与命中排行（被拦总量、按 App 分布、观察模式下的判定分布）。</string>
+    <string name="home_title">首页</string>
+    <string name="home_refresh">刷新统计</string>
+    <string name="home_stats_group">拦截统计（当前记录窗口）</string>
+    <string name="home_stats_note">只统计当前记录窗口：模块端保留最近 %1$d 组（文本与判定都相同的通知并为一组），因此清空记录后这些数字会归零。权威副本在模块端。</string>
+    <string name="home_stat_blocked">已拦截：%1$d</string>
+    <string name="home_stat_would">本应被拦（观察模式）：%1$d</string>
+    <string name="home_stat_pass">放行：%1$d</string>
+    <string name="home_stat_scope">组数：%1$d · 事件：%2$d</string>
+    <string name="home_top_group">命中排行（按应用）</string>
+    <string name="home_top_empty">此窗口内还没有拦截。观察模式下不会真拦 —— 要生效请到设置屏关掉观察模式；否则请查框架日志确认判定链在跑。</string>
+    <string name="home_top_other">其余 %1$d 个应用 · %2$d 次</string>
+    <string name="home_observe_group">观察模式</string>
+    <string name="home_observe_note">当前是观察模式：判定照跑也照记录，但还不拦 —— 上面的已拦截数为 0，关掉之后才会真的拦。</string>
     <string name="learning_plan">规划：标注清单与拟合状态（门槛、delta 版本、下发结果），以及误杀回溯。</string>
 
     <string name="service_checking">框架服务：检查中…</string>
