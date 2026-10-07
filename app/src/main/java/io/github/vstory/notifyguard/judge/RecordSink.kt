@@ -8,7 +8,8 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * M0 的记录出口 = 框架日志（每条一行 + 每 [SUMMARY_EVERY] 条汇总）。
  *
- * 落盘与回流（ContentProvider.insert）属 M1：system_server 内没有合适的私有目录。
+ * 落盘/回传在 [io.github.vstory.notifyguard.sync.LogSink]（M1d 起写 system_server 侧
+ * `/data/misc/notifyguard_<random16>/`）：框架日志是给人看的排查线索，两者互不替代。
  */
 object RecordSink {
 

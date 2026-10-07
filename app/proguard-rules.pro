@@ -15,6 +15,5 @@
 # `-adaptresourcefilecontents` 是否在 AGP 的资源链路上生效
 -keep class io.github.vstory.notifyguard.MainHook { *; }
 
-# LogProvider 由系统按 manifest 里的类名实例化（AGP 虽会自动保 manifest 组件，
-# 但那是隐式行为；显式写死才能让「provider 在 dex」这条门禁成为确定性断言）
--keep class io.github.vstory.notifyguard.provider.LogProvider { *; }
+# 记录通道（LogChannel/LogFetcher）没有 manifest 组件，靠的是两个 action 字面量跨进程对齐；
+# 门禁改为直接断言 action 字符串在 dex 中，故这里不需要额外的 keep 规则。

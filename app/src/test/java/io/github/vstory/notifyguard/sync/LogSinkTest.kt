@@ -1,16 +1,20 @@
 package io.github.vstory.notifyguard.sync
 
+import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.LogRecord
-import java.util.concurrent.CopyOnWriteArrayList
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
+import java.io.File
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 class LogSinkTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     @Before
     fun setUp() = LogSink.resetForTest()
@@ -20,107 +24,98 @@ class LogSinkTest {
 
     @Test
     fun flushesAtThreshold() {
-        val got = ArrayList<LogRecord>()
+        val store = store()
         LogSink.flushThreshold = 3
-        LogSink.deliverOverride = { got.addAll(it); true }
 
         LogSink.submit(rec(1))
         LogSink.submit(rec(2))
         LogSink.awaitIdle()
-        assertTrue(got.isEmpty())
+        assertEquals(0, store.size())
 
         LogSink.submit(rec(3))
         LogSink.awaitIdle()
-        assertEquals(listOf(1L, 2L, 3L), got.map { it.ts })
+        assertEquals(listOf(3L, 2L, 1L), store.recent(10).map { it.ts })
     }
 
     @Test
     fun flushesOnTimer() {
-        val got = ArrayList<LogRecord>()
+        val store = store()
         LogSink.flushThreshold = 100
         LogSink.flushDelayMs = 5
-        LogSink.deliverOverride = { got.addAll(it); true }
 
         LogSink.submit(rec(1))
-        assertTrue(waitUntil { got.isNotEmpty() })
+        assertTrue(waitUntil { store.size() == 1 })
     }
 
     @Test
     fun dropsOldestWhenQueueFull() {
-        val got = ArrayList<LogRecord>()
+        val store = store()
         LogSink.maxPending = 3
         LogSink.flushThreshold = 1000
-        LogSink.flushDelayMs = 5
-        LogSink.deliverOverride = { got.addAll(it); true }
+        LogSink.flushDelayMs = 10
 
         (1..5).forEach { LogSink.submit(rec(it.toLong())) }
-        assertTrue(waitUntil { got.isNotEmpty() })
-        LogSink.awaitIdle()
-        assertEquals(listOf(3L, 4L, 5L), got.map { it.ts })
+        assertTrue(waitUntil { store.size() == 3 })
+        assertEquals(listOf(5L, 4L, 3L), store.recent(10).map { it.ts })
+        assertTrue(LogSink.statsLine().contains("丢弃=2"))
     }
 
+    /** 拉取前必须把缓冲刷进文件：缓冲里的是「刚发生的通知」，用户打开 App 就该看到。 */
     @Test
-    fun countsFailedDeliveries() {
-        LogSink.flushThreshold = 2
-        LogSink.deliverOverride = { false }
+    fun snapshotFlushesBufferedRecords() {
+        val store = store()
+        LogSink.flushThreshold = 100
+        LogSink.flushDelayMs = 60_000
 
         LogSink.submit(rec(1))
         LogSink.submit(rec(2))
         LogSink.awaitIdle()
-        assertTrue(LogSink.statsLine().contains("回流失败=2"))
+        assertEquals(0, store.size())
+
+        val json = LogSink.snapshotJson()
+        assertEquals(2, store.size())
+        assertTrue(json.contains("\"ts\":1") && json.contains("\"ts\":2"))
+    }
+
+    /** 目录不可写时记录留在缓冲里（不出队），且不能把失败当成功计数。 */
+    @Test
+    fun keepsRecordsWhenPersistFails() {
+        val blocker = File(tmp.root, "blocker")
+        blocker.writeText("x")
+        LogSink.storeOverride = LogStore(File(blocker, LogStore.FILE_NAME))
+        LogSink.flushThreshold = 1
+
+        LogSink.submit(rec(1))
+        LogSink.awaitIdle()
+        assertTrue(LogSink.statsLine().contains("已落盘=0"))
+    }
+
+    /** 目录还没解析出来时刷出什么都不做，记录留在队列里等下一次。 */
+    @Test
+    fun keepsRecordsWhileStoreMissing() {
+        LogSink.flushThreshold = 1
+        LogSink.submit(rec(1))
+        LogSink.awaitIdle()
+        assertTrue(LogSink.statsLine().contains("已落盘=0"))
     }
 
     @Test
-    fun keepsRecordsOnFailure() {
-        val got = CopyOnWriteArrayList<LogRecord>()
-        val fail = AtomicBoolean(true)
-        val attempts = AtomicInteger()
+    fun clearAllEmptiesStore() {
+        val store = store()
         LogSink.flushThreshold = 2
-        LogSink.retryDelayMs = 5
-        LogSink.retryMaxDelayMs = 10
-        LogSink.deliverOverride = { batch ->
-            attempts.incrementAndGet()
-            if (fail.get()) false else { got.addAll(batch); true }
-        }
-
         LogSink.submit(rec(1))
         LogSink.submit(rec(2))
         LogSink.awaitIdle()
-        assertTrue(got.isEmpty())
-        assertTrue(LogSink.statsLine().contains("已回流=0"))
+        assertTrue(waitUntil { store.size() == 2 })
 
-        fail.set(false)
-        assertTrue(waitUntil { got.size == 2 })
-        assertEquals(listOf(1L, 2L), got.map { it.ts })
-        assertTrue(LogSink.statsLine().contains("已回流=2"))
+        LogSink.clearAll()
+        LogSink.awaitIdle()
+        assertEquals(0, store.size())
+        assertEquals(0, LogStore(File(tmp.root, LogStore.FILE_NAME)).size())
     }
 
-    @Test
-    fun backsOffBetweenRetries() {
-        val attempts = AtomicInteger()
-        LogSink.flushThreshold = 1
-        LogSink.retryDelayMs = 60_000
-        LogSink.retryMaxDelayMs = 60_000
-        LogSink.deliverOverride = { attempts.incrementAndGet(); false }
-
-        LogSink.submit(rec(1))
-        LogSink.awaitIdle()
-        assertEquals(1, attempts.get())
-
-        // 退避窗口内继续投递不应再撞一次「被 ROM 拦住的启动路径」
-        (2L..5L).forEach { LogSink.submit(rec(it)) }
-        LogSink.awaitIdle()
-        assertEquals(1, attempts.get())
-    }
-
-    @Test
-    fun keepsRecordsWhileContextMissing() {
-        // 没有 Context 且无注入实现：刷出必须什么都不做，记录留在队列里等下一轮
-        LogSink.flushThreshold = 1
-        LogSink.submit(rec(1))
-        LogSink.awaitIdle()
-        assertTrue(LogSink.statsLine().contains("已回流=0"))
-    }
+    private fun store(): LogStore =
+        LogStore(File(tmp.root, LogStore.FILE_NAME)).also { LogSink.storeOverride = it }
 
     private fun waitUntil(cond: () -> Boolean): Boolean {
         val end = System.currentTimeMillis() + 3_000

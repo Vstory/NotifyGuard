@@ -342,16 +342,19 @@ jobs:
             done
             echo "  ✅ 入口类生命周期方法名完整（R8 未改名）"
 
-            # ③c provider 由**系统按 manifest 里的类名**实例化，不走 java_init.list；被 R8 改名后
-            #     App 装得上、模块也照常加载，只是记录回流永远失败（且失败原因看不出来）。
-            for C in 'Lio/github/vstory/notifyguard/provider/LogProvider;'; do
-              CFOUND=0
+            # ③c 记录通道没有 manifest 组件，靠两个 action 字面量跨进程对齐（App 发 GET_LOGS，
+            #     模块端回 LOGS_RESULT）。字符串漂移/被裁的表现是「App 装得上、模块也照常加载，
+            #     只是记录永远拉不到」，故做成确定性断言。
+            for A in \
+              'io.github.vstory.notifyguard.action.GET_LOGS' \
+              'io.github.vstory.notifyguard.action.LOGS_RESULT'; do
+              AFOUND=0
               for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
-                if unzip -p "$APK" "$d" | grep -qaF "$C"; then CFOUND=1; break; fi
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
               done
-              [ "$CFOUND" -eq 1 ] || { echo "::error::$NAME 缺类 $C —— 被 R8 改名/裁剪，系统按 manifest 类名实例化会失败"; exit 1; }
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺记录通道 action $A —— 常量被改/裁剪，App 与模块端对不上，记录永远拉不到"; exit 1; }
             done
-            echo "  ✅ LogProvider 在 dex（R8 未改名）"
+            echo "  ✅ 记录通道 action 契约在 dex"
 
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 

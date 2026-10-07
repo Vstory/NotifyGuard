@@ -1,7 +1,6 @@
 package io.github.vstory.notifyguard.ui
 
 import android.app.Activity
-import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
@@ -18,7 +17,7 @@ import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigCodec
 import io.github.vstory.notifyguard.sync.ConfigWriter
-import io.github.vstory.notifyguard.sync.LogContract
+import io.github.vstory.notifyguard.sync.LogFetcher
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -49,8 +48,7 @@ class ConfigActivity : Activity() {
         super.onResume()
         // 框架服务从 Binder 线程回调，触碰 UI 必须回主线程
         ConfigWriter.observe { svc -> runOnUiThread { onService(svc) } }
-        requestFlush()
-        renderRecords()
+        refreshRecords()
     }
 
     override fun onPause() {
@@ -108,18 +106,33 @@ class ConfigActivity : Activity() {
         if (ok) jsonView.text = ConfigCodec.encode(next)
     }
 
-    /** 本页在前台 ⇒ App 进程活着 ⇒ provider 现成，催模块端把缓冲的记录补送出来。 */
-    private fun requestFlush() {
-        sendBroadcast(Intent(LogContract.ACTION_FLUSH))
+    /**
+     * 记录权威源在模块端（`/data/misc/notifyguard_<random16>/logs.json`），App 侧只有上次拉取的缓存：
+     * 进页面先渲染缓存（立刻有内容），再拉一次覆盖。
+     */
+    private fun refreshRecords() {
+        renderRecords(null)
+        recordInfo.text = "正在从模块端拉取…"
+        LogFetcher.fetch(this) { list ->
+            renderRecords(
+                if (list == null) {
+                    "拉取超时：模块未激活或装完还没重启过系统框架（记录本身没丢，仍在模块端的 /data/misc 下）"
+                } else {
+                    null
+                },
+            )
+        }
     }
 
-    private fun renderRecords() {
+    private fun renderRecords(error: String?) {
         val store = LogStore.get(this)
         val list = store.recent(RECENT_LIMIT)
-        recordInfo.text = "共 ${store.size()} 条（上限 ${LogStore.MAX_RECORDS}），下列最近 ${list.size} 条"
+        recordInfo.text = buildString {
+            append("共 ${store.size()} 条（上限 ${LogStore.MAX_RECORDS}），下列最近 ${list.size} 条；权威源在模块端")
+            error?.let { append("\n$it") }
+        }
         recordView.text = if (list.isEmpty()) {
-            "（暂无记录。模块端有判定后 30 秒内回传；一直为空请看框架日志的「记录回流失败」，" +
-                "并在 ColorOS 的「应用启动管理 / 关联启动」里放行本应用——被拦时只有在 App 前台才回流）"
+            "（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard_*/logs.json）"
         } else {
             list.joinToString("\n\n") { r ->
                 val mark = when {
@@ -177,19 +190,15 @@ class ConfigActivity : Activity() {
         root.addView(
             Button(this).apply {
                 text = "刷新记录"
-                setOnClickListener {
-                    requestFlush()
-                    // 补送是异步的（模块端要跑一次 binder），给一拍再渲染
-                    recordView.postDelayed({ renderRecords() }, 800)
-                }
+                setOnClickListener { refreshRecords() }
             },
         )
         root.addView(
             Button(this).apply {
                 text = "清空记录"
                 setOnClickListener {
-                    LogStore.get(this@ConfigActivity).clear()
-                    renderRecords()
+                    LogFetcher.clear(this@ConfigActivity)
+                    renderRecords(null)
                 }
             },
         )

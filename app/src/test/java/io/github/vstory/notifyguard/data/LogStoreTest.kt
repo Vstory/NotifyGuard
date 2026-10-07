@@ -58,6 +58,21 @@ class LogStoreTest {
         assertEquals(0, store().size())
     }
 
+    @Test
+    fun replaceAllOverwritesMemoryAndDisk() {
+        val s = store()
+        s.addAll(listOf(rec(1), rec(2)))
+        s.replaceAll(listOf(rec(9)))
+        assertEquals(1, s.size())
+        assertEquals(listOf(9L), store().recent(5).map { it.ts })
+    }
+
+    @Test
+    fun persistLeavesNoTempFile() {
+        store().addAll(listOf(rec(1)))
+        assertTrue(tmp.root.listFiles()!!.none { it.name.endsWith(".tmp") })
+    }
+
     private fun file(): File = File(tmp.root, "logs.json")
 
     private fun store() = LogStore(file())
