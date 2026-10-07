@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
@@ -24,6 +25,7 @@ import io.github.vstory.notifyguard.sync.LogFetcher
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 /**
  * App 侧配置入口（M1a 的最小可用版）。
@@ -42,6 +44,8 @@ class ConfigActivity : Activity() {
     private lateinit var enabledSwitch: Switch
     private lateinit var spamSwitch: Switch
     private lateinit var ruleSwitch: Switch
+    private lateinit var thresholdBar: SeekBar
+    private lateinit var thresholdLabel: TextView
     private lateinit var keywordsInput: EditText
     private lateinit var saveButton: Button
     private lateinit var jsonView: TextView
@@ -53,6 +57,9 @@ class ConfigActivity : Activity() {
 
     /** 最近一次生效的关键词文本，作为「有未保存改动」的比较基准。 */
     private var savedKeywords = ""
+
+    /** 最近一次生效的阈值（取档位比较，避免浮点等值判断）。 */
+    private var savedThresholdStep = stepOf(Config.DEFAULT_THRESHOLD)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,6 +86,7 @@ class ConfigActivity : Activity() {
         }
         val connected = svc != null
         for (s in listOf(enabledSwitch, observeSwitch, spamSwitch, ruleSwitch)) s.isEnabled = connected
+        thresholdBar.isEnabled = connected
         saveButton.isEnabled = connected
         if (connected) loadIntoUi()
     }
@@ -86,6 +94,7 @@ class ConfigActivity : Activity() {
     private fun loadIntoUi() {
         val cfg = ConfigWriter.load() ?: return
         renderSwitches(cfg)
+        renderThreshold(cfg)
         renderKeywords(cfg)
         jsonView.text = ConfigCodec.encode(cfg)
     }
@@ -130,6 +139,53 @@ class ConfigActivity : Activity() {
             toast("下发失败，开关已还原为生效值")
             renderSwitches(base)
         }
+    }
+
+    /**
+     * 阈值的提交方式是「松手」而不是「进一格」：拖动途中的中间值会被当场拿去拦通知
+     * （score >= threshold 即拦），而拖动控件的松手那一下才是用户的最终意图。
+     */
+    private fun renderThreshold(cfg: Config) {
+        savedThresholdStep = stepOf(cfg.threshold)
+        thresholdBar.progress = savedThresholdStep
+        updateThresholdLabel()
+    }
+
+    private fun updateThresholdLabel() {
+        val step = thresholdBar.progress
+        val state = if (step == savedThresholdStep) "当前生效"
+        else "松手下发，当前生效 ${fmt(valueOf(savedThresholdStep))}"
+        thresholdLabel.text = "AI 分数阈值 ${fmt(valueOf(step))}（$state）"
+    }
+
+    private fun pushThreshold() {
+        val step = thresholdBar.progress
+        if (step == savedThresholdStep) {
+            updateThresholdLabel()
+            return
+        }
+        val base = ConfigWriter.load()
+        if (base == null) {
+            toast("框架服务未连接，改动没有下发")
+            rollbackThreshold()
+            return
+        }
+        val next = base.copy(threshold = valueOf(step))
+        if (!ConfigWriter.save(next)) {
+            toast("下发失败，阈值已还原为生效值")
+            rollbackThreshold()
+            return
+        }
+        savedThresholdStep = step
+        jsonView.text = ConfigCodec.encode(next)
+        updateThresholdLabel()
+    }
+
+    /** 生效值以回读为准：只按内存里的旧值还原，界面可能停在一个其实没生效的数上。 */
+    private fun rollbackThreshold() {
+        savedThresholdStep = stepOf(ConfigWriter.load()?.threshold ?: valueOf(savedThresholdStep))
+        thresholdBar.progress = savedThresholdStep
+        updateThresholdLabel()
     }
 
     /** 关键词与开关走不同的提交路径：这里读的是输入框，其余字段一律沿用已生效配置。 */
@@ -229,6 +285,20 @@ class ConfigActivity : Activity() {
         observeSwitch = Switch(this).apply { text = "观察模式（只记录，不拦截）" }
         spamSwitch = Switch(this).apply { text = "AI 识别垃圾通知（记录页 reason 里的分数就是它给的）" }
         ruleSwitch = Switch(this).apply { text = "启用「自定义关键词」规则" }
+
+        thresholdLabel = TextView(this)
+        thresholdBar = SeekBar(this).apply { max = THRESHOLD_STEPS }
+        thresholdBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            // 靠 fromUser 而不是自备抑制标志：程序化 setProgress 不触发 onStopTrackingTouch，
+            // 渲染与回滚因此天然不会误下发
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) updateThresholdLabel()
+            }
+
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = pushThreshold()
+        })
+
         keywordsInput = EditText(this).apply {
             hint = "每行一个关键词，命中即拦"
             minLines = 4
@@ -252,6 +322,11 @@ class ConfigActivity : Activity() {
         root.addView(enabledSwitch)
         root.addView(observeSwitch)
         root.addView(spamSwitch)
+        root.addView(thresholdLabel)
+        root.addView(thresholdBar)
+        root.addView(
+            hint("滑杆松手即下发。AI 分数 ≥ 阈值就拦（只在上面「AI 识别垃圾通知」开着时生效）；调低更激进，0 等于全拦。"),
+        )
         root.addView(label("规则"))
         root.addView(ruleSwitch)
         root.addView(keywordsInput)
@@ -320,6 +395,16 @@ class ConfigActivity : Activity() {
     private companion object {
         const val CUSTOM_RULE_ID = "custom-keywords"
         const val RECENT_LIMIT = 20
+
+        /** 阈值档位数：0.00–1.00 步长 0.01，与判定链 reason 里 %.2f 的粒度对齐（更粗就对不上数）。 */
+        const val THRESHOLD_STEPS = 100
+
+        fun stepOf(v: Double): Int = (v * THRESHOLD_STEPS).roundToInt().coerceIn(0, THRESHOLD_STEPS)
+
+        fun valueOf(step: Int): Double = step.toDouble() / THRESHOLD_STEPS
+
+        fun fmt(v: Double): String = String.format(Locale.ROOT, "%.2f", v)
+
         val TIME = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
     }
 }
