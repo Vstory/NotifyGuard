@@ -132,9 +132,14 @@ class LabelStore(private val file: File) {
 
         @Volatile private var instance: LabelStore? = null
 
-        /** App 侧界面与拉取器共用一份内存列表，避免各自读盘。 */
+        /**
+         * App 侧界面与拉取器共用一份内存列表，避免各自读盘。
+         *
+         * 单例是进程级的 ⇒ 一律取 applicationContext（理由同 [LogStore.get]）。
+         */
         fun get(ctx: Context): LabelStore = instance ?: synchronized(this) {
-            instance ?: LabelStore(File(ctx.filesDir, FILE_NAME)).also { instance = it }
+            val app = ctx.applicationContext ?: ctx
+            instance ?: LabelStore(File(app.filesDir, FILE_NAME)).also { instance = it }
         }
     }
 }
