@@ -1,5 +1,7 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ui.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -66,5 +68,18 @@ class RulesViewModelTest {
             counts = mapOf("b.app" to 5, "a.app" to 5, "c.app" to 9),
         )
         assertEquals(listOf("c.app", "a.app", "b.app"), ranked.map { it.pkg })
+    }
+
+    /** 有未保存改动时按钮必须自己说出来 —— 那一屏没有「保存」以外的反馈渠道。 */
+    @Test
+    fun saveLabelTellsWhetherThereAreUnsavedChanges() {
+        assertEquals(
+            UiText.Res(R.string.rules_save_keywords),
+            RulesViewModel.saveLabel(dirty = false),
+        )
+        assertEquals(
+            UiText.Res(R.string.rules_save_keywords_dirty),
+            RulesViewModel.saveLabel(dirty = true),
+        )
     }
 }

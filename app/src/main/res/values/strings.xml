@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Default (English) resources. The Chinese pack lives in res/values-zh/strings.xml and must keep
+      the same keys: a key missing there silently falls back to English.
+    -->
+    <string name="app_name">NotifyGuard</string>
+
+    <string name="nav_home">Home</string>
+    <string name="nav_rules">Rules</string>
+    <string name="nav_records">Records</string>
+    <string name="nav_learning">Learning</string>
+    <string name="nav_settings">Settings</string>
+
+    <string name="home_plan">Planned: block statistics and top offenders (total blocked, per-app breakdown, verdict distribution while in observe mode).</string>
+    <string name="learning_plan">Planned: labelled set and fit status (threshold, delta version, delivery result), plus false-positive review.</string>
+
+    <string name="service_checking">Framework service: checking…</string>
+    <string name="service_connected">Framework service: %1$s %2$s</string>
+    <string name="service_disconnected">Framework service: not connected (enable this module in LSPosed, then reopen this page; changes cannot be delivered while disconnected, so the controls are greyed out)</string>
+    <string name="status_cfg_unreadable">Connected to the framework service, but the live config cannot be read (corrupted?). The values below are defaults; changes can still be delivered.</string>
+
+    <!-- Records screen -->
+    <string name="records_title">Records</string>
+    <string name="records_refresh">Refresh records</string>
+    <string name="records_more">More actions</string>
+    <string name="records_clear_records">Clear records</string>
+    <string name="records_clear_labels">Clear labels</string>
+    <string name="records_clear_labels_title">Clear all labels?</string>
+    <string name="records_clear_labels_body">%1$d labels will be deleted and cannot be restored. The model then falls back to the built-in one, and scores change back immediately.</string>
+    <string name="records_clear_labels_confirm">Clear</string>
+    <string name="records_clear_labels_cancel">Cancel</string>
+    <string name="records_summary">Groups: %1$d · events: %2$d (cap: %3$d groups); showing the latest %4$d. The module side holds the authoritative copy.</string>
+    <string name="records_fetching">Pulling from the module side…</string>
+    <string name="records_label_summary">Labels: %1$d · the authoritative copy is labels.json on the module side (it survives an app reinstall, just like records)</string>
+    <string name="records_fit_pending">Fine-tuning: not pulled yet</string>
+    <string name="records_label_hint">Marking a notification as spam or ham hands its text to on-device fine-tuning; once the sample threshold is reached the delta is fitted and pushed to the module side automatically (it applies to the next verdict) — no manual trigger.</string>
+    <string name="records_empty">(No records yet. Whether the verdict chain is running is visible in the framework log; module-side records live in /data/misc/notifyguard/logs.json)</string>
+    <string name="records_count_badge">×%1$d</string>
+    <string name="records_no_text">(no text)</string>
+    <string name="records_marked_spam">Marked spam</string>
+    <string name="records_marked_ham">Marked ham</string>
+    <string name="action_mark_spam">Mark spam</string>
+    <string name="action_mark_ham">Mark ham</string>
+    <string name="action_undo">Undo</string>
+    <string name="verdict_block">Blocked</string>
+    <string name="verdict_would">Would block</string>
+    <string name="verdict_pass">Passed</string>
+
+    <string name="records_fetch_timeout">Fetch timed out: the module is inactive, or the system framework has not been restarted since install (no data is lost — it is still under /data/misc/notifyguard on the module side)</string>
+    <string name="notice_no_labels">No labels right now</string>
+    <string name="notice_label_busy">The previous label action is still waiting for a reply</string>
+    <string name="label_action_clear">Clear labels</string>
+    <string name="label_action_mark_spam">Mark as spam</string>
+    <string name="label_action_mark_ham">Mark as ham</string>
+    <string name="label_action_undo">Undo label</string>
+    <string name="notice_label_failed">%1$s had no effect: the module side sent no reply (module inactive / system framework not restarted since install / labels.json corrupted)</string>
+    <string name="notice_label_done">%1$s applied (%2$d labels in total)</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_status_group">Module status</string>
+    <string name="settings_status_note">This reads the module\'s live state, not a UI guess: safe mode, assembly failures and a disabled verdict path all show up here.</string>
+    <string name="settings_refresh_status">Refresh module status</string>
+    <string name="settings_clear_safe_mode">Clear safe mode and recover</string>
+    <string name="settings_assembly_show">Assembly details</string>
+    <string name="settings_assembly_hide">Hide assembly details</string>
+    <string name="settings_assembly_empty">(no assembly details read)</string>
+    <string name="module_line_checking">Checking…</string>
+    <string name="module_line_no_reply">Module not responding (not enabled in LSPosed, system framework not restarted since install, or the status channel failed to register)</string>
+    <string name="module_line_safe_mode">Safe mode: the verdict path is disabled, every notification passes</string>
+    <string name="module_line_judging">Verdict active (path: %1$s)</string>
+    <string name="module_line_stopped">Verdict disabled (%1$s)</string>
+    <string name="module_line_not_installed">Hooks not installed: see the assembly details below</string>
+    <string name="module_slot_ext">extension slot, primary path</string>
+    <string name="module_slot_funnel">funnel, fallback path</string>
+    <string name="module_slot_unknown">unknown</string>
+    <string name="module_counters">Slot hits %1$d · funnel verdicts %2$d · funnel pass-through %3$d · blocked by ROM %4$d · errors %5$d</string>
+    <string name="module_detail_ai_ready">AI model ready</string>
+    <string name="module_detail_ai_unavailable">AI model unavailable (that whole step passes)</string>
+    <string name="module_detail_delta_on">fine-tuned v%1$d</string>
+    <string name="module_detail_delta_off">fine-tuning off</string>
+    <string name="module_detail">%1$s · %2$s · records on disk: %3$d (buffer dropped: %4$d)</string>
+    <string name="module_assembly">Assembly this launch: OK %1$d / SKIP %2$d / FAIL %3$d (module version %4$s)</string>
+    <string name="module_safe_mode_line">Safe mode triggered %1$s: %2$s. %3$s</string>
+    <string name="module_safe_mode_at">at %1$s</string>
+    <string name="module_safe_mode_at_unknown">time not recorded</string>
+    <string name="module_safe_mode_reason_unknown">reason not recorded</string>
+    <string name="module_safe_mode_tail_watch">The flag watcher is running, so clearing the flag restores verdicts.</string>
+    <string name="module_safe_mode_tail_no_watch">The flag watcher is unavailable, so restarting the system framework is still needed after clearing.</string>
+
+    <string name="settings_block_group">Blocking</string>
+    <string name="settings_block_note">Switches are delivered the moment they are flicked, the threshold on release — there is no Save button on this screen.</string>
+    <string name="settings_enabled">Enable verdicts</string>
+    <string name="settings_enabled_note">when off, the chain passes everything (records are still written)</string>
+    <string name="settings_observe">Observe mode</string>
+    <string name="settings_observe_note">record only, never block: verdicts still run and reason still shows the AI score and the matched rule</string>
+    <string name="settings_ai_group">AI recognition</string>
+    <string name="settings_spam">Detect spam notifications</string>
+    <string name="settings_spam_note">on-device hashed n-gram + logistic regression, no network</string>
+    <string name="settings_threshold_note">A score ≥ the threshold blocks. The slider is greyed out while the switch above is off — the value takes no part in verdicts then. Lower is more aggressive; 0 blocks everything.</string>
+    <string name="threshold_line">AI score threshold %1$s (%2$s)</string>
+    <string name="threshold_line_no_config">AI score threshold: no live value read (framework service not connected)</string>
+    <string name="threshold_note_ai_off">AI is off, so it has no effect</string>
+    <string name="threshold_note_dirty">release to deliver, currently in effect %1$s</string>
+    <string name="threshold_note_effective">currently in effect</string>
+    <string name="settings_protect_group">Protected kinds</string>
+    <string name="settings_protect_note">A match passes straight through, never reaching rules or AI: blocking one of these costs far more than missing an ad.</string>
+    <string name="protect_call">Calls</string>
+    <string name="protect_call_note">incoming calls</string>
+    <string name="protect_alarm">Alarms</string>
+    <string name="protect_alarm_note">alarms</string>
+    <string name="protect_navigation">Navigation</string>
+    <string name="protect_navigation_note">navigation</string>
+    <string name="protect_media">Media</string>
+    <string name="protect_media_note">media playback</string>
+    <string name="protect_foreground_service">Foreground services</string>
+    <string name="protect_foreground_service_note">foreground services</string>
+    <string name="protect_conversation">Conversations</string>
+    <string name="protect_conversation_note">messaging conversations</string>
+    <string name="settings_config_group">Live config</string>
+    <string name="settings_config_note">The config the module side actually reads right now (read-only). The switches above are rendered from it — check here first when \"I changed it but nothing happened\".</string>
+    <string name="settings_config_show">Show config JSON</string>
+    <string name="settings_config_hide">Hide config JSON</string>
+    <string name="settings_config_empty">(not connected, no live config to read)</string>
+
+    <string name="notice_service_disconnected">Framework service is not connected, the change was not delivered</string>
+    <string name="notice_delivery_failed_switch">Delivery failed, the switch was reverted to the live value</string>
+    <string name="notice_delivery_failed_threshold">Delivery failed, the threshold was reverted to the live value</string>
+    <string name="notice_clear_no_reply">The clear request got no reply (the module side did not answer)</string>
+    <string name="notice_clear_still_safe">The safe-mode flag is still set: clearing failed, still in safe mode</string>
+    <string name="notice_clear_resumed">Safe-mode flag cleared, verdicts are back</string>
+    <string name="notice_clear_reinstalling">Safe-mode flag cleared, hooks are being reinstalled</string>
+    <string name="notice_clear_no_watcher">Safe-mode flag cleared, but the flag watcher is unavailable: a system framework restart is still needed to restore verdicts</string>
+
+    <!-- Rules screen -->
+    <string name="rules_title">Rules</string>
+    <string name="rules_keyword_group">Keyword rules</string>
+    <string name="rules_keyword_note">A match blocks. Matching is a lowercased substring test (not a regex), so AD and ad are the same rule.</string>
+    <string name="rules_rule_enabled">Enable this rule</string>
+    <string name="rules_rule_enabled_note">when off the keywords stay in the config, they just take no part in verdicts</string>
+    <string name="rules_rule_empty_note">no keywords yet: this switch has nothing to enable until you fill them in and save</string>
+    <string name="rules_keyword_hint">one keyword per line</string>
+    <string name="rules_keyword_submit_note">Delivering while you type would block notifications on a half-typed keyword, so only the button below submits; saving delivers immediately and takes effect on the module side.</string>
+    <string name="rules_save_keywords">Save keywords</string>
+    <string name="rules_save_keywords_dirty">Save keywords (unsaved changes)</string>
+    <string name="rules_whitelist_group">Whitelist</string>
+    <string name="rules_whitelist_note">Listed apps skip AI recognition; keyword rules still apply (those are explicit block requests).</string>
+    <string name="rules_whitelist_candidates_note">Candidates come from package names seen in module-side records — those are the apps that actually posted a notification, so no \"read installed apps\" permission is needed.</string>
+    <string name="rules_refresh_candidates">Refresh candidates</string>
+    <string name="rules_refreshing">Pulling…</string>
+    <string name="rules_no_candidates">No candidates yet: the module side has not recorded any notification, or neither this page nor the records page has pulled yet. You can type a package name below.</string>
+    <string name="rules_candidate_seen">seen in records %1$d times</string>
+    <string name="rules_candidate_unseen">not seen in records yet</string>
+    <string name="rules_candidates_capped">Only the first %1$d are listed (whitelisted ones first). If the app you want to allow is not among them, type its package name below.</string>
+    <string name="rules_pkg_hint">com.example.app</string>
+    <string name="rules_add_whitelist">Add to whitelist</string>
+
+    <string name="notice_save_failed_disconnected">Save failed: the framework service is not connected</string>
+    <string name="notice_save_failed_delivery">Save failed: delivery did not go through (the module side still has the previous config)</string>
+    <string name="notice_keywords_cleared">Keywords cleared and delivered: the rule no longer blocks anything</string>
+    <string name="notice_keywords_saved">Saved %1$d keywords and delivered them (effective on the module side right away)</string>
+    <string name="notice_rule_no_keywords">No keywords yet: fill them in below and save first</string>
+    <string name="notice_rule_enabled">Keyword rule enabled</string>
+    <string name="notice_rule_disabled">Keyword rule disabled (the keywords stay in the config)</string>
+    <string name="notice_whitelist_added_effects">%1$s added to the whitelist: its notifications skip AI recognition (keyword rules still apply)</string>
+    <string name="notice_whitelist_added">%1$s added to the whitelist</string>
+    <string name="notice_whitelist_reverted">Delivery failed, the whitelist was reverted to the live value</string>
+    <string name="notice_whitelist_removed">%1$s removed from the whitelist</string>
+    <string name="notice_whitelist_already">%1$s is already whitelisted</string>
+    <string name="notice_pkg_bad_format">Bad package name: expected something like com.example.app (a package name, not an app label)</string>
+    <string name="notice_candidates_timeout">Candidate fetch timed out: the module is inactive, or the system framework has not been restarted since install (existing candidates still work)</string>
+    <string name="notice_candidates_updated">Candidates updated</string>
+
+    <!-- Fine-tuning state lines -->
+    <string name="fit_none">Fine-tuning: not delivered (auto-fits once there are %1$d labels with at least %2$d per class)</string>
+    <string name="fit_not_enough">Fine-tuning: not delivered (trainable samples %1$d/%2$d, spam %3$d/%4$d, ham %5$d/%6$d)</string>
+    <string name="fit_unavailable_line">Fine-tuning: not delivered (%1$s)</string>
+    <string name="fit_sent">Fine-tuning: delivered v%1$s (%2$d weights)</string>
+    <string name="fit_sent_no_file">Fine-tuning: delivered v%1$s (the version number is written but the delta file cannot be read — the module side scores with the plain base model)</string>
+    <string name="fit_reason_model">built-in model unavailable</string>
+    <string name="fit_reason_module">module not connected</string>
+    <string name="fit_reason_write">writing the delta file failed</string>
+    <string name="fit_reason_config">cannot read the current config</string>
+    <string name="fit_reason_version">delivering the version number failed</string>
+    <string name="fit_error">fit error: %1$s</string>
+    <string name="fit_state_error">state read error: %1$s</string>
+</resources>

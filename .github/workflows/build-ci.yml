@@ -301,6 +301,20 @@ jobs:
 
           # 每个产物独立跑全套断言。变体从**文件名**反推（命名规则保证含 `_ci-<变体>_`），
           #   不依赖构建期变量 ⇒「名字里写的变体」与「包里实际的变体」必须自洽，否则当场红。
+          # ③l 源文件层面（与产物无关，故在循环外跑一次）：两个 strings.xml 的键必须逐条一致。
+          #    包内断言（③g–③k）只抽查了少数几条资源，漏掉的键会静默回落英文 —— 这里按全集比对。
+          EN_STRINGS="app/src/main/res/values/strings.xml"
+          ZH_STRINGS="app/src/main/res/values-zh/strings.xml"
+          [ -f "$EN_STRINGS" ] && [ -f "$ZH_STRINGS" ] || { echo "::error::缺 $EN_STRINGS 或 $ZH_STRINGS"; exit 1; }
+          EN_KEYS="$(grep -oE 'name="[A-Za-z0-9_]+"' "$EN_STRINGS" | sed -E 's/^name="//; s/"$//' | sort -u || true)"
+          ZH_KEYS="$(grep -oE 'name="[A-Za-z0-9_]+"' "$ZH_STRINGS" | sed -E 's/^name="//; s/"$//' | sort -u || true)"
+          [ -n "$EN_KEYS" ] || { echo "::error::$EN_STRINGS 里没读到任何 string 键"; exit 1; }
+          MISSING_ZH="$(comm -23 <(printf '%s\n' "$EN_KEYS") <(printf '%s\n' "$ZH_KEYS") | tr '\n' ' ')"
+          MISSING_EN="$(comm -13 <(printf '%s\n' "$EN_KEYS") <(printf '%s\n' "$ZH_KEYS") | tr '\n' ' ')"
+          [ -z "${MISSING_ZH}${MISSING_EN}" ] \
+            || { echo "::error::两个 strings.xml 的键不一致 —— 英文多[$MISSING_ZH] 中文多[$MISSING_EN]（漏键会静默回落英文）"; exit 1; }
+          echo "  ✅ 英文与中文资源键逐条一致（$(printf '%s\n' "$EN_KEYS" | wc -l | tr -d ' ') 条）"
+
           for APK in dist/*.apk; do
             NAME="$(basename "$APK")"
             case "$NAME" in
@@ -406,67 +420,75 @@ jobs:
             done
             echo "  ✅ 微调量文件名与 magic 在 dex"
 
-            # ③g App 侧标注入口必须真在 release 里。上面 ③e 断言的那五个 action 是**共用**常量：
-            #     `const val` 在使用处内联、dex 字符串池又去重 ⇒ 只要模块端 LabelChannel 引用了它们，
-            #     字符串就在包里 —— 也就是说 ③e 过得了，而 App 侧写指令整条被 R8 裁掉（M3b 时正是
-            #     如此：无 UI 入口，断言全靠模块端单边撑着）。故这里断言**只在 App 侧出现**的字面量。
-            #     ⚠️ 断言的不是文案而是「App 侧标注入口活着」；改这几个词要同步改这里。
-            for A in "标垃圾" "标正常" "撤销" "清空标注"; do
-              AFOUND=0
-              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
-                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
-              done
-              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧标注入口字面量「$A」—— 记录页的标注动作在 App 侧没了（或被 R8 裁掉），用户无法产生标注，微调永远是空转"; exit 1; }
-            done
-            echo "  ✅ App 侧标注入口在 dex"
+            # ③g–③j：App 侧各屏入口必须真在 release 里。这些入口的文案自 M4f 起全部走字符串资源
+            #     （res/values 是英文默认、res/values-zh 是中文包），故判据从「中文文案字面量在 dex」
+            #     换成「资源在资源表里，且默认值与 zh 值都在」。要断言的理由没变：R8 能把整屏连同
+            #     引用一起裁掉，而界面没了的后果是「包照装、模块照常跑，用户在界面上够不到这个功能」。
+            #     资源表判据比 dex 字面量弱一档（未被引用的资源不会被自动裁），所以每条额外查 zh 值 ——
+            #     顺带拦住「中文包漏键」（漏了就静默回落英文，是这类改动最常见的错）。
+            #     ⚠️ 断言的是「入口活着」而非文案；改资源名要同步改这里。
+            RES_DUMP="$("$AAPT2" dump resources "$APK" 2>/dev/null || true)"
+            [ -n "$RES_DUMP" ] || { echo "::error::$NAME 读不到资源表（aapt2 dump resources 输出为空）"; exit 1; }
+            res_entry() {
+              local RNAME="$1" RBLOCK
+              RBLOCK="$(printf '%s\n' "$RES_DUMP" | grep -A 3 -E "resource 0x[0-9a-f]+ string/${RNAME}\$" || true)"
+              [ -n "$RBLOCK" ] || { echo "::error::$NAME 缺字符串资源 string/${RNAME}（界面文案没进资源表）"; return 1; }
+              printf '%s\n' "$RBLOCK" | grep -qE '^ *\(\) "' \
+                || { echo "::error::$NAME 的 string/${RNAME} 没有默认值（res/values/strings.xml 缺这条键）"; return 1; }
+              printf '%s\n' "$RBLOCK" | grep -qE '^ *\(zh\) "' \
+                || { echo "::error::$NAME 的 string/${RNAME} 缺中文值（res/values-zh/strings.xml 漏键 ⇒ 静默回落英文）"; return 1; }
+              return 0
+            }
 
-            # ③h App 侧六类保护开关的入口必须真在 release 里。六类保护在判定链里**早已生效**
-            #     （默认全开），但在 M4c 之前**没有任何界面入口**（README 曾如实标注为「暂无」）——
-            #     只断言配置侧的东西会漏掉「入口被 R8 裁掉、用户根本点不到」。
-            #     这六个词只在 App 侧的设置屏出现（模块端的保护标识是 call/alarm/... 英文 key），
-            #     且屏内说明文字**刻意不重复**这些标签词（重复了这条断言就会被说明文字单边撑着，
-            #     与 ③g 在旧页删除前的处境相同）。
-            #     ⚠️ 断言的不是文案而是「App 侧保护开关入口活着」；改标签要同步改这里。
-            for A in "通话" "闹钟" "导航" "媒体" "前台服务" "对话"; do
-              AFOUND=0
-              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
-                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
-              done
-              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧保护开关字面量「$A」—— 设置屏的保护开关在 App 侧没了（或被 R8 裁掉），用户在界面上关不掉这一类保护"; exit 1; }
+            # ③g App 侧标注入口：记录页的标注动作整块没了，用户就产生不了标注，微调永远是空转。
+            for A in action_mark_spam action_mark_ham action_undo records_clear_labels; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧标注入口资源「$A」—— 记录页的标注动作在 App 侧没了（或被 R8 裁掉）"; exit 1; }
             done
-            echo "  ✅ App 侧保护开关入口在 dex"
+            echo "  ✅ App 侧标注入口在（含中文值）"
 
-            # ③i App 侧规则入口（关键词 / 白名单）必须真在 release 里。与 ③h 同理：只断言配置侧
-            #     的东西证明不了「用户点得到」—— 规则屏整块被 R8 裁掉时配置字段照样在包内。
-            #     这四个字面量各自**只在规则屏的一处**出现（关键词输入框 / 保存按钮 / 规则启停开关 /
-            #     白名单候选入口），所以任一处单独失效即红。屏内说明文字刻意不重复它们，
-            #     否则断言会被说明文字单边撑着（与旧配置页删除前的 ③g 同一处境）。
-            #     ⚠️ 断言的不是文案而是「App 侧规则入口活着」；改这些文案要同步改这里。
-            for A in "每行一个关键词" "保存关键词并下发" "启用这条规则" "从模块端刷新候选"; do
-              AFOUND=0
-              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
-                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
-              done
-              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧规则入口字面量「$A」—— 规则屏的关键词 / 白名单入口在 App 侧没了（或被 R8 裁掉），用户改不了关键词与白名单"; exit 1; }
+            # ③h App 侧六类保护开关的入口（六类保护在判定链里早已生效，M4c 之前却没有界面入口）。
+            for A in protect_call protect_alarm protect_navigation protect_media protect_foreground_service protect_conversation; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧保护开关资源「$A」—— 设置屏的保护开关在 App 侧没了（或被 R8 裁掉），用户关不掉这一类保护"; exit 1; }
             done
-            echo "  ✅ App 侧规则入口在 dex"
+            echo "  ✅ App 侧保护开关入口在（含中文值）"
 
-            # ③j App 侧模块状态入口必须真在 release 里。状态通道的 action 是**共用**常量，模块端
-            #     StatusChannel 引用了它们 ⇒ 与 ③c/③e 同类的断言证明不了 App 侧还在：设置屏的状态组
-            #     整块被 R8 裁掉时它们照样在包里。其中「清除熔断并恢复」尤其不能少 ——
-            #     它没了，用户遇到熔断就只能 root 删标志文件（熔断态下标志在 system_server 私有目录）。
-            #     四个字面量各自只在 App 侧出现一处，屏内说明文字刻意不重复它们。
-            #     ⚠️ 断言的不是文案而是「App 侧状态入口活着」；改这些文案要同步改这里。
-            for A in "刷新模块状态" "本次装配明细" "模块未响应" "清除熔断并恢复"; do
-              AFOUND=0
-              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
-                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
-              done
-              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧状态入口字面量「$A」—— 设置屏的模块状态组在 App 侧没了（或被 R8 裁掉），用户看不到熔断、也点不到恢复"; exit 1; }
+            # ③i App 侧规则入口（关键词 / 白名单）。
+            for A in rules_keyword_hint rules_save_keywords rules_rule_enabled rules_refresh_candidates; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧规则入口资源「$A」—— 规则屏的关键词 / 白名单入口在 App 侧没了（或被 R8 裁掉）"; exit 1; }
             done
-            echo "  ✅ App 侧模块状态入口在 dex"
+            echo "  ✅ App 侧规则入口在（含中文值）"
+
+            # ③j App 侧模块状态入口。其中「清除熔断并恢复」尤其不能少：它没了，用户遇到熔断就只能
+            #     root 删标志文件（熔断态下标志在 system_server 私有目录）。
+            for A in settings_refresh_status settings_assembly_show module_line_no_reply settings_clear_safe_mode; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧状态入口资源「$A」—— 设置屏的模块状态组在 App 侧没了（或被 R8 裁掉），用户看不到熔断、也点不到恢复"; exit 1; }
+            done
+            echo "  ✅ App 侧模块状态入口在（含中文值）"
 
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
+
+            # ③k 语言包齐全：默认（无语言限定词）必须是英文、中文包必须真在包里。两条错都会在包内
+            #     静默：中文包整块没进包 ⇒ 中文用户看到英文；默认值被写成中文 ⇒ 其它语言用户看到中文。
+            #     资源表判据只能证明「有值」，方向得靠 badging 的配置行 + 一个抽查资源的两种取值来判
+            #     （默认值里不许有汉字，中文值里必须有汉字）。
+            LOCALES_LINE="$(printf '%s' "$BADGING" | grep -m1 '^locales:' || true)"
+            [ -n "$LOCALES_LINE" ] || { echo "::error::$NAME 读不到 badging 的 locales 行"; exit 1; }
+            printf '%s' "$LOCALES_LINE" | grep -qF "'--_--'" \
+              || { echo "::error::$NAME 的资源表里没有默认配置（res/values 是空语言配置）"; exit 1; }
+            printf '%s' "$LOCALES_LINE" | grep -qF "'zh'" \
+              || { echo "::error::$NAME 的资源表里没有 zh 配置 —— res/values-zh 没进包，中文用户会看到英文"; exit 1; }
+            LANG_PROBE="$(printf '%s\n' "$RES_DUMP" | grep -A 3 -E 'resource 0x[0-9a-f]+ string/action_mark_spam$' || true)"
+            PROBE_EN="$(printf '%s\n' "$LANG_PROBE" | grep -m1 -E '^ *\(\) "' || true)"
+            PROBE_ZH="$(printf '%s\n' "$LANG_PROBE" | grep -m1 -E '^ *\(zh\) "' || true)"
+            if printf '%s' "$PROBE_EN" | grep -qP '[\x{4e00}-\x{9fff}]'; then
+              echo "::error::$NAME 的默认（无语言限定）值里有汉字：$PROBE_EN —— 默认值只能是英文那份"
+              exit 1
+            fi
+            if ! printf '%s' "$PROBE_ZH" | grep -qP '[\x{4e00}-\x{9fff}]'; then
+              echo "::error::$NAME 的中文值里没有汉字：$PROBE_ZH —— 中英装反了，或中文键指到了英文值"
+              exit 1
+            fi
+            echo "  ✅ 语言包：默认英文 + 中文（zh）都在"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在
             #    `bash -e` 下会让赋值语句整体失败 ⇒ 脚本**静默**退出（日志里只剩 "Process

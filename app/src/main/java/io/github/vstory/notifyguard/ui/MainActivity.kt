@@ -11,6 +11,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -51,8 +52,8 @@ private fun NotifyGuardApp() {
         navigationSuiteItems = {
             Destination.entries.forEach { destination ->
                 item(
-                    icon = { Icon(destination.icon, contentDescription = destination.label) },
-                    label = { Text(destination.label) },
+                    icon = { Icon(destination.icon, contentDescription = stringResource(destination.labelRes)) },
+                    label = { Text(stringResource(destination.labelRes)) },
                     selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
                     onClick = {
                         navController.navigate(destination.route) {

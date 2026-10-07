@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import io.github.libxposed.service.XposedService
+import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.Rule
@@ -15,6 +16,7 @@ import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.LogFetcher
+import io.github.vstory.notifyguard.ui.UiText
 
 /**
  * 规则屏的状态与动作（M4）。
@@ -24,12 +26,14 @@ import io.github.vstory.notifyguard.sync.LogFetcher
  *
  * 两条路径都只替换自己负责的字段、且以**模块端读回的生效配置**为基准 —— 从界面收集全部字段整份重写
  * 会把另一条尚未提交的改动（只在草稿里）一起带下去。
+ *
+ * 界面文案一律以 [UiText] 回报（见 ui/UiText.kt）。
  */
 class RulesViewModel : ViewModel() {
 
     data class UiState(
         val connected: Boolean = false,
-        val serviceText: String = "框架服务：检查中…",
+        val serviceText: UiText = UiText.Res(R.string.service_checking),
         /** 读回的生效配置；null = 未连接或读不出（界面按「未知」渲染，不要当默认值用）。 */
         val cfg: Config? = null,
         /** 关键词输入框的草稿。与生效值分开：它是文本，有中间态。 */
@@ -41,7 +45,7 @@ class RulesViewModel : ViewModel() {
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次也要各弹一次。 */
-    data class Notice(val id: Long, val text: String)
+    data class Notice(val id: Long, val text: UiText)
 
     /**
      * 白名单的一个候选应用。
@@ -82,8 +86,7 @@ class RulesViewModel : ViewModel() {
     /** 关键词与生效值是否不同（按行归一后比较，所以行尾空格、空行不算改动）。 */
     fun keywordsDirty(): Boolean = normalize(state.keywordDraft) != savedKeywords()
 
-    fun saveLabel(): String =
-        if (keywordsDirty()) "保存关键词并下发（有未保存改动）" else "保存关键词并下发"
+    fun saveLabel(): UiText = saveLabel(keywordsDirty())
 
     /** 生效配置里那条关键词规则的启停状态；没有这条规则时按「未启用」算。 */
     fun ruleEnabled(): Boolean = state.cfg?.let(::customRule)?.enabled ?: false
@@ -106,7 +109,7 @@ class RulesViewModel : ViewModel() {
     fun saveKeywords() {
         val base = ConfigWriter.load()
         if (base == null) {
-            notify("保存失败：框架服务未连接")
+            notify(UiText.Res(R.string.notice_save_failed_disconnected))
             repaint()
             return
         }
@@ -124,16 +127,16 @@ class RulesViewModel : ViewModel() {
         )
         val next = base.copy(rules = if (keywords.isEmpty()) others else others + custom)
         if (!ConfigWriter.save(next)) {
-            notify("保存失败：下发没有成功（模块端仍是上一份配置）")
+            notify(UiText.Res(R.string.notice_save_failed_delivery))
             repaint()
             return
         }
         state = state.copy(cfg = next, keywordDraft = keywords.joinToString("\n"))
         notify(
             if (keywords.isEmpty()) {
-                "已清空关键词并下发：这条规则不再拦任何通知"
+                UiText.Res(R.string.notice_keywords_cleared)
             } else {
-                "已保存 ${keywords.size} 个关键词并下发（模块端即时生效）"
+                UiText.Res(R.string.notice_keywords_saved, listOf(keywords.size))
             },
         )
     }
@@ -142,32 +145,34 @@ class RulesViewModel : ViewModel() {
     fun setRuleEnabled(value: Boolean) {
         val base = ConfigWriter.load()
         if (base == null) {
-            notify("框架服务未连接，改动没有下发")
+            notify(UiText.Res(R.string.notice_service_disconnected))
             repaint()
             return
         }
         val i = base.rules.indexOfFirst { it.id == Rule.CUSTOM_KEYWORDS_ID }
         if (i < 0) {
-            notify("还没有关键词：先在下面填关键词并保存")
+            notify(UiText.Res(R.string.notice_rule_no_keywords))
             repaint()
             return
         }
         val rules = base.rules.toMutableList().also { it[i] = it[i].copy(enabled = value) }
         val next = base.copy(rules = rules)
         if (!ConfigWriter.save(next)) {
-            notify("下发失败，开关已还原为生效值")
+            notify(UiText.Res(R.string.notice_delivery_failed_switch))
             repaint()
             return
         }
         state = state.copy(cfg = next)
-        notify(if (value) "关键词规则已启用" else "关键词规则已停用（关键词仍保留在配置里）")
+        notify(
+            UiText.Res(if (value) R.string.notice_rule_enabled else R.string.notice_rule_disabled)
+        )
     }
 
     /** 勾选即下发，同开关语义。 */
     fun setWhitelist(pkg: String, inList: Boolean) {
         val base = ConfigWriter.load()
         if (base == null) {
-            notify("框架服务未连接，改动没有下发")
+            notify(UiText.Res(R.string.notice_service_disconnected))
             repaint()
             return
         }
@@ -175,7 +180,7 @@ class RulesViewModel : ViewModel() {
             whitelist = if (inList) base.whitelist + pkg else base.whitelist - pkg,
         )
         if (!ConfigWriter.save(next)) {
-            notify("下发失败，白名单已还原为生效值")
+            notify(UiText.Res(R.string.notice_whitelist_reverted))
             repaint()
             return
         }
@@ -183,9 +188,9 @@ class RulesViewModel : ViewModel() {
         repaint()
         notify(
             if (inList) {
-                "$pkg 已加入白名单：它的通知不再进 AI 识别（关键词规则照常生效）"
+                UiText.Res(R.string.notice_whitelist_added_effects, listOf(UiText.Raw(pkg)))
             } else {
-                "$pkg 已移出白名单"
+                UiText.Res(R.string.notice_whitelist_removed, listOf(UiText.Raw(pkg)))
             },
         )
     }
@@ -198,28 +203,28 @@ class RulesViewModel : ViewModel() {
         val pkg = state.pkgDraft.trim()
         if (pkg.isEmpty()) return
         if (!isPkgName(pkg)) {
-            notify("包名格式不对：应形如 com.example.app（这里要的是包名，不是应用名）")
+            notify(UiText.Res(R.string.notice_pkg_bad_format))
             return
         }
         if (state.cfg?.whitelist?.contains(pkg) == true) {
             state = state.copy(pkgDraft = "")
-            notify("$pkg 已在白名单里")
+            notify(UiText.Res(R.string.notice_whitelist_already, listOf(UiText.Raw(pkg))))
             return
         }
         val base = ConfigWriter.load()
         if (base == null) {
-            notify("框架服务未连接，改动没有下发")
+            notify(UiText.Res(R.string.notice_service_disconnected))
             return
         }
         val next = base.copy(whitelist = base.whitelist + pkg)
         if (!ConfigWriter.save(next)) {
-            notify("下发失败，白名单已还原为生效值")
+            notify(UiText.Res(R.string.notice_whitelist_reverted))
             repaint()
             return
         }
         state = state.copy(cfg = next, pkgDraft = "")
         repaint()
-        notify("$pkg 已加入白名单")
+        notify(UiText.Res(R.string.notice_whitelist_added, listOf(UiText.Raw(pkg))))
     }
 
     /**
@@ -233,11 +238,11 @@ class RulesViewModel : ViewModel() {
         state = state.copy(refreshing = true)
         LogFetcher.fetch(ctx) { list ->
             state = state.copy(refreshing = false)
-            if (list == null) {
-                notify("候选拉取超时：模块未激活或装完还没重启过系统框架（已有的候选照常可用）")
-            } else {
-                notify("候选已更新")
-            }
+            notify(
+                UiText.Res(
+                    if (list == null) R.string.notice_candidates_timeout else R.string.notice_candidates_updated
+                )
+            )
             repaint()
         }
     }
@@ -246,9 +251,9 @@ class RulesViewModel : ViewModel() {
         state = state.copy(
             connected = svc != null,
             serviceText = if (svc == null) {
-                "框架服务：未连接（在 LSPosed 里启用本模块后重开本页；未连接时改动下发不了，控件已置灰）"
+                UiText.Res(R.string.service_disconnected)
             } else {
-                "框架服务：${svc.frameworkName} ${svc.frameworkVersion}"
+                UiText.Res(R.string.service_connected, listOf(svc.frameworkName, svc.frameworkVersion))
             },
         )
         repaint()
@@ -289,7 +294,7 @@ class RulesViewModel : ViewModel() {
 
     private fun savedKeywords(): List<String> = state.cfg?.let(::customKeywords).orEmpty()
 
-    private fun notify(text: String) {
+    private fun notify(text: UiText) {
         state = state.copy(notice = Notice(++noticeSeq, text))
     }
 
@@ -302,6 +307,11 @@ class RulesViewModel : ViewModel() {
         const val CANDIDATE_MAX = 60
 
         private val PKG_RE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
+
+        /** 保存按钮上写什么：有未保存改动时必须写出来，否则用户看不出这一下会真的下发。 */
+        fun saveLabel(dirty: Boolean): UiText = UiText.Res(
+            if (dirty) R.string.rules_save_keywords_dirty else R.string.rules_save_keywords
+        )
 
         fun normalize(raw: String): List<String> =
             raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }

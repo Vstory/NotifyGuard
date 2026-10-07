@@ -115,6 +115,12 @@ ColorOS 的**通知拦截** LSPosed 模块：在通知**入队前**判定，命�
 
 框架未连接时控件置灰 —— 改动无法下发，页面会直说而不是假装成功。
 
+## 界面语言
+
+界面文案走 Android 字符串资源：`res/values` 是**默认（英文）**，`res/values-zh` 是**中文**。跟随系统语言，不需要在 App 里选。
+
+两套键逐条对应（CI 门禁按全集比对，漏键会让那一条静默回落英文）；模块端跑在 system_server 里，它的日志与判定 `reason` 是排障用的技术串，不参与翻译。
+
 ## 安装
 
 1. 安装 [LSPosed](https://github.com/LSPosed/LSPosed)（支持 libxposed API 102）
@@ -138,7 +144,7 @@ ColorOS 的**通知拦截** LSPosed 模块：在通知**入队前**判定，命�
 git clone https://github.com/Vstory/NotifyGuard.git
 cd NotifyGuard
 ./gradlew assembleDebug        # 或 assembleRelease
-./gradlew test                 # 196 条 JVM 单测
+./gradlew test                 # 228 条 JVM 单测
 ```
 
 - AGP 9.4.1（**内置 Kotlin**，不声明 `org.jetbrains.kotlin.android`）/ Gradle 9.7.1 / JDK 21

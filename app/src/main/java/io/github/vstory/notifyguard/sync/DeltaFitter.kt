@@ -8,9 +8,6 @@ import io.github.vstory.notifyguard.ai.SpamModel
 import io.github.vstory.notifyguard.ai.SpamTuner
 import io.github.vstory.notifyguard.judge.LabelRecord
 import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import java.util.concurrent.Executors
 
 /**
@@ -31,10 +28,30 @@ object DeltaFitter {
 
         data class NotEnough(val readiness: SpamTuner.Readiness) : State
 
-        /** 这一步做不成：模块未连接、写文件失败、内置模型不可用。 */
-        data class Unavailable(val reason: String) : State
+        /**
+         * 这一步做不成。原因用枚举而非成品文案：文案归资源，这一层拿不到 Locale，
+         * 拼好的中文串在英文界面里也没法再翻回去。
+         */
+        data class Unavailable(val reason: Reason) : State
 
         data class Sent(val version: Long, val weights: Int) : State
+    }
+
+    /** 拟合链路各步的失败原因（`Reason` 里带详情的两项是异常信息，本身不翻译）。 */
+    sealed interface Reason {
+        data object ModelUnavailable : Reason
+
+        data object ModuleDisconnected : Reason
+
+        data object DeltaWriteFailed : Reason
+
+        data object ConfigReadFailed : Reason
+
+        data object VersionWriteFailed : Reason
+
+        data class FitError(val detail: String) : Reason
+
+        data class StateError(val detail: String) : Reason
     }
 
     private const val PREFS = "notifyguard_fit"
@@ -63,7 +80,7 @@ object DeltaFitter {
         val appContext = ctx.applicationContext
         worker.execute {
             val state = runCatching { fitIfNeeded(appContext, labels) }
-                .getOrElse { State.Unavailable("拟合异常：${it.javaClass.simpleName}: ${it.message}") }
+                .getOrElse { State.Unavailable(Reason.FitError("${it.javaClass.simpleName}: ${it.message}")) }
             main.post { onDone(state) }
         }
     }
@@ -73,9 +90,9 @@ object DeltaFitter {
         val appContext = ctx.applicationContext
         worker.execute {
             val state = runCatching {
-                val model = bundledBase() ?: return@runCatching State.Unavailable("内置模型不可用")
+                val model = bundledBase() ?: return@runCatching State.Unavailable(Reason.ModelUnavailable)
                 currentState(model)
-            }.getOrElse { State.Unavailable("状态读取异常：${it.javaClass.simpleName}: ${it.message}") }
+            }.getOrElse { State.Unavailable(Reason.StateError("${it.javaClass.simpleName}: ${it.message}")) }
             main.post { onDone(state) }
         }
     }
@@ -89,7 +106,7 @@ object DeltaFitter {
     fun baseFingerprint(): Int = bundledBase()?.fingerprint ?: 0
 
     private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>): State {
-        val model = bundledBase() ?: return State.Unavailable("内置模型不可用")
+        val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getString(KEY_SIG, null) == sig) return currentState(model)
@@ -99,14 +116,14 @@ object DeltaFitter {
             is SpamTuner.Fit.NotReady -> return State.NotEnough(fit.readiness)
             is SpamTuner.Fit.Ok -> fit.delta
         }
-        if (!ConfigWriter.isConnected()) return State.Unavailable("模块未连接")
+        if (!ConfigWriter.isConnected()) return State.Unavailable(Reason.ModuleDisconnected)
         // 顺序是正确性的一部分：文件先落地，版本号后写（见 DeltaWriter 类注释）
-        if (!DeltaWriter.write(delta)) return State.Unavailable("写入微调文件失败")
-        val cfg = ConfigWriter.load() ?: return State.Unavailable("读不到当前配置")
+        if (!DeltaWriter.write(delta)) return State.Unavailable(Reason.DeltaWriteFailed)
+        val cfg = ConfigWriter.load() ?: return State.Unavailable(Reason.ConfigReadFailed)
         // 版本号与时间戳同源，同毫秒连发两轮时 +1 —— 否则模块端把第二轮当成「版本号没变」而不加载
         val now = System.currentTimeMillis()
         val version = if (cfg.deltaVersion == now) now + 1 else now
-        if (!ConfigWriter.save(cfg.copy(deltaVersion = version))) return State.Unavailable("下发版本号失败")
+        if (!ConfigWriter.save(cfg.copy(deltaVersion = version))) return State.Unavailable(Reason.VersionWriteFailed)
 
         prefs.edit().putString(KEY_SIG, sig).apply()
         return State.Sent(version, delta.indices.size)
@@ -147,19 +164,4 @@ object DeltaFitter {
         }
         return md.digest().joinToString("") { "%02x".format(it) }
     }
-
-    /** UI 文案集中在这里：状态行与「刷新」两处显示必须完全一致，各拼一份迟早不一致。 */
-    fun describe(state: State): String = when (state) {
-        is State.None -> "微调：未下发（标注满 ${SpamTuner.MIN_LABELS} 条且两类各 ≥ ${SpamTuner.MIN_PER_CLASS} 条后自动拟合）"
-        is State.NotEnough -> "微调：未下发（可训练样本 ${state.readiness.usable}/${SpamTuner.MIN_LABELS}，" +
-            "垃圾 ${state.readiness.spam}/${SpamTuner.MIN_PER_CLASS}、正常 ${state.readiness.ham}/${SpamTuner.MIN_PER_CLASS}）"
-        is State.Unavailable -> "微调：未下发（${state.reason}）"
-        is State.Sent -> if (state.weights >= 0) {
-            "微调：已下发 v${TIME.format(Date(state.version))}（${state.weights} 个权重）"
-        } else {
-            "微调：已下发 v${TIME.format(Date(state.version))}（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）"
-        }
-    }
-
-    private val TIME = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
 }
