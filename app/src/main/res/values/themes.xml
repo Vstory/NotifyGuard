@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Compose 自己画全部界面，宿主主题只需两件事：跟随系统深浅（DayNight）+ 去掉系统 ActionBar。
+      平台没有现成的「DeviceDefault.DayNight.NoActionBar」组合（写它会在资源链接期报 not found），
+      故在此继承后关掉 ActionBar —— 否则屏幕顶部会多出一条系统标题栏。
+    -->
+    <style name="Theme.NotifyGuard" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

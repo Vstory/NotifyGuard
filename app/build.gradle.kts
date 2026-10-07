@@ -2,6 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // 签名从 local.properties 读（该文件被 .gitignore 忽略）：本机与 CI 都往这四个键写值，
@@ -68,6 +69,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
+        compose = true
         buildConfig = true
     }
     lint {
@@ -85,6 +87,18 @@ dependencies {
     compileOnly(files("libs/libxposed/api.jar"))
     implementation(files("libs/libxposed/interface.jar"))
     implementation(files("libs/libxposed/service.jar"))
+
+    // UI 只走官方 Material 3（设计方案 §9.1 / D6）：compose 版本由 BOM 统一管，不自定版本号。
+    // 这几个库只进 App 侧 —— 模块端跑在 system_server，不碰 UI（见 core/EntryHook 的装配）。
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.material3:material3")
+    // NavigationSuiteScaffold：一套代码自适应手机底栏与宽屏侧栏（§9.1 明确不自写两套导航）
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite")
+    implementation("androidx.compose.material:material-icons-core")
+    implementation("androidx.navigation:navigation-compose:2.9.5")
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
 
     testImplementation("junit:junit:4.13.2")
     // JVM 单测需要 org.json 的真实现：android.jar 里那份是 stub，未 mock 时调用即抛
