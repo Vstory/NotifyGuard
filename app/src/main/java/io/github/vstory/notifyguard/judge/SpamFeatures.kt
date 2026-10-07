@@ -4,7 +4,7 @@ import java.util.SortedMap
 import java.util.TreeMap
 
 /**
- * 垃圾文本特征。**必须与 `ml/features.py` 逐位一致**（`SpamModelParityTest` 守着这条一致性）。
+ * 垃圾文本特征。**必须与 `training/features.py` 逐位一致**（`SpamModelParityTest` 守着这条一致性）。
  *
  * 归一化去掉空白、十进制数字与字母 x：语料里正常样本被去过空格、垃圾样本把数字与人名掩码成连续 x，
  * 留着它们，模型学到的是「有空格=正常」「有 xxx=垃圾」这类语料的加工痕迹而非词本身。

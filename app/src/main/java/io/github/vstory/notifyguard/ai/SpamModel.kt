@@ -6,10 +6,10 @@ import java.nio.ByteBuffer
 import java.util.zip.CRC32
 
 /**
- * base 模型：`NSPM` 二进制（与 `ml/export.py` 同源）。
+ * base 模型：`NSPM` 二进制（与 `training/export.py` 同源）。
  *
  * 内置只读——端侧自学习产生的是 delta，叠在内存副本上（M3），文件本身从不改写。
- * 打分口径与 `ml/export.py::score` 逐位对齐，`SpamModelParityTest` 拿 `ml/parity.json` 逐条比。
+ * 打分口径与 `training/export.py::score` 逐位对齐，`SpamModelParityTest` 拿 `model/parity.json` 逐条比。
  */
 class SpamModel private constructor(
     val buckets: Int,
