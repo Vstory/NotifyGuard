@@ -6,6 +6,7 @@ import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.judge.Judge
 import io.github.vstory.notifyguard.judge.NotifySnapshot
 import io.github.vstory.notifyguard.judge.RecordSink
+import io.github.vstory.notifyguard.sync.ConfigReader
 import java.lang.reflect.Method
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
@@ -83,6 +84,10 @@ object EntryHook {
             report.markSkip("safe_mode 标志存在 ⇒ 不装 hook")
             return report
         }
+
+        // 先于 hook 装配：判定链要读配置，且框架只向「已取过该组」的进程推送变更
+        ConfigReader.start(iface)
+        report.markOk("配置通道 ${ConfigReader.GROUP}（observe=${ConfigReader.config().observe}）")
 
         val nms = runCatching { cl.loadClass(NMS_CLASS) }.getOrElse {
             report.markSkip("$NMS_CLASS 加载失败: ${it.message}")
@@ -252,10 +257,13 @@ object EntryHook {
 
     private fun decideAndRecord(args: List<Any?>, slot: Slot): Boolean {
         val snapshot = NotifySnapshot.from(args)
-        val decision = Judge.decide(snapshot)
+        val decision = Judge.decide(snapshot, ConfigReader.config())
         RecordSink.record(snapshot, decision)
         if (decision.block) {
             ModuleLogger.info("BLOCK[$slot] pkg=${snapshot?.pkg} reason=${decision.reason}")
+        } else if (decision.wouldBlock) {
+            // 观察模式：判定已命中但未拦，这一行就是切到拦截模式前的证据
+            ModuleLogger.info("OBSERVE[$slot] pkg=${snapshot?.pkg} reason=${decision.reason}")
         }
         return decision.block
     }

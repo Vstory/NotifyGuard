@@ -1,0 +1,144 @@
+package io.github.vstory.notifyguard.sync
+
+import io.github.vstory.notifyguard.judge.Config
+import io.github.vstory.notifyguard.judge.ProtectSwitches
+import io.github.vstory.notifyguard.judge.Rule
+import io.github.vstory.notifyguard.judge.RuleLogic
+import io.github.vstory.notifyguard.judge.RuleType
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class ConfigCodecTest {
+
+    /** 期望解析成功的用例都用这个取结果（org.junit 的 assertNotNull 返回 void，不能当值用）。 */
+    private fun decode(json: String?): Config = requireNotNull(ConfigCodec.decode(json))
+
+    @Test
+    fun blankFallsBackToDefaults() {
+        for (json in listOf(null, "", "   ")) {
+            val c = decode(json)
+            assertTrue(c.observe)
+            assertTrue(c.enabled)
+            assertTrue(c.rules.isEmpty())
+            assertTrue(c.protect.call)
+        }
+    }
+
+    @Test
+    fun roundTripKeepsEveryField() {
+        val src = Config(
+            enabled = false,
+            observe = false,
+            protect = ProtectSwitches(call = false, media = false),
+            whitelist = setOf("com.keep.me"),
+            rules = listOf(
+                Rule(
+                    id = "r1",
+                    name = "电商推广",
+                    enabled = true,
+                    type = RuleType.KEYWORD,
+                    logic = RuleLogic.AND,
+                    keywords = listOf("优惠券", "限时"),
+                    packages = setOf("com.shop.app"),
+                ),
+                Rule(id = "r2", type = RuleType.REGEX, pattern = "(点击|戳).{0,8}领取"),
+            ),
+            threshold = 0.55,
+        )
+        val back = decode(ConfigCodec.encode(src))
+
+        assertEquals(src.enabled, back.enabled)
+        assertEquals(src.observe, back.observe)
+        assertEquals(src.protect.call, back.protect.call)
+        assertEquals(src.protect.media, back.protect.media)
+        assertEquals(src.protect.navigation, back.protect.navigation)
+        assertEquals(src.whitelist, back.whitelist)
+        assertEquals(src.threshold, back.threshold, 0.0)
+        assertEquals(2, back.rules.size)
+        assertEquals(src.rules[0], back.rules[0])
+        assertEquals(src.rules[1], back.rules[1])
+    }
+
+    @Test
+    fun brokenJsonReturnsNull() {
+        assertNull(ConfigCodec.decode("{ 这不是 json"))
+        assertNull(ConfigCodec.decode("[]"))
+    }
+
+    @Test
+    fun unknownSchemaReturnsNull() {
+        assertNull(ConfigCodec.decode("""{"schema":99}"""))
+        assertNull(ConfigCodec.decode("""{"schema":0}"""))
+    }
+
+    @Test
+    fun missingFieldsUseDefaults() {
+        val c = decode("""{"schema":1}""")
+        assertTrue(c.enabled)
+        assertTrue(c.observe)
+        assertTrue(c.rules.isEmpty())
+        assertTrue(c.whitelist.isEmpty())
+        assertEquals(Config.DEFAULT_THRESHOLD, c.threshold, 0.0)
+    }
+
+    @Test
+    fun unknownFieldsAreIgnored() {
+        val c = decode("""{"schema":1,"future":"x","nested":{"a":1}}""")
+        assertTrue(c.enabled)
+    }
+
+    @Test
+    fun ruleWithoutIdIsDropped() {
+        assertTrue(decode("""{"schema":1,"rules":[{"keywords":["a"]}]}""").rules.isEmpty())
+    }
+
+    @Test
+    fun unknownRuleTypeIsDropped() {
+        assertTrue(decode("""{"schema":1,"rules":[{"id":"r1","type":"glob","keywords":["a"]}]}""").rules.isEmpty())
+    }
+
+    @Test
+    fun keywordRuleWithoutKeywordsIsDropped() {
+        val json = """{"schema":1,"rules":[
+            {"id":"r1","type":"keyword","keywords":[]},
+            {"id":"r2","type":"keyword","keywords":["   "]}
+        ]}"""
+        assertTrue(decode(json).rules.isEmpty())
+    }
+
+    @Test
+    fun regexRuleWithoutPatternIsDropped() {
+        assertTrue(decode("""{"schema":1,"rules":[{"id":"r1","type":"regex","pattern":"  "}]}""").rules.isEmpty())
+    }
+
+    @Test
+    fun duplicateRuleIdKeepsFirst() {
+        val json = """{"schema":1,"rules":[
+            {"id":"r1","keywords":["first"]},
+            {"id":"r1","keywords":["second"]}
+        ]}"""
+        val rules = decode(json).rules
+        assertEquals(1, rules.size)
+        assertEquals(listOf("first"), rules[0].keywords)
+    }
+
+    @Test
+    fun disabledRuleSurvivesParsingButNotCompilation() {
+        val cfg = decode("""{"schema":1,"rules":[{"id":"r1","enabled":false,"keywords":["a"]}]}""")
+        assertEquals(1, cfg.rules.size)
+        assertFalse(cfg.rules[0].enabled)
+        assertTrue(cfg.compiledRules.isEmpty())
+        assertEquals(0, cfg.droppedRules)
+    }
+
+    @Test
+    fun invalidRegexCountsAsDroppedRule() {
+        val cfg = decode("""{"schema":1,"rules":[{"id":"r1","type":"regex","pattern":"("}]}""")
+        assertEquals(1, cfg.rules.size)
+        assertTrue(cfg.compiledRules.isEmpty())
+        assertEquals(1, cfg.droppedRules)
+    }
+}

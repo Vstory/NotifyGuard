@@ -44,7 +44,7 @@ object RecordSink {
         } else {
             "pkg=${s.pkg} tag=${s.tag} id=${s.id} uid=${s.uid} pid=${s.pid} user=${s.userId} " +
                 "ch=${s.channelId} flags=0x${Integer.toHexString(s.flags)} len=${s.textLength} " +
-                "group=${s.isGroupSummary} → ${d.reason} block=${d.block}"
+                "group=${s.isGroupSummary} → ${d.reason} would=${d.wouldBlock} block=${d.block}"
         }
 
     private fun summary(n: Long): String {

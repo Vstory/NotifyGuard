@@ -22,16 +22,25 @@ data class NotifySnapshot(
     val bigText: String?,
     val flags: Int,
     val group: String?,
+    val category: String?,
+    val hasMessagingStyle: Boolean,
 ) {
 
     val isGroupSummary: Boolean
         get() = flags and Notification.FLAG_GROUP_SUMMARY != 0
+
+    val isForegroundService: Boolean
+        get() = flags and Notification.FLAG_FOREGROUND_SERVICE != 0
 
     /** 三段文本去重后长度（§6 第 2 步：标题与正文全空 ⇒ 放行）。 */
     val textLength: Int
         get() = setOfNotNull(title, text, bigText).sumOf { it.length }
 
     fun hasNoText(): Boolean = title.isNullOrBlank() && text.isNullOrBlank() && bigText.isNullOrBlank()
+
+    /** 判定与将来 AI 共用的文本口径：三段去重后按行拼接。 */
+    fun judgeText(): String =
+        listOfNotNull(title, text, bigText).filter { it.isNotEmpty() }.distinct().joinToString("\n")
 
     companion object {
 
@@ -61,6 +70,9 @@ data class NotifySnapshot(
                 flags = n.flags,
                 // getGroup() 是 SDK 里公开的群标识；postTime 属隐藏成员，不取（记录时间由框架日志自带）
                 group = runCatching { n.group }.getOrNull(),
+                category = runCatching { n.category }.getOrNull(),
+                // EXTRA_MESSAGING_STYLE 是 @hide 常量，写死字符串（值见 AOSP Notification.java）
+                hasMessagingStyle = extras?.containsKey("android.messagingStyle") == true,
             )
         }
 

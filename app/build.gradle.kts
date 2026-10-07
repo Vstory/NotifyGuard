@@ -87,4 +87,6 @@ dependencies {
     implementation(files("libs/libxposed/service.jar"))
 
     testImplementation("junit:junit:4.13.2")
+    // JVM 单测需要 org.json 的真实现：android.jar 里那份是 stub，未 mock 时调用即抛
+    testImplementation("org.json:json:20240303")
 }
