@@ -16,11 +16,13 @@ import android.widget.Toast
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
+import io.github.vstory.notifyguard.judge.LabelRecord
 import io.github.vstory.notifyguard.judge.Rule
 import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigCodec
 import io.github.vstory.notifyguard.sync.ConfigWriter
+import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -50,6 +52,7 @@ class ConfigActivity : Activity() {
     private lateinit var saveButton: Button
     private lateinit var jsonView: TextView
     private lateinit var recordInfo: TextView
+    private lateinit var labelInfo: TextView
     private lateinit var recordView: TextView
 
     /** 程序化改开关（渲染 / 回滚）期间抑制监听回调，否则「渲染触发下发、下发触发渲染」会成环。 */
@@ -242,10 +245,14 @@ class ConfigActivity : Activity() {
     /**
      * 记录权威源在模块端（`/data/misc/notifyguard/logs.json`），App 侧只有上次拉取的缓存：
      * 进页面先渲染缓存（立刻有内容），再拉一次覆盖。
+     *
+     * 标注（`labels.json`）跟着一起拉：它同样是模块端权威、App 侧缓存，且这一行是本片唯一能看出
+     * 标注通道是否活着的窗口。
      */
     private fun refreshRecords() {
         renderRecords(null)
-        recordInfo.text = "正在从模块端拉取…"
+        labelInfo.text = "标注：正在从模块端拉取…"
+        LabelClient.fetch(this) { renderLabels(it) }
         LogFetcher.fetch(this) { list ->
             renderRecords(
                 if (list == null) {
@@ -254,6 +261,14 @@ class ConfigActivity : Activity() {
                     null
                 },
             )
+        }
+    }
+
+    private fun renderLabels(list: List<LabelRecord>?) {
+        labelInfo.text = if (list == null) {
+            "标注：拉取超时（模块未激活或装完还没重启过系统框架；标注本身没丢，仍在模块端）"
+        } else {
+            "标注 ${list.size} 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）"
         }
     }
 
@@ -359,6 +374,8 @@ class ConfigActivity : Activity() {
         root.addView(label("记录（模块端回流）"))
         recordInfo = TextView(this)
         root.addView(recordInfo)
+        labelInfo = TextView(this).apply { textSize = 12f }
+        root.addView(labelInfo)
         root.addView(
             Button(this).apply {
                 text = "刷新记录"

@@ -21,14 +21,25 @@ class LabelStore(private val file: File) {
     private val lock = Any()
 
     @Volatile private var loaded = false
+
+    /**
+     * 「文件存在且非空，但整体不是 JSON 数组」。置位后拒绝一切增量写入 ——
+     * 因为此时内存快照与权威源无关，写回等于拿空库覆盖用户标注（[LabelCodec.parseList] 的三态区分）。
+     * 不重试读盘：文件已经坏了，再读还是坏的。
+     */
+    @Volatile private var loadFailed = false
+
     private val labels = HashMap<String, LabelRecord>()
 
     /** 单测注入点：真上限下逐条写 5000 次会退化成 O(n²) 序列化，用例改小它（同 [LogSink] 的做法）。 */
     internal var maxLabels = MAX_LABELS
 
+    val isLoadFailed: Boolean get() = synchronized(lock) { ensureLoaded(); loadFailed }
+
     /** 同一 key 再标即用户改主意，只留最新一条。 */
     fun upsert(l: LabelRecord): Boolean = synchronized(lock) {
         ensureLoaded()
+        if (loadFailed) return false
         labels[l.key] = l
         trim()
         persist()
@@ -37,12 +48,27 @@ class LabelStore(private val file: File) {
     /** 删不存在的 key 是成功：调用方不必先查存在性，也不会因此白写一次盘。 */
     fun delete(key: String): Boolean = synchronized(lock) {
         ensureLoaded()
+        if (loadFailed) return false
         if (labels.remove(key) == null) true else persist()
     }
 
     fun clear(): Boolean = synchronized(lock) {
         ensureLoaded()
+        if (loadFailed) return false
         labels.clear()
+        persist()
+    }
+
+    /**
+     * 覆盖式替换（App 侧缓存专用：权威源在模块端，回执里的全量就是唯一真相）。
+     * **不受 [loadFailed] 限制**：它是显式覆盖语义，坏掉的本地缓存正该被它冲掉。
+     */
+    fun replaceAll(list: List<LabelRecord>): Boolean = synchronized(lock) {
+        ensureLoaded()
+        labels.clear()
+        list.forEach { labels[it.key] = it }
+        trim()
+        loadFailed = false
         persist()
     }
 
@@ -63,10 +89,14 @@ class LabelStore(private val file: File) {
     private fun ensureLoaded() {
         if (loaded) return
         loaded = true
-        runCatching {
-            if (!file.exists()) return@runCatching
-            LabelCodec.decodeList(file.readText()).forEach { labels[it.key] = it }
+        val text = runCatching { if (file.exists()) file.readText() else null }.getOrNull()
+        if (text.isNullOrBlank()) return
+        val parsed = LabelCodec.parseList(text)
+        if (parsed == null) {
+            loadFailed = true
+            return
         }
+        parsed.forEach { labels[it.key] = it }
     }
 
     private fun trim() {

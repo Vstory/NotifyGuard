@@ -43,6 +43,30 @@ class LabelCodecTest {
         assertTrue(LabelCodec.decodeList(null).isEmpty())
     }
 
+    /**
+     * `parseList` 的三态是写入安全的开关：`null`（整体不可解析）与 `[]`（合法但为空）
+     * 在 `LabelStore` 里对应完全不同的处置 —— 前者拒写，后者照写。
+     */
+    @Test
+    fun parseListDistinguishesBrokenFromEmpty() {
+        assertNull(LabelCodec.parseList("{ not an array"))
+        assertNull(LabelCodec.parseList(null))
+        assertNull(LabelCodec.parseList("   "))
+        assertEquals(emptyList<LabelRecord>(), LabelCodec.parseList("[]"))
+        assertEquals(listOf("1:com.x"), LabelCodec.parseList(LabelCodec.encodeList(listOf(label(key = "1:com.x"))))?.map { it.key })
+    }
+
+    /** 通道载荷是单条对象（不是数组）：解不出就得让调用方拒绝这次写入。 */
+    @Test
+    fun decodeOneHandlesSingleObjectOnly() {
+        assertEquals(label(), LabelCodec.decodeOne(LabelCodec.toJson(label()).toString()))
+        assertNull(LabelCodec.decodeOne("[]"))
+        assertNull(LabelCodec.decodeOne("junk"))
+        assertNull(LabelCodec.decodeOne(""))
+        assertNull(LabelCodec.decodeOne(null))
+        assertNull(LabelCodec.decodeOne(JSONObject().put("key", "").toString()))
+    }
+
     /** 一条坏标注不该毁掉整批 —— 与 LogCodec 同一口径。 */
     @Test
     fun brokenItemDoesNotKillTheBatch() {

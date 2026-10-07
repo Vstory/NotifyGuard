@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.data
 
 import io.github.vstory.notifyguard.judge.LabelRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -71,6 +72,57 @@ class LabelStoreTest {
     fun brokenFileIsTreatedAsEmpty() {
         file().writeText("{ not an array")
         assertEquals(0, store().size())
+    }
+
+    /**
+     * 坏文件必须**拒写**：此时内存快照与权威源无关，写回去就是拿空库盖掉用户已有标注。
+     * 拒写的代价只是「这次改动没生效」，写进去的代价是「标注全没了」。
+     */
+    @Test
+    fun brokenFileRejectsWritesAndKeepsTheFileIntact() {
+        file().writeText("{ not an array")
+        val s = store()
+        assertTrue(s.isLoadFailed)
+        assertFalse(s.upsert(label("1:com.x")))
+        assertFalse(s.delete("1:com.x"))
+        assertFalse(s.clear())
+        assertEquals("{ not an array", file().readText())
+    }
+
+    /** 「不存在 / 空 / 合法空数组」都不是故障，别把正常空库也锁成只读。 */
+    @Test
+    fun missingOrEmptyFileIsNotALoadFailure() {
+        assertFalse(store().isLoadFailed)
+        file().writeText("")
+        assertFalse(store().isLoadFailed)
+        file().writeText("[]")
+        assertFalse(store().isLoadFailed)
+    }
+
+    /** replaceAll 是显式覆盖语义（App 侧缓存专用），坏掉的缓存正该被它冲掉。 */
+    @Test
+    fun replaceAllRecoversABrokenCache() {
+        file().writeText("{ not an array")
+        assertTrue(store().replaceAll(listOf(label("1:com.x"))))
+        assertEquals(listOf("1:com.x"), store().all().map { it.key })
+        assertFalse(store().isLoadFailed)
+    }
+
+    /** 回执里的全量是唯一真相：替换而不是合并，否则模块端删掉的那条会一直留在缓存里。 */
+    @Test
+    fun replaceAllDropsWhatIsNoLongerThere() {
+        val s = store()
+        s.upsert(label("1:com.x"))
+        s.upsert(label("2:com.x"))
+        s.replaceAll(listOf(label("2:com.x")))
+        assertEquals(listOf("2:com.x"), s.all().map { it.key })
+    }
+
+    @Test
+    fun replaceAllRespectsTheLimit() {
+        val s = store(maxLabels = 2)
+        s.replaceAll(listOf(label("a:com.x", at = 10), label("b:com.x", at = 20), label("c:com.x", at = 30)))
+        assertEquals(listOf("b:com.x", "c:com.x"), s.all().map { it.key })
     }
 
     @Test

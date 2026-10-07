@@ -364,6 +364,24 @@ jobs:
             [ "$MODEL_BYTES" -gt 204800 ] || { echo "::error::$NAME 的 model/model.bin 只有 ${MODEL_BYTES} 字节（<200 KB）—— 文件被截断"; exit 1; }
             echo "  ✅ 内置模型在包内（${MODEL_BYTES} 字节）"
 
+            # ③e 标注通道：四个写指令 + 一个回执，同样没有 manifest 组件，靠 action 字面量跨进程对齐。
+            #     漂移/被裁的表现与 ③c 同类：包照装、模块照常加载，只是标注永远存不下来（且不回执，
+            #     App 只会显示「拉取超时」，看不出根因）。两端（LabelChannel / LabelClient）都在
+            #     引用链上，任一侧断开这条都会红。
+            for A in \
+              'io.github.vstory.notifyguard.action.GET_LABELS' \
+              'io.github.vstory.notifyguard.action.SET_LABEL' \
+              'io.github.vstory.notifyguard.action.DELETE_LABEL' \
+              'io.github.vstory.notifyguard.action.CLEAR_LABELS' \
+              'io.github.vstory.notifyguard.action.LABELS_RESULT'; do
+              AFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
+              done
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺标注通道 action $A —— 常量被改/裁剪，App 与模块端对不上，标注永远存不下来"; exit 1; }
+            done
+            echo "  ✅ 标注通道 action 契约在 dex"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在

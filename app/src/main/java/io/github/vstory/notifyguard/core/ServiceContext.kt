@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.core
 
 import android.content.Context
+import io.github.vstory.notifyguard.sync.LabelSink
 import io.github.vstory.notifyguard.sync.LogSink
 
 /**
@@ -30,6 +31,7 @@ object ServiceContext {
         }
         ctx = c
         LogSink.bindContext(c)
+        LabelSink.bindContext(c)
     }
 
     private fun fromGetter(service: Any): Context? = runCatching {

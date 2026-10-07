@@ -37,16 +37,30 @@ object LabelCodec {
         )
     }
 
+    /** 通道的 `label` extra：单条 JSON 对象。解不出返回 null —— 调用方据此拒绝该次写入。 */
+    fun decodeOne(json: String?): LabelRecord? {
+        if (json.isNullOrBlank()) return null
+        return runCatching { JSONObject(json) }.getOrNull()?.let { fromJson(it) }
+    }
+
     fun encodeList(list: List<LabelRecord>): String =
         JSONArray().apply { list.forEach { put(toJson(it)) } }.toString()
 
-    fun decodeList(json: String?): List<LabelRecord> {
-        if (json.isNullOrBlank()) return emptyList()
-        val arr = runCatching { JSONArray(json) }.getOrNull() ?: return emptyList()
+    /**
+     * `null` = 整体不可解析，与「合法但为空」区分开。
+     *
+     * 这个区分是写入安全的开关：文件坏掉时内存快照会是空的，此时任何一条新写入都会用空快照覆盖权威源，
+     * 把用户已有标注全抹掉。调用方（[io.github.vstory.notifyguard.data.LabelStore]）必须能分辨这两种空。
+     */
+    fun parseList(json: String?): List<LabelRecord>? {
+        if (json.isNullOrBlank()) return null
+        val arr = runCatching { JSONArray(json) }.getOrNull() ?: return null
         val out = ArrayList<LabelRecord>(arr.length())
         for (i in 0 until arr.length()) {
             arr.optJSONObject(i)?.let { fromJson(it)?.let(out::add) }
         }
         return out
     }
+
+    fun decodeList(json: String?): List<LabelRecord> = parseList(json).orEmpty()
 }
