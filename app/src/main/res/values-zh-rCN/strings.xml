@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      中文语言包。键必须与 res/values/strings.xml 逐条对应：漏掉的键会静默回落到英文。
+      简体中文语言包（values-zh-rCN）。键必须与 res/values/strings.xml 逐条对应：漏掉的键会静默回落到英文。
       「%1$s」这类占位的含义也与英文版一致，不要调换顺序。
     -->
     <string name="app_name">NotifyGuard</string>
