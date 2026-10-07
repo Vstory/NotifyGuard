@@ -1,6 +1,9 @@
 package io.github.vstory.notifyguard.sync
 
 import io.github.vstory.notifyguard.judge.LogRecord
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -65,6 +68,49 @@ class LogSinkTest {
         LogSink.submit(rec(2))
         LogSink.awaitIdle()
         assertTrue(LogSink.statsLine().contains("回流失败=2"))
+    }
+
+    @Test
+    fun keepsRecordsOnFailure() {
+        val got = CopyOnWriteArrayList<LogRecord>()
+        val fail = AtomicBoolean(true)
+        val attempts = AtomicInteger()
+        LogSink.flushThreshold = 2
+        LogSink.retryDelayMs = 5
+        LogSink.retryMaxDelayMs = 10
+        LogSink.deliverOverride = { batch ->
+            attempts.incrementAndGet()
+            if (fail.get()) false else { got.addAll(batch); true }
+        }
+
+        LogSink.submit(rec(1))
+        LogSink.submit(rec(2))
+        LogSink.awaitIdle()
+        assertTrue(got.isEmpty())
+        assertTrue(LogSink.statsLine().contains("已回流=0"))
+
+        fail.set(false)
+        assertTrue(waitUntil { got.size == 2 })
+        assertEquals(listOf(1L, 2L), got.map { it.ts })
+        assertTrue(LogSink.statsLine().contains("已回流=2"))
+    }
+
+    @Test
+    fun backsOffBetweenRetries() {
+        val attempts = AtomicInteger()
+        LogSink.flushThreshold = 1
+        LogSink.retryDelayMs = 60_000
+        LogSink.retryMaxDelayMs = 60_000
+        LogSink.deliverOverride = { attempts.incrementAndGet(); false }
+
+        LogSink.submit(rec(1))
+        LogSink.awaitIdle()
+        assertEquals(1, attempts.get())
+
+        // 退避窗口内继续投递不应再撞一次「被 ROM 拦住的启动路径」
+        (2L..5L).forEach { LogSink.submit(rec(it)) }
+        LogSink.awaitIdle()
+        assertEquals(1, attempts.get())
     }
 
     @Test

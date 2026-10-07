@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.ui
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.Button
@@ -17,6 +18,7 @@ import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigCodec
 import io.github.vstory.notifyguard.sync.ConfigWriter
+import io.github.vstory.notifyguard.sync.LogContract
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -47,6 +49,7 @@ class ConfigActivity : Activity() {
         super.onResume()
         // 框架服务从 Binder 线程回调，触碰 UI 必须回主线程
         ConfigWriter.observe { svc -> runOnUiThread { onService(svc) } }
+        requestFlush()
         renderRecords()
     }
 
@@ -105,12 +108,18 @@ class ConfigActivity : Activity() {
         if (ok) jsonView.text = ConfigCodec.encode(next)
     }
 
+    /** 本页在前台 ⇒ App 进程活着 ⇒ provider 现成，催模块端把缓冲的记录补送出来。 */
+    private fun requestFlush() {
+        sendBroadcast(Intent(LogContract.ACTION_FLUSH))
+    }
+
     private fun renderRecords() {
         val store = LogStore.get(this)
         val list = store.recent(RECENT_LIMIT)
         recordInfo.text = "共 ${store.size()} 条（上限 ${LogStore.MAX_RECORDS}），下列最近 ${list.size} 条"
         recordView.text = if (list.isEmpty()) {
-            "（暂无记录。模块端有判定后 30 秒内回传；一直为空就去看框架日志有无「记录回流失败」）"
+            "（暂无记录。模块端有判定后 30 秒内回传；一直为空请看框架日志的「记录回流失败」，" +
+                "并在 ColorOS 的「应用启动管理 / 关联启动」里放行本应用——被拦时只有在 App 前台才回流）"
         } else {
             list.joinToString("\n\n") { r ->
                 val mark = when {
@@ -168,7 +177,11 @@ class ConfigActivity : Activity() {
         root.addView(
             Button(this).apply {
                 text = "刷新记录"
-                setOnClickListener { renderRecords() }
+                setOnClickListener {
+                    requestFlush()
+                    // 补送是异步的（模块端要跑一次 binder），给一拍再渲染
+                    recordView.postDelayed({ renderRecords() }, 800)
+                }
             },
         )
         root.addView(

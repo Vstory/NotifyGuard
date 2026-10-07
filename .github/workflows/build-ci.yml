@@ -342,6 +342,17 @@ jobs:
             done
             echo "  ✅ 入口类生命周期方法名完整（R8 未改名）"
 
+            # ③c provider 由**系统按 manifest 里的类名**实例化，不走 java_init.list；被 R8 改名后
+            #     App 装得上、模块也照常加载，只是记录回流永远失败（且失败原因看不出来）。
+            for C in 'Lio/github/vstory/notifyguard/provider/LogProvider;'; do
+              CFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$C"; then CFOUND=1; break; fi
+              done
+              [ "$CFOUND" -eq 1 ] || { echo "::error::$NAME 缺类 $C —— 被 R8 改名/裁剪，系统按 manifest 类名实例化会失败"; exit 1; }
+            done
+            echo "  ✅ LogProvider 在 dex（R8 未改名）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在
