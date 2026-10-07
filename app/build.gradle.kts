@@ -99,6 +99,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.5")
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+    // 记录屏的状态要跨重组与屏幕旋转存活（在途的标注指令若随重组丢掉标志位，连点会并发下发）
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
 
     testImplementation("junit:junit:4.13.2")
     // JVM 单测需要 org.json 的真实现：android.jar 里那份是 stub，未 mock 时调用即抛

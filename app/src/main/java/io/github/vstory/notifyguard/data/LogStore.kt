@@ -125,9 +125,15 @@ class LogStore(private val file: File) {
 
         @Volatile private var instance: LogStore? = null
 
-        /** App 侧界面与拉取器共用一份内存列表，避免各自读盘。 */
+        /**
+         * App 侧界面与拉取器共用一份内存列表，避免各自读盘。
+         *
+         * 单例是进程级的 ⇒ 一律取 applicationContext：传 Activity 进来会把它一直留到进程结束，
+         * 而这里只需要 filesDir。
+         */
         fun get(ctx: Context): LogStore = instance ?: synchronized(this) {
-            instance ?: LogStore(File(ctx.filesDir, FILE_NAME)).also { instance = it }
+            val app = ctx.applicationContext ?: ctx
+            instance ?: LogStore(File(app.filesDir, FILE_NAME)).also { instance = it }
         }
     }
 }
