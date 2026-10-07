@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ci-refresh-page.sh — CI 滚动发布页刷新器（NotifyGuard 项目副本）
-# TEMPLATE_VERSION=1.0.0    # 模板版本号（模板内容变更时 bump；勿删）
-# SCRIPT_VERSION=1.0.0      # 项目副本版本（本副本自有的改动在此 +1）
+# TEMPLATE_VERSION=1.0.1    # 模板版本号（模板内容变更时 bump；勿删）
+# SCRIPT_VERSION=1.0.1    # 项目侧版本(合并模板更新 +1)
 #
 # 作用：把固定 tag 的 Release 正文重建为「最近 N 组构建」的表格，并删除被淘汰的旧资产。
 #       与语言无关：任何「push 即出包、产物追加进同一页」的项目都能用。
@@ -123,12 +123,19 @@ awk -F'\t' -v base="$BASE" -v cols="$COLUMNS" \
     for (i = 1; i <= n; i++) { hdr = hdr " " (C[i] in H ? H[C[i]] : C[i]) " |"; sep = sep "---|" }
     print hdr; print sep
   }
+  # 大小列按容量自适应单位：固定 MB 会把几十 KB 的产物显示成 0.0 MB
+  function fmt_size(b) {
+    if (b < 1024)       return b " B"
+    if (b < 1048576)    return sprintf("%.1f KB", b / 1024)
+    if (b < 1073741824) return sprintf("%.1f MB", b / 1048576)
+    return sprintf("%.2f GB", b / 1073741824)
+  }
   function cell(c) {
     if (c == "time")     return pretty
     if (c == "version")  return ver "(" code ")"
     if (c == "commit")   return short
     if (c == "variant")  return var
-    if (c == "size")     return sprintf("%.1f MB", size / 1048576)
+    if (c == "size")     return fmt_size(size + 0)
     if (c == "download") return "[下载](" base "/" name ")"
     return c
   }
