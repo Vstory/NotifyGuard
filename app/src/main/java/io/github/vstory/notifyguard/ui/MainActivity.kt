@@ -25,9 +25,9 @@ import io.github.vstory.notifyguard.ui.screen.SettingsScreen
 import io.github.vstory.notifyguard.ui.theme.NotifyGuardTheme
 
 /**
- * M4 的 App 入口（取代 ConfigActivity 成为 launcher）。
+ * App 入口（launcher）。
  *
- * 骨架期只保证「导航 + 主题 + 五屏可达」，屏内容逐屏填。
+ * 只负责导航与主题（五屏各自管自己的状态），屏内容逐屏填。
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

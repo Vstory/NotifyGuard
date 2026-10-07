@@ -436,6 +436,21 @@ jobs:
             done
             echo "  ✅ App 侧保护开关入口在 dex"
 
+            # ③i App 侧规则入口（关键词 / 白名单）必须真在 release 里。与 ③h 同理：只断言配置侧
+            #     的东西证明不了「用户点得到」—— 规则屏整块被 R8 裁掉时配置字段照样在包内。
+            #     这四个字面量各自**只在规则屏的一处**出现（关键词输入框 / 保存按钮 / 规则启停开关 /
+            #     白名单候选入口），所以任一处单独失效即红。屏内说明文字刻意不重复它们，
+            #     否则断言会被说明文字单边撑着（与旧配置页删除前的 ③g 同一处境）。
+            #     ⚠️ 断言的不是文案而是「App 侧规则入口活着」；改这些文案要同步改这里。
+            for A in "每行一个关键词" "保存关键词并下发" "启用这条规则" "从模块端刷新候选"; do
+              AFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
+              done
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧规则入口字面量「$A」—— 规则屏的关键词 / 白名单入口在 App 侧没了（或被 R8 裁掉），用户改不了关键词与白名单"; exit 1; }
+            done
+            echo "  ✅ App 侧规则入口在 dex"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在
