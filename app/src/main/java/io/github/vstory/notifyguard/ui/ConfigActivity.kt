@@ -55,6 +55,9 @@ class ConfigActivity : Activity() {
     /** 程序化改开关（渲染 / 回滚）期间抑制监听回调，否则「渲染触发下发、下发触发渲染」会成环。 */
     private var suppressSwitch = false
 
+    /** 框架服务是否已连上。滑杆可用性要在开关变化时重算，故必须留成字段而不只是 [onService] 的局部量。 */
+    private var connected = false
+
     /** 最近一次生效的关键词文本，作为「有未保存改动」的比较基准。 */
     private var savedKeywords = ""
 
@@ -84,10 +87,10 @@ class ConfigActivity : Activity() {
         } else {
             "框架服务：${svc.frameworkName} ${svc.frameworkVersion}"
         }
-        val connected = svc != null
+        connected = svc != null
         for (s in listOf(enabledSwitch, observeSwitch, spamSwitch, ruleSwitch)) s.isEnabled = connected
-        thresholdBar.isEnabled = connected
         saveButton.isEnabled = connected
+        syncThresholdEnabled()
         if (connected) loadIntoUi()
     }
 
@@ -151,10 +154,23 @@ class ConfigActivity : Activity() {
         updateThresholdLabel()
     }
 
+    /**
+     * 滑杆的不可用有两种原因，含义不同且都要表达出来：下不去（无框架服务）/ 值不起作用（AI 段短路在阈值比较之前）。
+     * 合成一个布尔，用户就无法从「置灰」本身看出自己该去修哪一个。
+     */
+    private fun syncThresholdEnabled() {
+        thresholdBar.isEnabled = connected && spamSwitch.isChecked
+        updateThresholdLabel()
+    }
+
     private fun updateThresholdLabel() {
         val step = thresholdBar.progress
-        val state = if (step == savedThresholdStep) "当前生效"
-        else "松手下发，当前生效 ${fmt(valueOf(savedThresholdStep))}"
+        val state = when {
+            !connected -> "框架服务未连接，未读到生效值"
+            !spamSwitch.isChecked -> "AI 未开启，不生效"
+            step == savedThresholdStep -> "当前生效"
+            else -> "松手下发，当前生效 ${fmt(valueOf(savedThresholdStep))}"
+        }
         thresholdLabel.text = "AI 分数阈值 ${fmt(valueOf(step))}（$state）"
     }
 
@@ -287,7 +303,11 @@ class ConfigActivity : Activity() {
         ruleSwitch = Switch(this).apply { text = "启用「自定义关键词」规则" }
 
         thresholdLabel = TextView(this)
-        thresholdBar = SeekBar(this).apply { max = THRESHOLD_STEPS }
+        // 未连接框架时读不到生效值：先落在默认档，别让滑杆停在 0.00 这个「全拦」的位置
+        thresholdBar = SeekBar(this).apply {
+            max = THRESHOLD_STEPS
+            progress = savedThresholdStep
+        }
         thresholdBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             // 靠 fromUser 而不是自备抑制标志：程序化 setProgress 不触发 onStopTrackingTouch，
             // 渲染与回滚因此天然不会误下发
@@ -325,7 +345,7 @@ class ConfigActivity : Activity() {
         root.addView(thresholdLabel)
         root.addView(thresholdBar)
         root.addView(
-            hint("滑杆松手即下发。AI 分数 ≥ 阈值就拦（只在上面「AI 识别垃圾通知」开着时生效）；调低更激进，0 等于全拦。"),
+            hint("滑杆松手即下发。AI 分数 ≥ 阈值就拦；关掉上面「AI 识别垃圾通知」时本滑杆置灰（这个值不参与判定）。调低更激进，0 等于全拦。"),
         )
         root.addView(label("规则"))
         root.addView(ruleSwitch)
@@ -365,7 +385,11 @@ class ConfigActivity : Activity() {
     private fun bindSwitches() {
         enabledSwitch.setOnCheckedChangeListener { _, _ -> pushSwitch { it.copy(enabled = enabledSwitch.isChecked) } }
         observeSwitch.setOnCheckedChangeListener { _, _ -> pushSwitch { it.copy(observe = observeSwitch.isChecked) } }
-        spamSwitch.setOnCheckedChangeListener { _, _ -> pushSwitch { it.copy(spamEnabled = spamSwitch.isChecked) } }
+        spamSwitch.setOnCheckedChangeListener { _, _ ->
+            pushSwitch { it.copy(spamEnabled = spamSwitch.isChecked) }
+            // 渲染期（suppressSwitch）也会走到这里，正是需要跟着重算的时机
+            syncThresholdEnabled()
+        }
         ruleSwitch.setOnCheckedChangeListener { _, checked ->
             if (suppressSwitch) return@setOnCheckedChangeListener
             val base = ConfigWriter.load()
