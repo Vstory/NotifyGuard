@@ -396,6 +396,20 @@ jobs:
             done
             echo "  ✅ 微调量文件名与 magic 在 dex"
 
+            # ③g App 侧标注入口必须真在 release 里。上面 ③e 断言的那五个 action 是**共用**常量：
+            #     `const val` 在使用处内联、dex 字符串池又去重 ⇒ 只要模块端 LabelChannel 引用了它们，
+            #     字符串就在包里 —— 也就是说 ③e 过得了，而 App 侧写指令整条被 R8 裁掉（M3b 时正是
+            #     如此：无 UI 入口，断言全靠模块端单边撑着）。故这里断言**只在 App 侧出现**的字面量。
+            #     ⚠️ 断言的不是文案而是「App 侧标注入口活着」；改这几个词要同步改这里。
+            for A in "标垃圾" "标正常" "撤销" "清空标注"; do
+              AFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
+              done
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧标注入口字面量「$A」—— 记录页的标注动作在 App 侧没了（或被 R8 裁掉），用户无法产生标注，微调永远是空转"; exit 1; }
+            done
+            echo "  ✅ App 侧标注入口在 dex"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在

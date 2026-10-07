@@ -1,9 +1,11 @@
 package io.github.vstory.notifyguard.ui
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -14,9 +16,11 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import io.github.libxposed.service.XposedService
+import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.LabelRecord
+import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.judge.Rule
 import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
@@ -54,7 +58,8 @@ class ConfigActivity : Activity() {
     private lateinit var jsonView: TextView
     private lateinit var recordInfo: TextView
     private lateinit var labelInfo: TextView
-    private lateinit var recordView: TextView
+    private lateinit var root: ScrollView
+    private lateinit var recordList: LinearLayout
 
     /** 程序化改开关（渲染 / 回滚）期间抑制监听回调，否则「渲染触发下发、下发触发渲染」会成环。 */
     private var suppressSwitch = false
@@ -72,9 +77,13 @@ class ConfigActivity : Activity() {
     private var labelSummary = "标注：尚未拉取"
     private var fitSummary = "微调：尚未拉取"
 
+    /** 标注指令在途标志：重绘时读它决定按钮可用性，所以必须跨重绘存活。 */
+    private var labelBusy = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(buildUi())
+        root = buildUi()
+        setContentView(root)
     }
 
     override fun onResume() {
@@ -258,10 +267,11 @@ class ConfigActivity : Activity() {
      * 拟合按「输入摘要有没有变」自行决定要不要真跑，重复进页面不会白算。
      */
     private fun refreshRecords() {
-        renderRecords(null)
         labelSummary = "标注：正在从模块端拉取…"
         fitSummary = "微调：检查中…"
         paintLabelInfo()
+        renderRecords(null)
+        renderRecordViews()
         LabelClient.fetch(this) { renderLabels(it) }
         LogFetcher.fetch(this) { list ->
             renderRecords(
@@ -271,6 +281,7 @@ class ConfigActivity : Activity() {
                     null
                 },
             )
+            renderRecordViews()
         }
     }
 
@@ -278,14 +289,19 @@ class ConfigActivity : Activity() {
         labelSummary = if (list == null) {
             "标注：拉取超时（模块未激活或装完还没重启过系统框架；标注本身没丢，仍在模块端）"
         } else {
-            "标注 ${list.size} 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）"
+            labelSummaryOf(list)
         }
+        // 拉取与前一次标注的回执都会把模块端全量写进本地缓存（LabelClient），据此重绘每条的标注状态
+        renderRecordViews()
         if (list == null) {
             DeltaFitter.status(this) { onFitState(it) }
         } else {
             DeltaFitter.ensureFitted(this, list) { onFitState(it) }
         }
     }
+
+    private fun labelSummaryOf(list: List<LabelRecord>): String =
+        "标注 ${list.size} 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）"
 
     private fun onFitState(state: DeltaFitter.State) {
         if (isFinishing || isDestroyed) return
@@ -299,41 +315,167 @@ class ConfigActivity : Activity() {
 
     private fun renderRecords(error: String?) {
         val store = LogStore.get(this)
-        val list = store.recent(RECENT_LIMIT)
         recordInfo.text = buildString {
-            append("共 ${store.size()} 组 / 累计 ${store.rawCount()} 次（上限 ${LogStore.MAX_RECORDS} 组），下列最近 ${list.size} 组；权威源在模块端")
+            append("共 ${store.size()} 组 / 累计 ${store.rawCount()} 次（上限 ${LogStore.MAX_RECORDS} 组），下列最近 $RECENT_LIMIT 组；权威源在模块端")
             error?.let { append("\n$it") }
-        }
-        recordView.text = if (list.isEmpty()) {
-            "（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）"
-        } else {
-            list.joinToString("\n\n") { r ->
-                val mark = when {
-                    r.block -> "拦截"
-                    r.would -> "本应拦"
-                    else -> "放行"
-                }
-                // 一条记录是一组通知：时间取最近一次，次数附在后面（首见时间对用户没有意义）
-                val times = if (r.count > 1) " ×${r.count}" else ""
-                "${TIME.format(Date(r.lastTs))} [$mark]$times ${r.pkg} · ${r.slot.orEmpty()}\n" +
-                    listOfNotNull(r.title, r.text).joinToString(" / ").ifEmpty { "(无文本)" } + "\n" +
-                    r.reason + (r.ruleId?.let { " · $it" } ?: "")
-            }
         }
     }
 
+    /**
+     * 重绘记录列表。整表重建而不是增量更新：一次点击、一次拉取各只重建一遍（至多 [RECENT_LIMIT] 行），
+     * 而增量更新要多维护一份「哪一行是哪条记录」的索引 —— 那才是真会出错的地方。
+     *
+     * 重建前后恢复滚动位置：按钮在列表靠下的行上，跳回顶部会让人当场丢失上下文（尤其连标几条时）。
+     */
+    private fun renderRecordViews() {
+        val list = LogStore.get(this).recent(RECENT_LIMIT)
+        // 标注同样来自模块端的本地缓存：对不上时只会少显示「已标注」，不会写坏权威源
+        val marks = LabelRecord.marksOf(list, LabelStore.get(this).all())
+        val y = root.scrollY
+        recordList.removeAllViews()
+        if (list.isEmpty()) {
+            recordList.addView(hint("（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）"))
+        } else {
+            list.forEach { recordList.addView(recordRow(it, marks[LabelRecord.keyOf(it)])) }
+        }
+        root.scrollTo(0, y)
+    }
+
+    private fun recordRow(r: LogRecord, marked: Boolean?): View {
+        val mark = when {
+            r.block -> "拦截"
+            r.would -> "本应拦"
+            else -> "放行"
+        }
+        // 一条记录是一组通知：时间取最近一次，次数附在后面（首见时间对用户没有意义）
+        val times = if (r.count > 1) " ×${r.count}" else ""
+        val labeled = when (marked) {
+            true -> " 【已标垃圾】"
+            false -> " 【已标正常】"
+            null -> ""
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, pad / 2, 0, pad / 2)
+
+            addView(
+                TextView(this@ConfigActivity).apply {
+                    textSize = 12f
+                    text = "${TIME.format(Date(r.lastTs))} [$mark]$times ${r.pkg} · ${r.slot.orEmpty()}$labeled"
+                },
+            )
+            addView(
+                TextView(this@ConfigActivity).apply {
+                    textSize = 13f
+                    text = listOfNotNull(r.title, r.text).joinToString(" / ").ifEmpty { "(无文本)" }
+                },
+            )
+            addView(
+                TextView(this@ConfigActivity).apply {
+                    textSize = 10f
+                    text = r.reason + (r.ruleId?.let { " · $it" } ?: "")
+                },
+            )
+            addView(labelButtons(r, marked))
+        }
+    }
+
+    /** 三个动作对已标注状态互斥收敛：已标垃圾时「标垃圾」置灰，免得按出一串同义指令。 */
+    private fun labelButtons(r: LogRecord, marked: Boolean?): View {
+        fun action(text: String, enabled: Boolean, onClick: () -> Unit) = Button(this).apply {
+            this.text = text
+            textSize = 11f
+            // 贴合文字宽度：三个中文按钮走默认 minWidth 会在窄屏上把「撤销」挤出屏幕外
+            minWidth = 0
+            setPadding(pad / 3, pad / 6, pad / 3, pad / 6)
+            // 在途时全部置灰：连点会并发发出多条指令，而「先到的回执」会把后点那次的状态盖掉
+            isEnabled = enabled && !labelBusy
+            setOnClickListener { onClick() }
+        }
+
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(action("标垃圾", marked != true) { markAs(r, true) })
+            addView(action("标正常", marked != false) { markAs(r, false) })
+            addView(action("撤销", marked != null) { undoMark(r) })
+        }
+    }
+
+    private fun markAs(r: LogRecord, spam: Boolean) = submitLabel(if (spam) "标为垃圾" else "标为正常") { done ->
+        LabelClient.set(
+            this,
+            LabelRecord.of(r, spam, System.currentTimeMillis(), DeltaFitter.baseFingerprint()),
+            done,
+        )
+    }
+
+    private fun undoMark(r: LogRecord) = submitLabel("撤销标注") { done ->
+        LabelClient.delete(this, LabelRecord.keyOf(r), done)
+    }
+
+    private fun clearLabels() {
+        val n = LabelStore.get(this).size()
+        if (n == 0) {
+            toast("当前没有标注")
+            return
+        }
+        // 二次确认：标注是手工劳动且没有回收站，误触一下整批就没了
+        AlertDialog.Builder(this)
+            .setTitle("清空全部标注？")
+            .setMessage("$n 条标注会被删除且无法恢复。清空后模型退回纯内置模型，分数会立刻变回去。")
+            .setPositiveButton("清空") { _, _ ->
+                submitLabel("清空标注") { done -> LabelClient.clear(this, done) }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    /**
+     * 标注动作串行化：一次只允许一条指令在途。
+     *
+     * 广播是异步的、超时窗 5s，连点会并发发出多条；模块端按到达顺序串行落盘，而 App 侧**先到的
+     * 回执**会把后点那次的结果覆盖掉 —— 界面最终留下的可能是用户最后一次没点的那个标注。
+     */
+    private fun submitLabel(what: String, call: ((List<LabelRecord>?) -> Unit) -> Unit) {
+        if (labelBusy) {
+            toast("上一个标注动作还在等回执")
+            return
+        }
+        labelBusy = true
+        renderRecordViews()
+        call { list -> onLabelResult(what, list) }
+    }
+
+    private fun onLabelResult(what: String, list: List<LabelRecord>?) {
+        labelBusy = false
+        if (list == null) {
+            // 没有回执 ⇒ LabelClient 不会动本地缓存 ⇒ 重绘后显示的还是原状态，界面与权威源仍一致
+            toast("$what 未生效：模块端没有回执（模块未激活 / 装完还没重启过系统框架 / labels.json 损坏）")
+        } else {
+            toast("$what 已生效（共 ${list.size} 条标注）")
+            labelSummary = labelSummaryOf(list)
+        }
+        renderRecordViews()
+        paintLabelInfo()
+        // 标注就是微调的输入：改完立刻重拟合下发，用户不必再去找别的入口
+        if (list != null) DeltaFitter.ensureFitted(this, list) { onFitState(it) }
+    }
+
+    /** 内边距基准。UI 一律手搓，M4 会用 Material 3 重做整页，样式不值得在这里收敛。 */
+    private val pad: Int get() = (16 * resources.displayMetrics.density).toInt()
+
+    /** 说明文字。抽成成员是因为记录列表在重建时也要用它（列表为空时的占位）。 */
+    private fun hint(text: String): TextView =
+        TextView(this).apply { this.text = text; textSize = 11f; setPadding(0, 0, 0, pad / 4) }
+
     private fun buildUi(): ScrollView {
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply {
+        val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
         }
 
         fun label(text: String): TextView =
             TextView(this).apply { this.text = text; setPadding(0, pad / 2, 0, pad / 4) }
-
-        fun hint(text: String): TextView =
-            TextView(this).apply { this.text = text; textSize = 11f; setPadding(0, 0, 0, pad / 4) }
 
         status = TextView(this).apply { text = "框架服务：检查中…" }
 
@@ -376,54 +518,71 @@ class ConfigActivity : Activity() {
             setOnClickListener { save() }
         }
 
-        root.addView(status)
-        root.addView(label("开关"))
-        root.addView(hint("这一组拨动即下发，模块端立刻生效；右侧「已生效配置」会跟着变。"))
-        root.addView(enabledSwitch)
-        root.addView(observeSwitch)
-        root.addView(spamSwitch)
-        root.addView(thresholdLabel)
-        root.addView(thresholdBar)
-        root.addView(
+        column.addView(status)
+        column.addView(label("开关"))
+        column.addView(hint("这一组拨动即下发，模块端立刻生效；右侧「已生效配置」会跟着变。"))
+        column.addView(enabledSwitch)
+        column.addView(observeSwitch)
+        column.addView(spamSwitch)
+        column.addView(thresholdLabel)
+        column.addView(thresholdBar)
+        column.addView(
             hint("滑杆松手即下发。AI 分数 ≥ 阈值就拦；关掉上面「AI 识别垃圾通知」时本滑杆置灰（这个值不参与判定）。调低更激进，0 等于全拦。"),
         )
-        root.addView(label("规则"))
-        root.addView(ruleSwitch)
-        root.addView(keywordsInput)
-        root.addView(hint("关键词是文本，打到一半就下发会被按半截词拦通知，所以由下面的按钮提交。"))
-        root.addView(saveButton)
-        root.addView(label("当前已生效配置（只读，便于排查）"))
+        column.addView(label("规则"))
+        column.addView(ruleSwitch)
+        column.addView(keywordsInput)
+        column.addView(hint("关键词是文本，打到一半就下发会被按半截词拦通知，所以由下面的按钮提交。"))
+        column.addView(saveButton)
+        column.addView(label("当前已生效配置（只读，便于排查）"))
         jsonView = TextView(this).apply { textSize = 10f }
-        root.addView(jsonView)
+        column.addView(jsonView)
 
-        root.addView(label("记录（模块端回流）"))
+        column.addView(label("记录（模块端回流）"))
         recordInfo = TextView(this)
-        root.addView(recordInfo)
+        column.addView(recordInfo)
         labelInfo = TextView(this).apply { textSize = 12f }
-        root.addView(labelInfo)
-        root.addView(
-            hint("标注是端侧微调的唯一输入：标注累计到门槛后本页会自动拟合并下发给模块端（下次判定即生效），无需手动触发。"),
+        column.addView(labelInfo)
+        column.addView(
+            hint(
+                "「标垃圾 / 标正常」把这条通知的文本交给端侧微调；标完累计到门槛本页会自动拟合并下发给模块端" +
+                    "（下次判定即生效），无需手动触发。标注存模块端，卸载重装 App 不会丢。",
+            ),
         )
-        root.addView(
-            Button(this).apply {
-                text = "刷新记录"
-                setOnClickListener { refreshRecords() }
+        column.addView(
+            LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(
+                    Button(this@ConfigActivity).apply {
+                        text = "刷新记录"
+                        setOnClickListener { refreshRecords() }
+                    },
+                )
+                addView(
+                    Button(this@ConfigActivity).apply {
+                        text = "清空记录"
+                        setOnClickListener {
+                            LogFetcher.clear(this@ConfigActivity)
+                            renderRecords(null)
+                            renderRecordViews()
+                        }
+                    },
+                )
             },
         )
-        root.addView(
+        // 与「清空记录」分开一行：记录是流水（丢了无所谓），标注是手工劳动（清空要二次确认），
+        // 两个破坏性动作并排在同一行的相邻位置，误触代价不对等
+        column.addView(
             Button(this).apply {
-                text = "清空记录"
-                setOnClickListener {
-                    LogFetcher.clear(this@ConfigActivity)
-                    renderRecords(null)
-                }
+                text = "清空标注"
+                setOnClickListener { clearLabels() }
             },
         )
-        recordView = TextView(this).apply { textSize = 12f }
-        root.addView(recordView)
+        recordList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        column.addView(recordList)
 
         return ScrollView(this).apply {
-            addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            addView(column, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
 

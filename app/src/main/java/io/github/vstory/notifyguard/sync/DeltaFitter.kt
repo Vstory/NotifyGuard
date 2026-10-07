@@ -80,6 +80,14 @@ object DeltaFitter {
         }
     }
 
+    /**
+     * 当前 base 的指纹：标注入库时随标注一起存（[LabelRecord.modelVersion]），供换模型后筛出旧样本重标。
+     *
+     * 取不到时返回 `0` 而不是拒绝标注 —— 这个字段是事后筛选的线索，缺了不影响拟合；
+     * 为它禁掉用户的标注入口是拿辅助信息换掉了主功能。
+     */
+    fun baseFingerprint(): Int = bundledBase()?.fingerprint ?: 0
+
     private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>): State {
         val model = bundledBase() ?: return State.Unavailable("内置模型不可用")
         val sig = signature(labels, model)
