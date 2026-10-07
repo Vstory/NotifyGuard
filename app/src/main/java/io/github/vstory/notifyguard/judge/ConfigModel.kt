@@ -57,6 +57,8 @@ data class Config(
 
     companion object {
         const val SCHEMA = 1
-        const val DEFAULT_THRESHOLD = 0.7
+
+        /** 0.8 = 真机观察模式下的分数分布标定值（M2 遗留项）。改动它会改变已装用户的行为。 */
+        const val DEFAULT_THRESHOLD = 0.8
     }
 }
