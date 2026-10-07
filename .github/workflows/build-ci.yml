@@ -465,6 +465,13 @@ jobs:
             done
             echo "  ✅ App 侧模块状态入口在（含中文值）"
 
+            # ③m App 侧首页统计入口（M4g）。首页整块没了 ⇒ 用户看不到拦了多少、哪些应用最烦；
+            #     「本应被拦」那一行尤其不能少：观察模式下真拦截恒为 0，少了它首页只剩一个 0。
+            for A in home_stats_group home_stat_blocked home_stat_would home_top_group; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧首页统计资源「$A」—— 首页的统计与排行在 App 侧没了（或被 R8 裁掉）"; exit 1; }
+            done
+            echo "  ✅ App 侧首页统计入口在（含中文值）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ③k 语言包齐全：默认（无语言限定词）必须是英文、中文包必须真在包里。两条错都会在包内

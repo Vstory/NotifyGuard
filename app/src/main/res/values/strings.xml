@@ -12,7 +12,19 @@
     <string name="nav_learning">Learning</string>
     <string name="nav_settings">Settings</string>
 
-    <string name="home_plan">Planned: block statistics and top offenders (total blocked, per-app breakdown, verdict distribution while in observe mode).</string>
+    <string name="home_title">Home</string>
+    <string name="home_refresh">Refresh statistics</string>
+    <string name="home_stats_group">Blocked (current window)</string>
+    <string name="home_stats_note">Only the current record window is counted: the module keeps the latest %1$d groups (notifications with identical text and verdict merge into one), so clearing records resets these numbers. The module side holds the authoritative copy.</string>
+    <string name="home_stat_blocked">Blocked: %1$d</string>
+    <string name="home_stat_would">Would have been blocked (observe mode): %1$d</string>
+    <string name="home_stat_pass">Passed: %1$d</string>
+    <string name="home_stat_scope">Groups: %1$d · events: %2$d</string>
+    <string name="home_top_group">Top apps (blocked)</string>
+    <string name="home_top_empty">Nothing has been blocked in this window. Nothing is ever blocked while observe mode is on — turn it off in Settings to let verdicts take effect; otherwise check the framework log to confirm the verdict chain is running.</string>
+    <string name="home_top_other">Other apps: %1$d · %2$d events</string>
+    <string name="home_observe_group">Observe mode</string>
+    <string name="home_observe_note">Observe mode is on: verdicts still run and are recorded, but nothing is blocked yet — the blocked count above stays 0 until you turn it off.</string>
     <string name="learning_plan">Planned: labelled set and fit status (threshold, delta version, delivery result), plus false-positive review.</string>
 
     <string name="service_checking">Framework service: checking…</string>

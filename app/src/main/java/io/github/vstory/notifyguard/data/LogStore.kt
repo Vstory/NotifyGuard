@@ -48,6 +48,12 @@ class LogStore(private val file: File) {
         records.sortedByDescending { it.lastTs }.take(limit)
     }
 
+    /** 全部组。统计口径要覆盖整个窗口，而 [recent] 只取最近的若干条。 */
+    fun all(): List<LogRecord> = synchronized(lock) {
+        ensureLoaded()
+        records.toList()
+    }
+
     fun size(): Int = synchronized(lock) {
         ensureLoaded()
         records.size
