@@ -451,6 +451,21 @@ jobs:
             done
             echo "  ✅ App 侧规则入口在 dex"
 
+            # ③j App 侧模块状态入口必须真在 release 里。状态通道的 action 是**共用**常量，模块端
+            #     StatusChannel 引用了它们 ⇒ 与 ③c/③e 同类的断言证明不了 App 侧还在：设置屏的状态组
+            #     整块被 R8 裁掉时它们照样在包里。其中「清除熔断并恢复」尤其不能少 ——
+            #     它没了，用户遇到熔断就只能 root 删标志文件（熔断态下标志在 system_server 私有目录）。
+            #     四个字面量各自只在 App 侧出现一处，屏内说明文字刻意不重复它们。
+            #     ⚠️ 断言的不是文案而是「App 侧状态入口活着」；改这些文案要同步改这里。
+            for A in "刷新模块状态" "本次装配明细" "模块未响应" "清除熔断并恢复"; do
+              AFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
+              done
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧状态入口字面量「$A」—— 设置屏的模块状态组在 App 侧没了（或被 R8 裁掉），用户看不到熔断、也点不到恢复"; exit 1; }
+            done
+            echo "  ✅ App 侧模块状态入口在 dex"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在

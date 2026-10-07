@@ -68,9 +68,13 @@ object EntryHook {
         fun detail(): String = lines.toString()
     }
 
+    /** 计数快照。整体取一份：逐项取值会在两次读之间被判定线程改掉，读出的数自相矛盾。 */
+    data class Hits(val ext: Long, val funnelJudge: Long, val funnelPass: Long, val romBlocked: Long)
+
     private val owner = AtomicReference(Slot.NONE)
     private val handles = CopyOnWriteArrayList<XposedInterface.HookHandle>()
     @Volatile private var judgingStopped = false
+    @Volatile private var stopReason: String? = null
 
     private val extHits = AtomicLong()
     private val funnelJudgeHits = AtomicLong()
@@ -122,6 +126,7 @@ object EntryHook {
      */
     private fun stopJudging(reason: String) {
         judgingStopped = true
+        stopReason = reason
         owner.set(Slot.NONE)
         ModuleLogger.error("判定已停用（$reason）：hook 保留直通，不再记录")
     }
@@ -131,6 +136,7 @@ object EntryHook {
         handles.clear()
         owner.set(Slot.NONE)
         judgingStopped = false
+        stopReason = null
         extHits.set(0)
         funnelJudgeHits.set(0)
         funnelPassHits.set(0)
@@ -142,6 +148,16 @@ object EntryHook {
         "owner=${owner.get()} 扩展槽命中=${extHits.get()} 漏斗判定=${funnelJudgeHits.get()} " +
             "漏斗直通=${funnelPassHits.get()} ROM已拦=${romBlocked.get()} 异常=${CrashGuard.errorCount()} " +
             LogSink.statsLine()
+
+    // ===== 状态回传（M4e）=====
+
+    fun hits(): Hits = Hits(extHits.get(), funnelJudgeHits.get(), funnelPassHits.get(), romBlocked.get())
+
+    fun currentSlot(): Slot = owner.get()
+
+    fun isJudgingStopped(): Boolean = judgingStopped
+
+    fun stopReason(): String? = stopReason
 
     // ===== 装配 =====
 

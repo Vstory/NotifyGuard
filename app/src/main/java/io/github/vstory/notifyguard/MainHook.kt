@@ -4,6 +4,7 @@ import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
 import io.github.vstory.notifyguard.core.EntryHook
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.ModuleStatus
 
 /**
  * api102 模块入口（java_init.list 声明）。scope = system，只注入 system_server。
@@ -66,6 +67,7 @@ class MainHook : XposedModule() {
         }
         installed = true
         val report = EntryHook.install(this, cl)
+        ModuleStatus.recordInstall(report)
         ModuleLogger.info("installHooks: ${report.okCount} ok / ${report.skipCount} skip / ${report.failCount} fail${report.detail()}")
         ModuleLogger.info("slot: ${EntryHook.statsLine()}")
     }
