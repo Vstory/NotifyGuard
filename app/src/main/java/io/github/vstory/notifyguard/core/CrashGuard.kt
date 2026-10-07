@@ -43,6 +43,7 @@ object CrashGuard {
     private const val SYSTEMUI = "com.android.systemui"
 
     private const val AMS_CLASS = "com.android.server.am.ActivityManagerService"
+    private const val AMS_READY_METHOD = "systemReady"
     private val DEATH_METHODS = setOf("appDiedLocked", "handleAppDiedLocked")
 
     private val errors = AtomicInteger()
@@ -84,7 +85,10 @@ object CrashGuard {
     ) {
         syncFromDisk()
         if (tripped) ModuleLogger.error("safe_mode 标志存在 ⇒ 本代不装拦截（删掉 ${ModuleDir.safeMode().path} 即免重启恢复）")
-        installAmsWatch(iface, cl, ok, skip)
+        val ams = runCatching { cl.loadClass(AMS_CLASS) }.getOrNull()
+        if (ams == null) skip("$AMS_CLASS 加载失败 ⇒ 崩溃环路检测与熔断期间的状态通道均不可用")
+        installAmsWatch(iface, ams, ok, skip)
+        installContextProbe(iface, ams, ok, skip)
         watchFlag(ok, skip)
     }
 
@@ -119,6 +123,37 @@ object CrashGuard {
         }
     }
 
+    /**
+     * 熔断的触发线索（写侧见 [writeFlag]）。App 侧「为什么熔断的」没有别的来源，只能从这里读。
+     * 读失败只丢线索，不影响熔断本身的判定。无标志时返回 null。
+     */
+    data class SafeModeInfo(val at: Long, val reason: String)
+
+    fun safeModeInfo(): SafeModeInfo? {
+        if (!isSafeMode()) return null
+        val text = runCatching { ModuleDir.safeMode().readText() }.getOrDefault("")
+        return SafeModeInfo(
+            at = noteField(text, "tripped_at")?.toLongOrNull() ?: 0L,
+            reason = noteField(text, "reason").orEmpty(),
+        )
+    }
+
+    /** 标志监听是否装着：没装时清掉标志也不会重装拦截（恢复需重启系统框架），界面据此如实提示。 */
+    fun autoRecoverAvailable(): Boolean = watcher != null
+
+    /**
+     * 删标志并立刻按磁盘同步内存，返回删除前是否处于熔断。
+     *
+     * **不在这里重装拦截**：恢复统一由 [watchFlag] 的 FileObserver 走（与用户手动删文件同一条路），
+     * 两条路都重装会在标志变化时装两遍。
+     */
+    fun clearSafeMode(): Boolean {
+        val was = isSafeMode()
+        runCatching { ModuleDir.safeMode().delete() }
+        syncFromDisk()
+        return was
+    }
+
     fun reset() {
         errors.set(0)
         stormTripped = false
@@ -133,14 +168,11 @@ object CrashGuard {
 
     private fun installAmsWatch(
         iface: XposedInterface,
-        cl: ClassLoader,
+        ams: Class<*>?,
         ok: (String) -> Unit,
         skip: (String) -> Unit,
     ) {
-        val ams = runCatching { cl.loadClass(AMS_CLASS) }.getOrElse {
-            skip("$AMS_CLASS 加载失败 ⇒ 崩溃环路检测不可用（safe_mode 标志仍生效）")
-            return
-        }
+        if (ams == null) return
         // 不硬编码签名：方法名随 ROM 版本变，这里只要求「第一个参数是 ProcessRecord」
         val targets = ams.declaredMethods.filter { m ->
             m.name in DEATH_METHODS && m.parameterCount >= 1 &&
@@ -168,6 +200,44 @@ object CrashGuard {
             }.onFailure { skip("AMS#${m.name}(${m.parameterCount} 参数) hook 失败: ${it.message}") }
         }
         if (hooked > 0) ok("AMS app-death 监听（$hooked 个重载）⇒ SystemUI 崩溃环路熔断")
+    }
+
+    /**
+     * 熔断期间的 Context 来源（M4e）。
+     *
+     * 熔断时**不装拦截**，于是取 Context 的正常入口（NMS 漏斗首次被调用，见 [ServiceContext]）根本不会走，
+     * 状态通道与「清除熔断」也就注册不上 —— App 只能显示未响应，恢复只剩手动删文件一条路（而那是 root 操作）。
+     * AMS 是此时另一个必然被创建并调用的服务，从它的实例上取 Context 不扰动启动顺序；
+     * **绝不能**改用 `ActivityThread.systemMain()`（会 new 出第二个 ActivityThread，见 §8.5）。
+     */
+    private fun installContextProbe(
+        iface: XposedInterface,
+        ams: Class<*>?,
+        ok: (String) -> Unit,
+        skip: (String) -> Unit,
+    ) {
+        if (ams == null) return
+        val targets = ams.declaredMethods.filter { it.name == AMS_READY_METHOD }
+        if (targets.isEmpty()) {
+            skip("AMS 上未找到 $AMS_READY_METHOD ⇒ 熔断期间 App 联系不上模块（恢复需重启系统框架）")
+            return
+        }
+        var hooked = 0
+        targets.forEach { m ->
+            runCatching {
+                amsHandles.add(
+                    iface.hook(m).intercept(object : XposedInterface.Hooker {
+                        override fun intercept(chain: XposedInterface.Chain): Any? {
+                            val result = chain.proceed()
+                            runCatching { ServiceContext.bindFrom(chain.thisObject) }
+                            return result
+                        }
+                    }),
+                )
+                hooked++
+            }.onFailure { skip("AMS#${m.name}(${m.parameterCount} 参数) hook 失败: ${it.message}") }
+        }
+        if (hooked > 0) ok("AMS $AMS_READY_METHOD 钩子（熔断期间也能注册状态通道）")
     }
 
     private fun inspectDeath(args: List<Any?>) {
@@ -220,4 +290,9 @@ object CrashGuard {
             ModuleLogger.error("写 ${ModuleDir.FILE_SAFE_MODE} 失败 ⇒ 熔断只在本代内存生效（重启后会重新装拦截）", it)
         }
     }
+
+    private fun noteField(text: String, key: String): String? = text.lineSequence()
+        .firstOrNull { it.startsWith("$key=") }
+        ?.substringAfter('=')
+        ?.trim()
 }

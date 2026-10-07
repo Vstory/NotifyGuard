@@ -49,6 +49,10 @@ object LogSink {
 
     @Volatile private var bound = false
 
+    fun persistedCount(): Long = persisted.get()
+
+    fun droppedCount(): Long = dropped.get()
+
     fun bindContext(c: Context) {
         if (bound) return
         bound = true

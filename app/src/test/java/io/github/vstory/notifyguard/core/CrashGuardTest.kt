@@ -4,6 +4,7 @@ import io.github.vstory.notifyguard.data.ModuleDir
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -92,6 +93,31 @@ class CrashGuardTest {
         flag().delete()
         assertFalse(CrashGuard.syncFromDisk())
         assertFalse(CrashGuard.isSafeMode())
+    }
+
+    @Test
+    fun safeModeInfoReadsTripReasonAndTime() {
+        flag().writeText("tripped_at=4321\nreason=SystemUI 崩溃环路\n")
+        assertTrue(CrashGuard.syncFromDisk())
+        val info = CrashGuard.safeModeInfo()
+        assertEquals(4321L, info!!.at)
+        assertEquals("SystemUI 崩溃环路", info.reason)
+    }
+
+    @Test
+    fun safeModeInfoIsNullWhenNotTripped() {
+        assertNull(CrashGuard.safeModeInfo())
+    }
+
+    /** App 侧「清除熔断」走的入口：删标志 + 立刻按磁盘同步内存。 */
+    @Test
+    fun clearSafeModeRemovesFlagAndLeavesSafeMode() {
+        flag().writeText("tripped_at=1\nreason=x\n")
+        assertTrue(CrashGuard.syncFromDisk())
+        assertTrue(CrashGuard.clearSafeMode())
+        assertFalse(flag().exists())
+        assertFalse(CrashGuard.isSafeMode())
+        assertNull(CrashGuard.safeModeInfo())
     }
 
     @Test

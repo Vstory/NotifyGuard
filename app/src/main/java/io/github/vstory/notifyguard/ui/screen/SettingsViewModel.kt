@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.runtime.getValue
@@ -10,6 +11,9 @@ import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.ProtectSwitches
 import io.github.vstory.notifyguard.sync.ConfigWriter
+import io.github.vstory.notifyguard.sync.StatusClient
+import io.github.vstory.notifyguard.sync.StatusReport
+import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -21,6 +25,8 @@ import kotlin.math.roundToInt
  *
  * 两条路径都只替换自己负责的字段、且以**模块端读回的生效配置**为基准，绝不从界面收集全部字段整份重写 ——
  * 那会把另一方尚未刷新的改动一起带下去（同进程另有一个旧配置页可能在位）。
+ *
+ * M4e 起另有一条**读**通道（模块端状态回传）：它不回写配置，只是把熔断与装配情况显示出来。
  */
 class SettingsViewModel : ViewModel() {
 
@@ -32,6 +38,10 @@ class SettingsViewModel : ViewModel() {
         /** 阈值拖动中的草稿（null = 没在拖）。与生效值分开，松手前不下发。 */
         val draftThreshold: Float? = null,
         val notice: Notice? = null,
+        /** 模块端状态：null 且 [statusFetched] 为真 = 拉过但没响应（不是「还没拉」）。 */
+        val status: StatusReport? = null,
+        val statusFetched: Boolean = false,
+        val statusBusy: Boolean = false,
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次也要各弹一次。 */
@@ -101,6 +111,90 @@ class SettingsViewModel : ViewModel() {
     fun noticeShown(n: Notice) {
         if (state.notice == n) state = state.copy(notice = null)
     }
+
+    // ===== 模块端状态（M4e）=====
+
+    /** 拉一次模块端实时状态。回调已在主线程（[StatusClient] 保证），不用再 post。 */
+    fun refreshStatus(ctx: Context) {
+        if (state.statusBusy) return
+        state = state.copy(statusBusy = true)
+        StatusClient.fetch(ctx) { r ->
+            state = state.copy(status = r, statusFetched = true, statusBusy = false)
+        }
+    }
+
+    /**
+     * 清除熔断标志。回执是清除后**现读的**状态 —— 所以这里不做「已恢复」的口头承诺，
+     * 只按回执里的事实说（重装拦截是异步的，回执时可能还没走到）。
+     */
+    fun clearSafeMode(ctx: Context) {
+        if (state.statusBusy) return
+        state = state.copy(statusBusy = true)
+        StatusClient.clearSafeMode(ctx) { r ->
+            state = state.copy(status = r ?: state.status, statusFetched = true, statusBusy = false)
+            notify(
+                when {
+                    r == null -> "清除请求没有回应（模块端没回执）"
+                    r.safeMode -> "熔断标志还在：清除没成功，仍处熔断"
+                    r.judging -> "已清除熔断标志，判定已恢复"
+                    r.autoRecover -> "已清除熔断标志，正在重装拦截"
+                    else -> "已清除熔断标志，但标志监听不可用：仍需重启系统框架才恢复判定"
+                }
+            )
+        }
+    }
+
+    /** 模块状态主行：模块此刻在自己生效吗、走的哪条路。 */
+    fun moduleLine(): String {
+        val s = state.status ?: return if (state.statusFetched) {
+            "模块未响应（LSPosed 里未启用本模块、装完还没重启系统框架，或状态通道没注册上）"
+        } else {
+            "检查中…"
+        }
+        return when {
+            s.safeMode -> "已熔断：判定停用，通知全部放行"
+            s.judging -> "判定生效中（路径：${slotLabel(s.slot)}）"
+            s.stopReason.isNotEmpty() -> "判定已停用（${s.stopReason}）"
+            else -> "未装拦截：见下方装配明细"
+        }
+    }
+
+    fun countersText(): String {
+        val s = state.status ?: return ""
+        return "扩展槽命中 ${s.extHits} · 漏斗判定 ${s.funnelJudgeHits} · 漏斗直通 ${s.funnelPassHits} · " +
+            "ROM 已拦 ${s.romBlocked} · 异常 ${s.errorCount}"
+    }
+
+    fun detailLine(): String {
+        val s = state.status ?: return ""
+        val ai = if (s.modelReady) "AI 模型就绪" else "AI 模型不可用（整段放行）"
+        val delta = if (s.deltaVersion > 0) "微调 v${s.deltaVersion}" else "微调未启用"
+        return "$ai · $delta · 记录已落盘 ${s.recordsPersisted} 条（缓冲丢弃 ${s.recordsDropped}）"
+    }
+
+    fun assemblySummary(): String {
+        val s = state.status ?: return ""
+        return "本代装配 OK ${s.okCount} / SKIP ${s.skipCount} / FAIL ${s.failCount}（模块版本 ${s.version}）"
+    }
+
+    /** 熔断详情；没熔断返回 null。 */
+    fun safeModeLine(): String? {
+        val s = state.status ?: return null
+        if (!s.safeMode) return null
+        val at = if (s.safeModeAt > 0) "时间 ${timeText(s.safeModeAt)}" else "时间未记录"
+        val reason = s.safeModeReason.ifEmpty { "原因未记录" }
+        val tail = if (s.autoRecover) "标志监听在跑，清除即可恢复判定。" else "标志监听不可用，清除后仍需重启系统框架。"
+        return "熔断触发：$at；$reason。$tail"
+    }
+
+    private fun slotLabel(slot: String): String = when (slot) {
+        "EXT_SLOT" -> "扩展槽（主路径）"
+        "FUNNEL" -> "漏斗（兜底路径）"
+        else -> slot.ifEmpty { "未知" }
+    }
+
+    private fun timeText(at: Long): String =
+        SimpleDateFormat("MM-dd HH:mm", Locale.ROOT).format(java.util.Date(at))
 
     /** 阈值行的说明文字。在 ViewModel 里算好，界面只负责画。 */
     fun thresholdText(): String {
