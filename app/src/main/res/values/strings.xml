@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!--
-      Default (English) resources. The Chinese pack lives in res/values-zh/strings.xml and must keep
-      the same keys: a key missing there silently falls back to English.
+      Default (English) resources. The Simplified Chinese pack lives in res/values-zh-rCN/strings.xml
+      and must keep the same keys: a key missing there silently falls back to English.
+      Keep the region qualifier: bare "values-zh" is not the standard tag for Simplified Chinese.
     -->
     <string name="app_name">NotifyGuard</string>
 

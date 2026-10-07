@@ -304,7 +304,7 @@ jobs:
           # ③l 源文件层面（与产物无关，故在循环外跑一次）：两个 strings.xml 的键必须逐条一致。
           #    包内断言（③g–③k）只抽查了少数几条资源，漏掉的键会静默回落英文 —— 这里按全集比对。
           EN_STRINGS="app/src/main/res/values/strings.xml"
-          ZH_STRINGS="app/src/main/res/values-zh/strings.xml"
+          ZH_STRINGS="app/src/main/res/values-zh-rCN/strings.xml"
           [ -f "$EN_STRINGS" ] && [ -f "$ZH_STRINGS" ] || { echo "::error::缺 $EN_STRINGS 或 $ZH_STRINGS"; exit 1; }
           EN_KEYS="$(grep -oE 'name="[A-Za-z0-9_]+"' "$EN_STRINGS" | sed -E 's/^name="//; s/"$//' | sort -u || true)"
           ZH_KEYS="$(grep -oE 'name="[A-Za-z0-9_]+"' "$ZH_STRINGS" | sed -E 's/^name="//; s/"$//' | sort -u || true)"
@@ -421,10 +421,10 @@ jobs:
             echo "  ✅ 微调量文件名与 magic 在 dex"
 
             # ③g–③j：App 侧各屏入口必须真在 release 里。这些入口的文案自 M4f 起全部走字符串资源
-            #     （res/values 是英文默认、res/values-zh 是中文包），故判据从「中文文案字面量在 dex」
-            #     换成「资源在资源表里，且默认值与 zh 值都在」。要断言的理由没变：R8 能把整屏连同
+            #     （res/values 是英文默认、res/values-zh-rCN 是简体中文包），故判据从「中文文案字面量在 dex」
+            #     换成「资源在资源表里，且默认值与简体中文值都在」。要断言的理由没变：R8 能把整屏连同
             #     引用一起裁掉，而界面没了的后果是「包照装、模块照常跑，用户在界面上够不到这个功能」。
-            #     资源表判据比 dex 字面量弱一档（未被引用的资源不会被自动裁），所以每条额外查 zh 值 ——
+            #     资源表判据比 dex 字面量弱一档（未被引用的资源不会被自动裁），所以每条额外查中文值 ——
             #     顺带拦住「中文包漏键」（漏了就静默回落英文，是这类改动最常见的错）。
             #     ⚠️ 断言的是「入口活着」而非文案；改资源名要同步改这里。
             RES_DUMP="$("$AAPT2" dump resources "$APK" 2>/dev/null || true)"
@@ -435,8 +435,8 @@ jobs:
               [ -n "$RBLOCK" ] || { echo "::error::$NAME 缺字符串资源 string/${RNAME}（界面文案没进资源表）"; return 1; }
               printf '%s\n' "$RBLOCK" | grep -qE '^ *\(\) "' \
                 || { echo "::error::$NAME 的 string/${RNAME} 没有默认值（res/values/strings.xml 缺这条键）"; return 1; }
-              printf '%s\n' "$RBLOCK" | grep -qE '^ *\(zh\) "' \
-                || { echo "::error::$NAME 的 string/${RNAME} 缺中文值（res/values-zh/strings.xml 漏键 ⇒ 静默回落英文）"; return 1; }
+              printf '%s\n' "$RBLOCK" | grep -qE '^ *\(zh-rCN\) "' \
+                || { echo "::error::$NAME 的 string/${RNAME} 缺简体中文值（res/values-zh-rCN/strings.xml 漏键，或目录被写回 values-zh ⇒ 静默回落英文）"; return 1; }
               return 0
             }
 
@@ -474,19 +474,22 @@ jobs:
 
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
-            # ③k 语言包齐全：默认（无语言限定词）必须是英文、中文包必须真在包里。两条错都会在包内
+            # ③k 语言包齐全：默认（无语言限定词）必须是英文、简体中文包必须真在包里。两条错都会在包内
             #     静默：中文包整块没进包 ⇒ 中文用户看到英文；默认值被写成中文 ⇒ 其它语言用户看到中文。
+            #     ⚠️ 下面 locales 行的 'zh-CN' 也可能来自 androidx 依赖（依赖自带 zh-CN/HK/TW 资源），
+            #     所以它只算粗检，拦不住「我们的中文包没进包」。真正带方向的判据是上面 res_entry 里的
+            #     (zh-rCN) 配置限定符 —— 依赖没有我们的键，目录写错（例如写回 values-zh）就当场红。
             #     资源表判据只能证明「有值」，方向得靠 badging 的配置行 + 一个抽查资源的两种取值来判
             #     （默认值里不许有汉字，中文值里必须有汉字）。
             LOCALES_LINE="$(printf '%s' "$BADGING" | grep -m1 '^locales:' || true)"
             [ -n "$LOCALES_LINE" ] || { echo "::error::$NAME 读不到 badging 的 locales 行"; exit 1; }
             printf '%s' "$LOCALES_LINE" | grep -qF "'--_--'" \
               || { echo "::error::$NAME 的资源表里没有默认配置（res/values 是空语言配置）"; exit 1; }
-            printf '%s' "$LOCALES_LINE" | grep -qF "'zh'" \
-              || { echo "::error::$NAME 的资源表里没有 zh 配置 —— res/values-zh 没进包，中文用户会看到英文"; exit 1; }
+            printf '%s' "$LOCALES_LINE" | grep -qF "'zh-CN'" \
+              || { echo "::error::$NAME 的资源表里没有 zh-CN 配置 —— res/values-zh-rCN 没进包，中文用户会看到英文"; exit 1; }
             LANG_PROBE="$(printf '%s\n' "$RES_DUMP" | grep -A 3 -E 'resource 0x[0-9a-f]+ string/action_mark_spam$' || true)"
             PROBE_EN="$(printf '%s\n' "$LANG_PROBE" | grep -m1 -E '^ *\(\) "' || true)"
-            PROBE_ZH="$(printf '%s\n' "$LANG_PROBE" | grep -m1 -E '^ *\(zh\) "' || true)"
+            PROBE_ZH="$(printf '%s\n' "$LANG_PROBE" | grep -m1 -E '^ *\(zh-rCN\) "' || true)"
             if printf '%s' "$PROBE_EN" | grep -qP '[\x{4e00}-\x{9fff}]'; then
               echo "::error::$NAME 的默认（无语言限定）值里有汉字：$PROBE_EN —— 默认值只能是英文那份"
               exit 1
@@ -495,7 +498,7 @@ jobs:
               echo "::error::$NAME 的中文值里没有汉字：$PROBE_ZH —— 中英装反了，或中文键指到了英文值"
               exit 1
             fi
-            echo "  ✅ 语言包：默认英文 + 中文（zh）都在"
+            echo "  ✅ 语言包：默认英文 + 简体中文（zh-rCN）都在"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在
             #    `bash -e` 下会让赋值语句整体失败 ⇒ 脚本**静默**退出（日志里只剩 "Process

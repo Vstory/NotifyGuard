@@ -4,6 +4,7 @@ dev-project/tokens
 # ==== 构建产物 / 中间文件 ====
 build/
 .gradle/
+.kotlin/
 dev-project/releases/
 *.idsig
 local.properties
