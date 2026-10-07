@@ -32,6 +32,9 @@ android {
         checkReleaseBuilds = false
         abortOnError = false
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -40,4 +43,6 @@ dependencies {
     compileOnly(files("libs/libxposed/api.jar"))
     implementation(files("libs/libxposed/interface.jar"))
     implementation(files("libs/libxposed/service.jar"))
+
+    testImplementation("junit:junit:4.13.2")
 }
