@@ -31,6 +31,11 @@ class CrashGuardTest {
         CrashGuard.onStorm = null
         CrashGuard.onTrip = null
         CrashGuard.onCleared = null
+        // 前置必须在开头建立，不能只靠 tearDown 收尾：tripped 不在 reset() 里复位（生产路径
+        // EntryHook 也调 reset，清它会让熔断失效），而 trip 的写盘是异步的（worker 线程）——
+        // 上一个用例排队的写任务可能晚到、把已删的标志文件写回来，于是本用例一开始就「已熔断」。
+        flag().delete()
+        CrashGuard.syncFromDisk()
     }
 
     @After
