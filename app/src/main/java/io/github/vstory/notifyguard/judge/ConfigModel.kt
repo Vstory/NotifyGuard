@@ -35,7 +35,7 @@ data class ProtectSwitches(
  * 正则在这里预编译：编译要几毫秒到几十毫秒，绝不能留给判定热路径（那会拖慢 system_server 的通知入队）。
  * 调用方读一次 [compiledRules] 就会触发编译，配置解析阶段就把它读掉。
  */
-class Config(
+data class Config(
     val schema: Int = SCHEMA,
     val enabled: Boolean = true,
     val observe: Boolean = true,

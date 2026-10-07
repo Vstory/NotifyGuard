@@ -62,6 +62,27 @@ class ConfigCodecTest {
         assertEquals(src.rules[1], back.rules[1])
     }
 
+    /**
+     * M1f：开关下发走「读回已生效配置 + 只替换一个字段」。这条用例锁住那个契约 ——
+     * 单字段更新经编解码往返后，阈值 / 白名单 / 保护开关 / 规则一个都不能变（变一个就是把别的改动夹带下去了）。
+     */
+    @Test
+    fun singleFieldUpdateCarriesNothingElse() {
+        val base = decode(
+            """{"schema":1,"observe":true,"threshold":0.83,"whitelist":["com.keep.me"],
+                "protect":{"call":false},"spamEnabled":false,
+                "rules":[{"id":"custom-keywords","keywords":["贷款"]}]}""",
+        )
+        val back = decode(ConfigCodec.encode(base.copy(spamEnabled = true)))
+
+        assertTrue(back.spamEnabled)
+        assertTrue(back.observe)
+        assertEquals(0.83, back.threshold, 0.0)
+        assertEquals(setOf("com.keep.me"), back.whitelist)
+        assertFalse(back.protect.call)
+        assertEquals(base.rules, back.rules)
+    }
+
     @Test
     fun brokenJsonReturnsNull() {
         assertNull(ConfigCodec.decode("{ 这不是 json"))

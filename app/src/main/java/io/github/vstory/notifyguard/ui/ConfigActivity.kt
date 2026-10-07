@@ -2,6 +2,8 @@ package io.github.vstory.notifyguard.ui
 
 import android.app.Activity
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
@@ -10,6 +12,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.Rule
@@ -25,8 +28,12 @@ import java.util.Locale
 /**
  * App 侧配置入口（M1a 的最小可用版）。
  *
- * 只做「改开关 / 改关键词 / 保存下发」这一条链路，样式一律不做：M4 会用官方 Material 3 五屏取代本页，
+ * 只做「改开关 / 改关键词 / 下发」这一条链路，样式一律不做：M4 会用官方 Material 3 五屏取代本页，
  * 现在叠加的样式都要重写。
+ *
+ * 开关与关键词的提交方式不同（M1f）：开关没有中间态，拨动即下发；关键词是文本，半截词下发会被照它拦通知，
+ * 所以仍由按钮显式提交。两条路径都只替换自己负责的字段，绝不从界面收集全部字段整份重写 ——
+ * 那会把对方尚未提交的改动一起带下去。
  */
 class ConfigActivity : Activity() {
 
@@ -36,9 +43,16 @@ class ConfigActivity : Activity() {
     private lateinit var spamSwitch: Switch
     private lateinit var ruleSwitch: Switch
     private lateinit var keywordsInput: EditText
+    private lateinit var saveButton: Button
     private lateinit var jsonView: TextView
     private lateinit var recordInfo: TextView
     private lateinit var recordView: TextView
+
+    /** 程序化改开关（渲染 / 回滚）期间抑制监听回调，否则「渲染触发下发、下发触发渲染」会成环。 */
+    private var suppressSwitch = false
+
+    /** 最近一次生效的关键词文本，作为「有未保存改动」的比较基准。 */
+    private var savedKeywords = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,30 +71,75 @@ class ConfigActivity : Activity() {
         ConfigWriter.clear()
     }
 
-    private fun onService(svc: io.github.libxposed.service.XposedService?) {
+    private fun onService(svc: XposedService?) {
         status.text = if (svc == null) {
-            "框架服务：未连接（在 LSPosed 里启用本模块后重开本页）"
+            "框架服务：未连接（在 LSPosed 里启用本模块后重开本页；未连接时改动无法下发，控件已置灰）"
         } else {
             "框架服务：${svc.frameworkName} ${svc.frameworkVersion}"
         }
-        if (svc != null) loadIntoUi()
+        val connected = svc != null
+        for (s in listOf(enabledSwitch, observeSwitch, spamSwitch, ruleSwitch)) s.isEnabled = connected
+        saveButton.isEnabled = connected
+        if (connected) loadIntoUi()
     }
 
     private fun loadIntoUi() {
         val cfg = ConfigWriter.load() ?: return
-        enabledSwitch.isChecked = cfg.enabled
-        observeSwitch.isChecked = cfg.observe
-        spamSwitch.isChecked = cfg.spamEnabled
-        val custom = cfg.rules.firstOrNull { it.id == CUSTOM_RULE_ID }
-        ruleSwitch.isChecked = custom?.enabled ?: true
-        keywordsInput.setText(custom?.keywords?.joinToString("\n").orEmpty())
+        renderSwitches(cfg)
+        renderKeywords(cfg)
         jsonView.text = ConfigCodec.encode(cfg)
     }
 
+    private fun renderSwitches(cfg: Config) {
+        suppressSwitch = true
+        enabledSwitch.isChecked = cfg.enabled
+        observeSwitch.isChecked = cfg.observe
+        spamSwitch.isChecked = cfg.spamEnabled
+        ruleSwitch.isChecked = customRule(cfg)?.enabled ?: true
+        suppressSwitch = false
+    }
+
+    /**
+     * 有未保存改动时不动输入框：`onResume` 也会走到这里，无条件灌值会把用户刚输入、还没提交的关键词静默抹掉。
+     */
+    private fun renderKeywords(cfg: Config) {
+        val dirty = keywordsDirty()
+        val text = customRule(cfg)?.keywords.orEmpty().joinToString("\n")
+        savedKeywords = text
+        if (!dirty && keywordsInput.text.toString() != text) keywordsInput.setText(text)
+        updateKeywordState()
+    }
+
+    /**
+     * 拨动开关即刻下发：读回已生效配置，只替换这一个字段。
+     *
+     * 关键词取的是**已生效值**而不是输入框当前文本 —— 用户打到一半的词不能被这次拨动顺手带下去。
+     */
+    private fun pushSwitch(change: (Config) -> Config) {
+        if (suppressSwitch) return
+        val base = ConfigWriter.load()
+        if (base == null) {
+            toast("框架服务未连接，改动没有下发")
+            return
+        }
+        val next = change(base)
+        if (ConfigWriter.save(next)) {
+            jsonView.text = ConfigCodec.encode(next)
+        } else {
+            // 停在「看起来开了」的状态比下发失败更糟：用户会以为规则已经生效
+            toast("下发失败，开关已还原为生效值")
+            renderSwitches(base)
+        }
+    }
+
+    /** 关键词与开关走不同的提交路径：这里读的是输入框，其余字段一律沿用已生效配置。 */
     private fun save() {
-        val base = ConfigWriter.load() ?: Config()
-        val keywords = keywordsInput.text.toString()
-            .split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+        val base = ConfigWriter.load()
+        if (base == null) {
+            toast("保存失败：框架服务未连接")
+            return
+        }
+        val keywords = normalizeKeywords(keywordsInput.text.toString())
         val others = base.rules.filter { it.id != CUSTOM_RULE_ID }
         val custom = Rule(
             id = CUSTOM_RULE_ID,
@@ -90,23 +149,22 @@ class ConfigActivity : Activity() {
             logic = RuleLogic.OR,
             keywords = keywords,
         )
-        val next = Config(
-            schema = base.schema,
-            enabled = enabledSwitch.isChecked,
-            observe = observeSwitch.isChecked,
-            protect = base.protect,
-            whitelist = base.whitelist,
-            rules = if (keywords.isEmpty()) others else others + custom,
-            threshold = base.threshold,
-            spamEnabled = spamSwitch.isChecked,
-        )
-        val ok = ConfigWriter.save(next)
-        Toast.makeText(
-            this,
-            if (ok) "已保存并下发（模块端即时生效）" else "保存失败：框架服务未连接",
-            Toast.LENGTH_LONG,
-        ).show()
-        if (ok) jsonView.text = ConfigCodec.encode(next)
+        val next = base.copy(rules = if (keywords.isEmpty()) others else others + custom)
+        if (!ConfigWriter.save(next)) {
+            toast("保存失败：框架服务未连接")
+            return
+        }
+        savedKeywords = keywords.joinToString("\n")
+        updateKeywordState()
+        jsonView.text = ConfigCodec.encode(next)
+        toast("已保存并下发（模块端即时生效）")
+    }
+
+    private fun keywordsDirty(): Boolean =
+        normalizeKeywords(keywordsInput.text.toString()) != normalizeKeywords(savedKeywords)
+
+    private fun updateKeywordState() {
+        saveButton.text = if (keywordsDirty()) "保存关键词并下发（有未保存改动）" else "保存关键词并下发"
     }
 
     /**
@@ -162,6 +220,9 @@ class ConfigActivity : Activity() {
         fun label(text: String): TextView =
             TextView(this).apply { this.text = text; setPadding(0, pad / 2, 0, pad / 4) }
 
+        fun hint(text: String): TextView =
+            TextView(this).apply { this.text = text; textSize = 11f; setPadding(0, 0, 0, pad / 4) }
+
         status = TextView(this).apply { text = "框架服务：检查中…" }
 
         enabledSwitch = Switch(this).apply { text = "启用拦截判定" }
@@ -171,23 +232,32 @@ class ConfigActivity : Activity() {
         keywordsInput = EditText(this).apply {
             hint = "每行一个关键词，命中即拦"
             minLines = 4
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) = Unit
+                override fun afterTextChanged(s: Editable?) = updateKeywordState()
+            })
         }
 
-        val saveButton = Button(this).apply {
-            text = "保存并下发"
+        bindSwitches()
+
+        saveButton = Button(this).apply {
+            text = "保存关键词并下发"
             setOnClickListener { save() }
         }
 
         root.addView(status)
         root.addView(label("开关"))
+        root.addView(hint("这一组拨动即下发，模块端立刻生效；右侧「已生效配置」会跟着变。"))
         root.addView(enabledSwitch)
         root.addView(observeSwitch)
         root.addView(spamSwitch)
         root.addView(label("规则"))
         root.addView(ruleSwitch)
         root.addView(keywordsInput)
+        root.addView(hint("关键词是文本，打到一半就下发会被按半截词拦通知，所以由下面的按钮提交。"))
         root.addView(saveButton)
-        root.addView(label("当前配置（只读，便于排查）"))
+        root.addView(label("当前已生效配置（只读，便于排查）"))
         jsonView = TextView(this).apply { textSize = 10f }
         root.addView(jsonView)
 
@@ -216,6 +286,36 @@ class ConfigActivity : Activity() {
             addView(root, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
     }
+
+    private fun bindSwitches() {
+        enabledSwitch.setOnCheckedChangeListener { _, _ -> pushSwitch { it.copy(enabled = enabledSwitch.isChecked) } }
+        observeSwitch.setOnCheckedChangeListener { _, _ -> pushSwitch { it.copy(observe = observeSwitch.isChecked) } }
+        spamSwitch.setOnCheckedChangeListener { _, _ -> pushSwitch { it.copy(spamEnabled = spamSwitch.isChecked) } }
+        ruleSwitch.setOnCheckedChangeListener { _, checked ->
+            if (suppressSwitch) return@setOnCheckedChangeListener
+            val base = ConfigWriter.load()
+            // 没有关键词时这条规则无处可挂（空关键词规则会在解码侧被丢弃），先让用户填词
+            if (base != null && customRule(base)?.keywords.isNullOrEmpty()) {
+                toast("先在下面填关键词并保存，规则开关才有内容可匹配")
+                renderSwitches(base)
+                return@setOnCheckedChangeListener
+            }
+            pushSwitch { cfg -> cfg.copy(rules = cfg.rules.withCustomEnabled(checked)) }
+        }
+    }
+
+    private fun toast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+
+    private fun customRule(cfg: Config): Rule? = cfg.rules.firstOrNull { it.id == CUSTOM_RULE_ID }
+
+    private fun List<Rule>.withCustomEnabled(checked: Boolean): List<Rule> {
+        val i = indexOfFirst { it.id == CUSTOM_RULE_ID }
+        if (i < 0) return this
+        return toMutableList().also { it[i] = it[i].copy(enabled = checked) }
+    }
+
+    private fun normalizeKeywords(raw: String): List<String> =
+        raw.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
 
     private companion object {
         const val CUSTOM_RULE_ID = "custom-keywords"
