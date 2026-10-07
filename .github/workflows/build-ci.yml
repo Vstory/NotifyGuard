@@ -420,6 +420,22 @@ jobs:
             done
             echo "  ✅ App 侧标注入口在 dex"
 
+            # ③h App 侧六类保护开关的入口必须真在 release 里。六类保护在判定链里**早已生效**
+            #     （默认全开），但在 M4c 之前**没有任何界面入口**（README 曾如实标注为「暂无」）——
+            #     只断言配置侧的东西会漏掉「入口被 R8 裁掉、用户根本点不到」。
+            #     这六个词只在 App 侧的设置屏出现（模块端的保护标识是 call/alarm/... 英文 key），
+            #     且屏内说明文字**刻意不重复**这些标签词（重复了这条断言就会被说明文字单边撑着，
+            #     与 ③g 在旧页删除前的处境相同）。
+            #     ⚠️ 断言的不是文案而是「App 侧保护开关入口活着」；改标签要同步改这里。
+            for A in "通话" "闹钟" "导航" "媒体" "前台服务" "对话"; do
+              AFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
+              done
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺 App 侧保护开关字面量「$A」—— 设置屏的保护开关在 App 侧没了（或被 R8 裁掉），用户在界面上关不掉这一类保护"; exit 1; }
+            done
+            echo "  ✅ App 侧保护开关入口在 dex"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在

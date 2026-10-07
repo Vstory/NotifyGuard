@@ -64,6 +64,9 @@ class ConfigActivity : Activity() {
     /** 程序化改开关（渲染 / 回滚）期间抑制监听回调，否则「渲染触发下发、下发触发渲染」会成环。 */
     private var suppressSwitch = false
 
+    /** 框架服务订阅句柄。注销只摘自己这一个，避免连带断掉同时在位的新设置屏。 */
+    private var serviceHandle: (() -> Unit)? = null
+
     /** 框架服务是否已连上。滑杆可用性要在开关变化时重算，故必须留成字段而不只是 [onService] 的局部量。 */
     private var connected = false
 
@@ -89,13 +92,15 @@ class ConfigActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // 框架服务从 Binder 线程回调，触碰 UI 必须回主线程
-        ConfigWriter.observe { svc -> runOnUiThread { onService(svc) } }
+        serviceHandle = ConfigWriter.observe { svc -> runOnUiThread { onService(svc) } }
         refreshRecords()
     }
 
     override fun onPause() {
         super.onPause()
-        ConfigWriter.clear()
+        // 只摘自己那一个订阅者：新设置屏可能同时在位，清空会把它的状态一并断掉
+        serviceHandle?.invoke()
+        serviceHandle = null
     }
 
     private fun onService(svc: XposedService?) {

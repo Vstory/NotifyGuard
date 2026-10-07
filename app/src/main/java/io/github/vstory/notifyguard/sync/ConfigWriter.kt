@@ -4,6 +4,7 @@ import android.util.Log
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import io.github.vstory.notifyguard.judge.Config
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * App 侧的配置读写（配置的唯一写方）。
@@ -17,20 +18,28 @@ object ConfigWriter {
 
     private const val TAG = "NotifyGuard"
 
-    /** 框架服务是异步连上的（App 启动时可能还没到），故用回调而不是一次性查询。 */
-    @Volatile private var onServiceChange: ((XposedService?) -> Unit)? = null
+    /**
+     * 框架服务是异步连上的（App 启动时可能还没到），故用回调而不是一次性查询。
+     *
+     * 订阅者允许多个：设置屏与旧配置页会同时在位。此前只有一个槽位，后注册的覆盖先注册的，
+     * 且任一方离开时的清空会把另一方一并静默摘掉 —— 表现是「状态显示未连接，其实连着」。
+     */
+    private val listeners = CopyOnWriteArrayList<(XposedService?) -> Unit>()
 
     @Volatile private var service: XposedService? = null
     @Volatile private var registered = false
 
-    fun observe(cb: (XposedService?) -> Unit) {
-        onServiceChange = cb
+    /**
+     * 注册订阅者并**立即**回调一次当前状态；返回注销句柄。
+     *
+     * 这里的回调发生在调用线程上（旧状态可能是 null），界面务必在离开时注销：句柄不解除，
+     * 回调闭包会一直持有界面对象。
+     */
+    fun observe(cb: (XposedService?) -> Unit): () -> Unit {
+        listeners.add(cb)
         ensureRegistered()
         cb(service)
-    }
-
-    fun clear() {
-        onServiceChange = null
+        return { listeners.remove(cb) }
     }
 
     fun isConnected(): Boolean = service != null
@@ -64,22 +73,29 @@ object ConfigWriter {
         }
     }
 
+    /** 一个订阅者抛异常不该让后面的收不到通知。 */
+    private fun notifyService(s: XposedService?) {
+        listeners.forEach { cb ->
+            runCatching { cb(s) }.onFailure { Log.e(TAG, "service listener failed", it) }
+        }
+    }
+
     private fun ensureRegistered() {
         if (registered) return
         registered = true
         runCatching {
-            // 框架要求 registerListener 只调一次，后续换人靠 onServiceChange 覆盖
+            // 框架要求 registerListener 只调一次，后续换人靠 notifyService 分发
             XposedServiceHelper.registerListener(object : XposedServiceHelper.OnServiceListener {
                 override fun onServiceBind(s: XposedService) {
                     service = s
                     Log.i(TAG, "xposed service connected: ${s.frameworkName}/${s.frameworkVersion}")
-                    onServiceChange?.invoke(s)
+                    notifyService(s)
                 }
 
                 override fun onServiceDied(s: XposedService) {
                     if (service === s) {
                         service = null
-                        onServiceChange?.invoke(null)
+                        notifyService(null)
                     }
                 }
             })
