@@ -36,6 +36,7 @@ class ModuleDirTest {
         assertEquals("/data/misc/notifyguard", ModuleDir.PATH)
         assertEquals(File("/data/misc/notifyguard/safe_mode"), ModuleDir.safeMode())
         assertEquals(File("/data/misc/notifyguard/logs.json"), ModuleDir.logs())
+        assertEquals(File("/data/misc/notifyguard/labels.json"), ModuleDir.labels())
     }
 
     @Test
@@ -61,6 +62,16 @@ class ModuleDirTest {
         ModuleDir.prepare(200L)
         assertFalse(ModuleDir.logs().exists())
         assertEquals("200", File(dir, "install_time").readText())
+    }
+
+    /** 重装只作废记录：标注是用户手工劳动，比流水贵 —— 被顺手一起清掉就等于逼用户重标。 */
+    @Test
+    fun keepsLabelsOnReinstall() {
+        ModuleDir.prepare(100L)
+        ModuleDir.labels().writeText("[]")
+        ModuleDir.prepare(200L)
+        assertFalse(ModuleDir.logs().exists())
+        assertTrue(ModuleDir.labels().exists())
     }
 
     /** 取不到安装时间（PM 查询失败返回 -1）时不许动用户数据，也不许写错标记。 */

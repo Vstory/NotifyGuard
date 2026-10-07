@@ -18,6 +18,7 @@ object ModuleDir {
 
     const val PATH = "/data/misc/notifyguard"
     const val FILE_LOGS = "logs.json"
+    const val FILE_LABELS = "labels.json"
     const val FILE_SAFE_MODE = "safe_mode"
     private const val FILE_INSTALL_TIME = "install_time"
 
@@ -27,6 +28,9 @@ object ModuleDir {
     val dir: File get() = dirOverride ?: File(PATH)
 
     fun logs(): File = File(dir, FILE_LOGS)
+
+    /** 标注与流水同目录，但生命周期不同：重装只作废 [logs]（见 [checkInstallTime]）。 */
+    fun labels(): File = File(dir, FILE_LABELS)
 
     fun safeMode(): File = File(dir, FILE_SAFE_MODE)
 
