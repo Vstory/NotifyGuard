@@ -382,6 +382,20 @@ jobs:
             done
             echo "  ✅ 标注通道 action 契约在 dex"
 
+            # ③f 微调量通道：文件名与格式 magic 各是一份跨进程契约 —— App 按 REMOTE_FILE 写、
+            #     模块端按同名读（写 A 读 B 的表现是「标注标了、分数不动」，且两端都不报错）；
+            #     magic 则是「文件确实是本格式」的第一道校验，被改成别的布局后旧与新会互相误读。
+            for A in \
+              'spam_delta.bin' \
+              'NSGD'; do
+              AFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$A"; then AFOUND=1; break; fi
+              done
+              [ "$AFOUND" -eq 1 ] || { echo "::error::$NAME 缺微调量契约字面量 $A —— 常量被改/裁剪，App 与模块端对不上，微调永远不生效"; exit 1; }
+            done
+            echo "  ✅ 微调量文件名与 magic 在 dex"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在

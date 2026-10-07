@@ -1,0 +1,157 @@
+package io.github.vstory.notifyguard.sync
+
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import io.github.vstory.notifyguard.ai.SpamDelta
+import io.github.vstory.notifyguard.ai.SpamModel
+import io.github.vstory.notifyguard.ai.SpamTuner
+import io.github.vstory.notifyguard.judge.LabelRecord
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.Executors
+
+/**
+ * App 侧的拟合与下发编排：标注 + base 指纹 → 确定性 SGD → remote file → 配置里的 `deltaVersion`。
+ *
+ * 「需要重拟合」的判据是**输入摘要**（标注全集 + base 指纹）而不是「标注条数变了」：同一条标注被改主意、
+ * 或 base 换了一版，条数都不变但样本集变了。摘要存 App 私有 prefs —— 它丢了最多让首启多拟合一轮，
+ * 而拟合是确定性的（同输入同 delta），重复一轮没有副作用。
+ *
+ * 门槛没到、或链路任一步失败，都只回报状态、**不写版本号**：模块端按版本号决定是否读文件，
+ * 写一个它读不出东西的版本号，等于把「还没准备好」显示成「已生效」。
+ */
+object DeltaFitter {
+
+    sealed interface State {
+        /** 尚未下发（版本号为 0）。 */
+        data object None : State
+
+        data class NotEnough(val readiness: SpamTuner.Readiness) : State
+
+        /** 这一步做不成：模块未连接、写文件失败、内置模型不可用。 */
+        data class Unavailable(val reason: String) : State
+
+        data class Sent(val version: Long, val weights: Int) : State
+    }
+
+    private const val PREFS = "notifyguard_fit"
+    private const val KEY_SIG = "last_signature"
+
+    /** 显示用：文件读不到时的权重数占位（用负数，与「0 个权重」区分开）。 */
+    private const val UNKNOWN_WEIGHTS = -1
+
+    private val worker = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "NotifyGuard-fit").apply { isDaemon = true }
+    }
+
+    private val main = Handler(Looper.getMainLooper())
+
+    /** App 进程内只解析一次内置模型（262 KB，与模块端用的是同一份资源）。 */
+    @Volatile private var base: SpamModel? = null
+    @Volatile private var baseTried = false
+
+    /**
+     * 标注有变就重拟合并下发；没变就只回报当前状态。
+     *
+     * 回调在主线程，可直接更新 UI。**不在这里判 `spamEnabled`**：微调量与「AI 段是否启用」是两件事 ——
+     * 用户关掉 AI 再打开，不该顺带丢掉已拟合的微调。
+     */
+    fun ensureFitted(ctx: Context, labels: List<LabelRecord>, onDone: (State) -> Unit) {
+        val appContext = ctx.applicationContext
+        worker.execute {
+            val state = runCatching { fitIfNeeded(appContext, labels) }
+                .getOrElse { State.Unavailable("拟合异常：${it.javaClass.simpleName}: ${it.message}") }
+            main.post { onDone(state) }
+        }
+    }
+
+    /** 不带标注的纯查询（例如只想刷新那一行状态时用）。 */
+    fun status(ctx: Context, onDone: (State) -> Unit) {
+        val appContext = ctx.applicationContext
+        worker.execute {
+            val state = runCatching {
+                val model = bundledBase() ?: return@runCatching State.Unavailable("内置模型不可用")
+                currentState(model)
+            }.getOrElse { State.Unavailable("状态读取异常：${it.javaClass.simpleName}: ${it.message}") }
+            main.post { onDone(state) }
+        }
+    }
+
+    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>): State {
+        val model = bundledBase() ?: return State.Unavailable("内置模型不可用")
+        val sig = signature(labels, model)
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (prefs.getString(KEY_SIG, null) == sig) return currentState(model)
+
+        val samples = labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
+        val delta = when (val fit = SpamTuner.fit(model, samples)) {
+            is SpamTuner.Fit.NotReady -> return State.NotEnough(fit.readiness)
+            is SpamTuner.Fit.Ok -> fit.delta
+        }
+        if (!ConfigWriter.isConnected()) return State.Unavailable("模块未连接")
+        // 顺序是正确性的一部分：文件先落地，版本号后写（见 DeltaWriter 类注释）
+        if (!DeltaWriter.write(delta)) return State.Unavailable("写入微调文件失败")
+        val cfg = ConfigWriter.load() ?: return State.Unavailable("读不到当前配置")
+        // 版本号与时间戳同源，同毫秒连发两轮时 +1 —— 否则模块端把第二轮当成「版本号没变」而不加载
+        val now = System.currentTimeMillis()
+        val version = if (cfg.deltaVersion == now) now + 1 else now
+        if (!ConfigWriter.save(cfg.copy(deltaVersion = version))) return State.Unavailable("下发版本号失败")
+
+        prefs.edit().putString(KEY_SIG, sig).apply()
+        return State.Sent(version, delta.indices.size)
+    }
+
+    private fun currentState(model: SpamModel): State {
+        val version = ConfigWriter.load()?.deltaVersion ?: 0L
+        if (version == 0L) return State.None
+        val weights = when (val parsed = DeltaWriter.read(model)) {
+            is SpamDelta.Parse.Ok -> parsed.delta.indices.size
+            else -> UNKNOWN_WEIGHTS
+        }
+        return State.Sent(version, weights)
+    }
+
+    private fun bundledBase(): SpamModel? {
+        if (baseTried) return base
+        synchronized(this) {
+            if (baseTried) return base
+            baseTried = true
+            base = SpamModel.bundled()
+        }
+        return base
+    }
+
+    /**
+     * 输入摘要 = 标注全集（key + 文本 + 标注） + base 指纹。
+     * 不含 `at`（改一次标注时间就重拟合没有意义）与 `pkg`（文本与 key 已覆盖它的信息）。
+     */
+    private fun signature(labels: List<LabelRecord>, model: SpamModel): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        md.update(model.fingerprintU32.toString().toByteArray())
+        for (l in labels.sortedBy { it.key }) {
+            md.update(0)
+            md.update(l.key.toByteArray())
+            md.update(if (l.spam) 1 else 0)
+            md.update(l.text.toByteArray())
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /** UI 文案集中在这里：状态行与「刷新」两处显示必须完全一致，各拼一份迟早不一致。 */
+    fun describe(state: State): String = when (state) {
+        is State.None -> "微调：未下发（标注满 ${SpamTuner.MIN_LABELS} 条且两类各 ≥ ${SpamTuner.MIN_PER_CLASS} 条后自动拟合）"
+        is State.NotEnough -> "微调：未下发（可训练样本 ${state.readiness.usable}/${SpamTuner.MIN_LABELS}，" +
+            "垃圾 ${state.readiness.spam}/${SpamTuner.MIN_PER_CLASS}、正常 ${state.readiness.ham}/${SpamTuner.MIN_PER_CLASS}）"
+        is State.Unavailable -> "微调：未下发（${state.reason}）"
+        is State.Sent -> if (state.weights >= 0) {
+            "微调：已下发 v${TIME.format(Date(state.version))}（${state.weights} 个权重）"
+        } else {
+            "微调：已下发 v${TIME.format(Date(state.version))}（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）"
+        }
+    }
+
+    private val TIME = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+}

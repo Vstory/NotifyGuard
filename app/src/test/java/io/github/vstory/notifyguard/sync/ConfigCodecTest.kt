@@ -84,8 +84,7 @@ class ConfigCodecTest {
     }
 
     @Test
-    fun brokenJsonReturnsNull() {
-        assertNull(ConfigCodec.decode("{ 这不是 json"))
+    fun brokenJsonReturnsNull() {        assertNull(ConfigCodec.decode("{ 这不是 json"))
         assertNull(ConfigCodec.decode("[]"))
     }
 
@@ -109,6 +108,25 @@ class ConfigCodecTest {
     fun unknownFieldsAreIgnored() {
         val c = decode("""{"schema":1,"future":"x","nested":{"a":1}}""")
         assertTrue(c.enabled)
+    }
+
+    /**
+     * 微调版本号挂在同一条「读回配置 + 只替换一个字段」的路径上（[io.github.vstory.notifyguard.sync.DeltaFitter]），
+     * 所以它必须与阈值 / 开关 / 规则一起原样往返，否则一次拟合下发会把用户刚改的规则抹掉。
+     */
+    @Test
+    fun deltaVersionRoundTripsAndCarriesNothingElse() {
+        val base = decode(
+            """{"schema":1,"observe":false,"threshold":0.83,"spamEnabled":true,
+                "rules":[{"id":"custom-keywords","keywords":["贷款"]}]}""",
+        )
+        assertEquals(0L, base.deltaVersion)
+        val back = decode(ConfigCodec.encode(base.copy(deltaVersion = 1759812345678L)))
+        assertEquals(1759812345678L, back.deltaVersion)
+        assertTrue(back.spamEnabled)
+        assertFalse(back.observe)
+        assertEquals(0.83, back.threshold, 0.0)
+        assertEquals(base.rules, back.rules)
     }
 
     @Test

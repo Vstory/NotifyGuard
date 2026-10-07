@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.core
 import android.app.Notification
 import io.github.libxposed.api.XposedInterface
 import io.github.vstory.notifyguard.BuildConfig
+import io.github.vstory.notifyguard.ai.DeltaHolder
 import io.github.vstory.notifyguard.ai.ModelHolder
 import io.github.vstory.notifyguard.judge.Judge
 import io.github.vstory.notifyguard.judge.LogRecord
@@ -95,6 +96,7 @@ object EntryHook {
         }
 
         // 先于 hook 装配：判定链要读配置，且框架只向「已取过该组」的进程推送变更
+        DeltaHolder.start(iface)
         ConfigReader.start(iface)
         report.markOk("配置通道 ${ConfigReader.GROUP}（observe=${ConfigReader.config().observe}）")
 

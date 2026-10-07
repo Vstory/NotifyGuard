@@ -17,7 +17,8 @@ object Judge {
 
     const val SELF_PKG = "io.github.vstory.notifyguard"
 
-    private const val MIN_AI_LEN = 4
+    /** 过短的文本不进 AI 段。[SpamTuner] 复用同一个数：标了却拟合不出特征的样本是噪声。 */
+    internal const val MIN_AI_LEN = 4
 
     data class Decision(
         val block: Boolean,

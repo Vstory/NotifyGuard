@@ -24,7 +24,7 @@ class SpamModel private constructor(
 
     override fun score(text: String): Double {
         val counts = SpamFeatures.counts(text, buckets, ngramMin, ngramMax)
-        if (counts.isEmpty()) return sigmoid(bias.toDouble())
+        if (counts.isEmpty()) return sigmoidOf(bias.toDouble())
         var sq = 0L
         for (c in counts.values) sq += c.toLong() * c
         val norm = Math.sqrt(sq.toDouble())
@@ -33,18 +33,28 @@ class SpamModel private constructor(
             // 与 Python 同形：int8 × float32 先按单精度舍入，再升 double 累加（顺序已由升序 key 固定）
             z += (weights[k] * scale).toDouble() * (c / norm)
         }
-        return sigmoid(z)
+        return sigmoidOf(z)
     }
+
+    /**
+     * 单桶的基权重（已反量化）。给 [TunedScorer] 与 [SpamTuner] 用：它们要的是「base 的那一项」，
+     * 而不是「base 的最终分数」，所以不能靠调 [score] 绕。
+     */
+    internal fun baseWeight(k: Int): Float = weights[k] * scale
 
     fun fingerprintHex(): String = "%08x".format(fingerprint)
 
-    private fun sigmoid(z: Double): Double {
-        if (z >= 0) return 1.0 / (1.0 + Math.exp(-z))
-        val e = Math.exp(z)
-        return e / (1.0 + e)
-    }
+    /** 文件 CRC32 的**无符号**形式。delta 头里存的是它，用 Int 装负值再比会两边都自认为一致不了。 */
+    val fingerprintU32: Long get() = fingerprint.toLong() and 0xFFFFFFFFL
 
     companion object {
+
+        internal fun sigmoidOf(z: Double): Double {
+            if (z >= 0) return 1.0 / (1.0 + Math.exp(-z))
+            val e = Math.exp(z)
+            return e / (1.0 + e)
+        }
+
 
         const val RESOURCE = "model/model.bin"
 

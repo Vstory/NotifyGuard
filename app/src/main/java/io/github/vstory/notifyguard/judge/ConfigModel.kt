@@ -45,6 +45,13 @@ data class Config(
     val threshold: Double = DEFAULT_THRESHOLD,
     /** AI 段总开关。默认关：先观察模式跑分数分布，再谈默认开（M2 验收）。 */
     val spamEnabled: Boolean = false,
+    /**
+     * 已下发的微调量版本号（App 写，模块端读）。0 = 无微调。
+     *
+     * 为什么版本号走配置而不塞进 delta 文件：配置是本就有监听的回传通道（写它即触发模块端热更新），
+     * 且「版本号变了才读文件」让模块端不必轮询文件系统。
+     */
+    val deltaVersion: Long = 0,
 ) {
 
     val compiledRules: List<CompiledRule> by lazy { RuleMatcher.compile(rules) }

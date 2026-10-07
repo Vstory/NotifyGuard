@@ -35,6 +35,12 @@ object ConfigWriter {
 
     fun isConnected(): Boolean = service != null
 
+    /**
+     * 给同进程的其它出口用（目前是 [DeltaWriter] 写 remote file）：框架服务只在这里注册一次监听，
+     * 各处各自注册会撞上框架「registerListener 只许调一次」的限制。
+     */
+    internal fun currentService(): XposedService? = service
+
     /** 读回当前配置；未连接或内容不可解析时返回 null（调用方按「未知」处理，不要当默认值用）。 */
     fun load(): Config? {
         val s = service ?: return null

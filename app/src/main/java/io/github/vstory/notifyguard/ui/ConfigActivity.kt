@@ -22,6 +22,7 @@ import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigCodec
 import io.github.vstory.notifyguard.sync.ConfigWriter
+import io.github.vstory.notifyguard.sync.DeltaFitter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
 import java.text.SimpleDateFormat
@@ -66,6 +67,10 @@ class ConfigActivity : Activity() {
 
     /** 最近一次生效的阈值（取档位比较，避免浮点等值判断）。 */
     private var savedThresholdStep = stepOf(Config.DEFAULT_THRESHOLD)
+
+    /** 标注行与微调行分别存文本再合成：两者的刷新时机不同（标注先到、拟合后到）。 */
+    private var labelSummary = "标注：尚未拉取"
+    private var fitSummary = "微调：尚未拉取"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -248,10 +253,15 @@ class ConfigActivity : Activity() {
      *
      * 标注（`labels.json`）跟着一起拉：它同样是模块端权威、App 侧缓存，且这一行是本片唯一能看出
      * 标注通道是否活着的窗口。
+     *
+     * 拉完标注就顺手喂给拟合（[DeltaFitter]）：标注是微调的唯一输入，两者天然同源；
+     * 拟合按「输入摘要有没有变」自行决定要不要真跑，重复进页面不会白算。
      */
     private fun refreshRecords() {
         renderRecords(null)
-        labelInfo.text = "标注：正在从模块端拉取…"
+        labelSummary = "标注：正在从模块端拉取…"
+        fitSummary = "微调：检查中…"
+        paintLabelInfo()
         LabelClient.fetch(this) { renderLabels(it) }
         LogFetcher.fetch(this) { list ->
             renderRecords(
@@ -265,11 +275,26 @@ class ConfigActivity : Activity() {
     }
 
     private fun renderLabels(list: List<LabelRecord>?) {
-        labelInfo.text = if (list == null) {
+        labelSummary = if (list == null) {
             "标注：拉取超时（模块未激活或装完还没重启过系统框架；标注本身没丢，仍在模块端）"
         } else {
             "标注 ${list.size} 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）"
         }
+        if (list == null) {
+            DeltaFitter.status(this) { onFitState(it) }
+        } else {
+            DeltaFitter.ensureFitted(this, list) { onFitState(it) }
+        }
+    }
+
+    private fun onFitState(state: DeltaFitter.State) {
+        if (isFinishing || isDestroyed) return
+        fitSummary = DeltaFitter.describe(state)
+        paintLabelInfo()
+    }
+
+    private fun paintLabelInfo() {
+        labelInfo.text = "$labelSummary\n$fitSummary"
     }
 
     private fun renderRecords(error: String?) {
@@ -376,6 +401,9 @@ class ConfigActivity : Activity() {
         root.addView(recordInfo)
         labelInfo = TextView(this).apply { textSize = 12f }
         root.addView(labelInfo)
+        root.addView(
+            hint("标注是端侧微调的唯一输入：标注累计到门槛后本页会自动拟合并下发给模块端（下次判定即生效），无需手动触发。"),
+        )
         root.addView(
             Button(this).apply {
                 text = "刷新记录"

@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.sync
 
 import io.github.libxposed.api.XposedInterface
+import io.github.vstory.notifyguard.ai.DeltaHolder
 import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.judge.Config
 import java.util.concurrent.Executors
@@ -108,10 +109,13 @@ object ConfigReader {
         current.set(parsed)
         ModuleLogger.info(
             "配置生效（$from）：enabled=${parsed.enabled} observe=${parsed.observe} " +
-                "规则=${parsed.rules.size}(有效 ${parsed.compiledRules.size}) 白名单=${parsed.whitelist.size}",
+                "规则=${parsed.rules.size}(有效 ${parsed.compiledRules.size}) 白名单=${parsed.whitelist.size} " +
+                "微调版本=${parsed.deltaVersion}",
         )
         if (parsed.droppedRules > 0) {
             ModuleLogger.error("配置里有 ${parsed.droppedRules} 条规则被丢弃（类型未知 / 正则非法 / 关键词为空）")
         }
+        // 版本号变了才去读 delta 文件（IO 在 DeltaHolder 的后台线程上，这里只是投递）
+        DeltaHolder.onConfigVersion(parsed.deltaVersion)
     }
 }

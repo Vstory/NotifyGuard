@@ -17,6 +17,14 @@ object ModelHolder {
     var current: SpamScorer? = null
         private set
 
+    /**
+     * 不可变的内置 base。delta 每次都叠在**它**之上，而不是叠在 [current] 上 ——
+     * 后者是「上一份 delta 的结果」，链式叠加会让「清空标注回到纯 base」变成不可能。
+     */
+    @Volatile
+    var base: SpamModel? = null
+        private set
+
     private var loaded = false
 
     fun loadBundled() {
@@ -33,6 +41,7 @@ object ModelHolder {
                         "fp=${model.fingerprintHex()}"
                 )
             }
+            base = model
             current = model
         }
     }
