@@ -73,18 +73,105 @@ class LogStoreTest {
         assertTrue(tmp.root.listFiles()!!.none { it.name.endsWith(".tmp") })
     }
 
-    private fun file(): File = File(tmp.root, "logs.json")
+    // ---- 内容聚合（M2b）----
 
+    /** 一条记录是一组通知：同文本同判定只留一组，[LogRecord.count]/[LogRecord.lastTs] 记住它的量。 */
+    @Test
+    fun repeatedTextCollapsesIntoOneGroup() {
+        val s = store()
+        s.addAll(listOf(dup(1), dup(2), dup(3)))
+        assertEquals(1, s.size())
+        val r = s.recent(1).first()
+        assertEquals(1L, r.ts)
+        assertEquals(3L, r.lastTs)
+        assertEquals(3, r.count)
+        assertEquals(3, s.rawCount())
+    }
+
+    @Test
+    fun packageTextOrVerdictDifferenceKeepsGroupsApart() {
+        val s = store()
+        s.addAll(
+            listOf(
+                dup(1, text = "a"),
+                dup(2, text = "b"),
+                dup(3, text = "a", pkg = "com.y"),
+                dup(4, text = "a", block = true),
+                dup(5, text = "a", would = true),
+            ),
+        )
+        assertEquals(5, s.size())
+    }
+
+    @Test
+    fun mergeSurvivesReload() {
+        store().addAll(listOf(dup(1), dup(2)))
+        val r = store().recent(1).first()
+        assertEquals(2, r.count)
+        assertEquals(2L, r.lastTs)
+    }
+
+    /** M2 之前的文件没有 count/lastTs：载入时就地压实，用户不需要清空重来。 */
+    @Test
+    fun legacyFileIsCompactedOnLoad() {
+        val one = "{\"ts\":%d,\"pkg\":\"com.x\",\"title\":\"t\",\"text\":\"same\"," +
+            "\"reason\":\"no_model\",\"would\":false,\"block\":false,\"slot\":\"EXT_SLOT\"}"
+        file().writeText("[${one.format(1)},${one.format(2)}]")
+        val s = store()
+        assertEquals(1, s.size())
+        assertEquals(2, s.recent(1).first().count)
+    }
+
+    /** 裁剪淘汰最久未活跃者：首见很早但刚被刷新的组必须留下，被淘汰的是别的。 */
+    @Test
+    fun trimDropsLeastRecentlySeen() {
+        val s = store()
+        s.addAll((1..LogStore.MAX_RECORDS).map { dup(it.toLong(), text = "u$it") })
+        s.addAll(listOf(dup(501L, text = "u1")))
+        s.addAll(listOf(dup(502L, text = "u501")))
+        assertEquals(LogStore.MAX_RECORDS, s.size())
+        assertEquals(listOf("u501", "u1"), s.recent(2).map { it.text })
+        assertTrue(s.recent(LogStore.MAX_RECORDS).none { it.text == "u2" })
+    }
+
+    /** 排序看最近活跃而非首见：否则一直在刷的组会沉到列表最底。 */
+    @Test
+    fun recentOrdersByLastSeenNotFirstSeen() {
+        val s = store()
+        s.addAll(listOf(dup(1, text = "a"), dup(2, text = "b")))
+        s.addAll(listOf(dup(3, text = "a")))
+        assertEquals(listOf("a", "b"), s.recent(2).map { it.text })
+    }
+
+    private fun file(): File = File(tmp.root, "logs.json")
     private fun store() = LogStore(file())
 
     private fun rec(ts: Long) = LogRecord(
         ts = ts,
         pkg = "com.x",
         title = "t",
-        text = null,
+        // 每条一个正文：同文本会被聚合，而这些用例要的是逐条独立
+        text = "t$ts",
         reason = "pass",
         would = false,
         block = false,
         slot = "FUNNEL",
+    )
+
+    private fun dup(
+        ts: Long,
+        text: String = "same",
+        pkg: String = "com.x",
+        would: Boolean = false,
+        block: Boolean = false,
+    ) = LogRecord(
+        ts = ts,
+        pkg = pkg,
+        title = "t",
+        text = text,
+        reason = "no_model",
+        would = would,
+        block = block,
+        slot = "EXT_SLOT",
     )
 }

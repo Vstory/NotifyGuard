@@ -130,7 +130,8 @@ class LogSinkTest {
         ts = ts,
         pkg = "com.x",
         title = "t",
-        text = null,
+        // 每条一个正文：同文本会被聚合，而这些用例要的是逐条独立
+        text = "t$ts",
         reason = "rule:r1",
         would = true,
         block = false,

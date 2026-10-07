@@ -50,6 +50,28 @@ class LogCodecTest {
         assertEquals(false, back.would)
     }
 
+    @Test
+    fun mergedFieldsRoundTrip() {
+        val r = rec().copy(lastTs = 1_500L, count = 7)
+        val back = LogCodec.fromJson(LogCodec.toJson(r))!!
+        assertEquals(1_500L, back.lastTs)
+        assertEquals(7, back.count)
+    }
+
+    /** 只出现一次的记录不写这两个键：字节格式与 M2 一致，旧版本读新文件也不会多解析。 */
+    @Test
+    fun singleRecordOmitsMergedFields() {
+        val json = LogCodec.toJson(rec())
+        assertTrue(!json.has("count") && !json.has("lastTs"))
+    }
+
+    @Test
+    fun omittedMergedFieldsDefaultToOne() {
+        val back = LogCodec.fromJson(JSONObject("{\"ts\":9,\"pkg\":\"a\",\"reason\":\"pass\"}"))!!
+        assertEquals(9L, back.lastTs)
+        assertEquals(1, back.count)
+    }
+
     private fun rec() = LogRecord(
         ts = 1_000L,
         pkg = "com.x",

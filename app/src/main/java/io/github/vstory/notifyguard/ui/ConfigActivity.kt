@@ -131,7 +131,7 @@ class ConfigActivity : Activity() {
         val store = LogStore.get(this)
         val list = store.recent(RECENT_LIMIT)
         recordInfo.text = buildString {
-            append("共 ${store.size()} 条（上限 ${LogStore.MAX_RECORDS}），下列最近 ${list.size} 条；权威源在模块端")
+            append("共 ${store.size()} 组 / 累计 ${store.rawCount()} 次（上限 ${LogStore.MAX_RECORDS} 组），下列最近 ${list.size} 组；权威源在模块端")
             error?.let { append("\n$it") }
         }
         recordView.text = if (list.isEmpty()) {
@@ -143,7 +143,9 @@ class ConfigActivity : Activity() {
                     r.would -> "本应拦"
                     else -> "放行"
                 }
-                "${TIME.format(Date(r.ts))} [$mark] ${r.pkg} · ${r.slot.orEmpty()}\n" +
+                // 一条记录是一组通知：时间取最近一次，次数附在后面（首见时间对用户没有意义）
+                val times = if (r.count > 1) " ×${r.count}" else ""
+                "${TIME.format(Date(r.lastTs))} [$mark]$times ${r.pkg} · ${r.slot.orEmpty()}\n" +
                     listOfNotNull(r.title, r.text).joinToString(" / ").ifEmpty { "(无文本)" } + "\n" +
                     r.reason + (r.ruleId?.let { " · $it" } ?: "")
             }
