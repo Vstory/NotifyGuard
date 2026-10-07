@@ -37,10 +37,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
+import io.github.vstory.notifyguard.ui.text
 
 /**
  * 记录屏（M4）：模块端回流记录的展示 + 就地标注。
@@ -58,27 +61,31 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
 
     // 进屏拉一次（切回本屏也算进屏）；超时不重试，刷新入口就在顶栏
     LaunchedEffect(Unit) { viewModel.refresh(ctx) }
-    LaunchedEffect(state.notice) {
-        state.notice?.let {
-            snackbar.showSnackbar(it.text)
-            viewModel.noticeShown(it)
+    // 文案必须在 Composable 上下文里解析：LaunchedEffect 的 block 不是 @Composable，
+    // 里面调不了 stringResource
+    val notice = state.notice
+    val noticeText = notice?.text?.text()
+    LaunchedEffect(notice) {
+        if (notice != null && noticeText != null) {
+            snackbar.showSnackbar(noticeText)
+            viewModel.noticeShown(notice)
         }
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("记录") },
+                title = { Text(stringResource(R.string.records_title)) },
                 actions = {
                     IconButton(onClick = { viewModel.refresh(ctx) }, enabled = !state.fetching) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "刷新记录")
+                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.records_refresh))
                     }
                     IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = "更多操作")
+                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.records_more))
                     }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("清空记录") },
+                            text = { Text(stringResource(R.string.records_clear_records)) },
                             onClick = {
                                 menuOpen = false
                                 viewModel.clearRecords(ctx)
@@ -87,7 +94,7 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
                         // 与「清空记录」拆成两项、且只有它二次确认：记录是流水（丢了无所谓），
                         // 标注是手工劳动（清空不可恢复），两个破坏性动作的误触代价不对等
                         DropdownMenuItem(
-                            text = { Text("清空标注") },
+                            text = { Text(stringResource(R.string.records_clear_labels)) },
                             onClick = {
                                 menuOpen = false
                                 viewModel.askClearLabels(ctx)
@@ -125,13 +132,17 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
     state.confirmClearLabels?.let { n ->
         AlertDialog(
             onDismissRequest = { viewModel.dismissClearLabels() },
-            title = { Text("清空全部标注？") },
-            text = { Text("$n 条标注会被删除且无法恢复。清空后模型退回纯内置模型，分数会立刻变回去。") },
+            title = { Text(stringResource(R.string.records_clear_labels_title)) },
+            text = { Text(stringResource(R.string.records_clear_labels_body, n)) },
             confirmButton = {
-                TextButton(onClick = { viewModel.clearLabels(ctx) }) { Text("清空") }
+                TextButton(onClick = { viewModel.clearLabels(ctx) }) {
+                    Text(stringResource(R.string.records_clear_labels_confirm))
+                }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissClearLabels() }) { Text("取消") }
+                TextButton(onClick = { viewModel.dismissClearLabels() }) {
+                    Text(stringResource(R.string.records_clear_labels_cancel))
+                }
             },
         )
     }
@@ -145,23 +156,32 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = "共 ${state.groups} 组 / 累计 ${state.rawCount} 次" +
-                    "（上限 ${LogStore.MAX_RECORDS} 组），下列最近 ${RecordsViewModel.RECENT_LIMIT} 组；权威源在模块端",
+                text = stringResource(
+                    R.string.records_summary,
+                    state.groups,
+                    state.rawCount,
+                    LogStore.MAX_RECORDS,
+                    RecordsViewModel.RECENT_LIMIT,
+                ),
                 style = MaterialTheme.typography.bodySmall,
             )
             if (state.fetching) {
                 Text(
-                    text = "正在从模块端拉取…",
+                    text = stringResource(R.string.records_fetching),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             state.fetchError?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(
+                    text = it.text(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
             }
             Text(
-                text = state.labelError
-                    ?: "标注 ${state.labelCount} 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）",
+                text = state.labelError?.text()
+                    ?: stringResource(R.string.records_label_summary, state.labelCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (state.labelError != null) {
                     MaterialTheme.colorScheme.error
@@ -170,13 +190,12 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
                 },
             )
             Text(
-                text = state.fitText ?: "微调：尚未拉取",
+                text = fitLine(state.fit),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = "标垃圾 / 标正常会把这条通知的文本交给端侧微调；累计到门槛自动拟合并下发给模块端" +
-                    "（下次判定即生效），无需手动触发。",
+                text = stringResource(R.string.records_label_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -187,7 +206,7 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
 @Composable
 private fun EmptyHint() {
     Text(
-        text = "（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）",
+        text = stringResource(R.string.records_empty),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -222,7 +241,7 @@ private fun RecordCard(
                 )
                 if (row.count > 1) {
                     Text(
-                        text = "×${row.count}",
+                        text = stringResource(R.string.records_count_badge, row.count),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -230,7 +249,9 @@ private fun RecordCard(
                 Spacer(Modifier.weight(1f))
                 row.marked?.let { spam ->
                     Text(
-                        text = if (spam) "已标垃圾" else "已标正常",
+                        text = stringResource(
+                            if (spam) R.string.records_marked_spam else R.string.records_marked_ham
+                        ),
                         style = MaterialTheme.typography.labelMedium,
                         color = if (spam) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     )
@@ -243,7 +264,7 @@ private fun RecordCard(
             )
             if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
                 Text(
-                    text = "(无文本)",
+                    text = stringResource(R.string.records_no_text),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -267,27 +288,30 @@ private fun RecordCard(
                     onClick = { onMark(true) },
                     modifier = Modifier.heightIn(min = 48.dp),
                     enabled = !busy && row.marked != true,
-                ) { Text("标垃圾") }
+                ) { Text(stringResource(R.string.action_mark_spam)) }
                 TextButton(
                     onClick = { onMark(false) },
                     modifier = Modifier.heightIn(min = 48.dp),
                     enabled = !busy && row.marked != false,
-                ) { Text("标正常") }
+                ) { Text(stringResource(R.string.action_mark_ham)) }
                 TextButton(
                     onClick = onUndo,
                     modifier = Modifier.heightIn(min = 48.dp),
                     enabled = !busy && row.marked != null,
-                ) { Text("撤销") }
+                ) { Text(stringResource(R.string.action_undo)) }
             }
         }
     }
 }
 
-private fun verdictLabel(verdict: RecordsViewModel.Verdict): String = when (verdict) {
-    RecordsViewModel.Verdict.Block -> "拦截"
-    RecordsViewModel.Verdict.Would -> "本应拦"
-    RecordsViewModel.Verdict.Pass -> "放行"
-}
+@Composable
+private fun verdictLabel(verdict: RecordsViewModel.Verdict): String = stringResource(
+    when (verdict) {
+        RecordsViewModel.Verdict.Block -> R.string.verdict_block
+        RecordsViewModel.Verdict.Would -> R.string.verdict_would
+        RecordsViewModel.Verdict.Pass -> R.string.verdict_pass
+    }
+)
 
 @Composable
 private fun verdictColor(verdict: RecordsViewModel.Verdict) = when (verdict) {

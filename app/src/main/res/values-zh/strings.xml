@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      中文语言包。键必须与 res/values/strings.xml 逐条对应：漏掉的键会静默回落到英文。
+      「%1$s」这类占位的含义也与英文版一致，不要调换顺序。
+    -->
+    <string name="app_name">NotifyGuard</string>
+
+    <string name="nav_home">首页</string>
+    <string name="nav_rules">规则</string>
+    <string name="nav_records">记录</string>
+    <string name="nav_learning">学习</string>
+    <string name="nav_settings">设置</string>
+
+    <string name="home_plan">规划：拦截统计与命中排行（被拦总量、按 App 分布、观察模式下的判定分布）。</string>
+    <string name="learning_plan">规划：标注清单与拟合状态（门槛、delta 版本、下发结果），以及误杀回溯。</string>
+
+    <string name="service_checking">框架服务：检查中…</string>
+    <string name="service_connected">框架服务：%1$s %2$s</string>
+    <string name="service_disconnected">框架服务：未连接（在 LSPosed 里启用本模块后重开本页；未连接时改动下发不了，控件已置灰）</string>
+    <string name="status_cfg_unreadable">连上了框架服务，但读不出生效配置（配置内容损坏？）—— 下面显示的是默认值，改动仍可下发。</string>
+
+    <!-- 记录屏 -->
+    <string name="records_title">记录</string>
+    <string name="records_refresh">刷新记录</string>
+    <string name="records_more">更多操作</string>
+    <string name="records_clear_records">清空记录</string>
+    <string name="records_clear_labels">清空标注</string>
+    <string name="records_clear_labels_title">清空全部标注？</string>
+    <string name="records_clear_labels_body">%1$d 条标注会被删除且无法恢复。清空后模型退回纯内置模型，分数会立刻变回去。</string>
+    <string name="records_clear_labels_confirm">清空</string>
+    <string name="records_clear_labels_cancel">取消</string>
+    <string name="records_summary">共 %1$d 组 / 累计 %2$d 次（上限 %3$d 组），下列最近 %4$d 组；权威源在模块端</string>
+    <string name="records_fetching">正在从模块端拉取…</string>
+    <string name="records_label_summary">标注 %1$d 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）</string>
+    <string name="records_fit_pending">微调：尚未拉取</string>
+    <string name="records_label_hint">标垃圾 / 标正常会把这条通知的文本交给端侧微调；累计到门槛自动拟合并下发给模块端（下次判定即生效），无需手动触发。</string>
+    <string name="records_empty">（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）</string>
+    <string name="records_count_badge">×%1$d</string>
+    <string name="records_no_text">(无文本)</string>
+    <string name="records_marked_spam">已标垃圾</string>
+    <string name="records_marked_ham">已标正常</string>
+    <string name="action_mark_spam">标垃圾</string>
+    <string name="action_mark_ham">标正常</string>
+    <string name="action_undo">撤销</string>
+    <string name="verdict_block">拦截</string>
+    <string name="verdict_would">本应拦</string>
+    <string name="verdict_pass">放行</string>
+
+    <string name="records_fetch_timeout">拉取超时：模块未激活或装完还没重启过系统框架（数据本身没丢，仍在模块端的 /data/misc/notifyguard 下）</string>
+    <string name="notice_no_labels">当前没有标注</string>
+    <string name="notice_label_busy">上一个标注动作还在等回执</string>
+    <string name="label_action_clear">清空标注</string>
+    <string name="label_action_mark_spam">标为垃圾</string>
+    <string name="label_action_mark_ham">标为正常</string>
+    <string name="label_action_undo">撤销标注</string>
+    <string name="notice_label_failed">%1$s 未生效：模块端没有回执（模块未激活 / 装完还没重启过系统框架 / labels.json 损坏）</string>
+    <string name="notice_label_done">%1$s 已生效（共 %2$d 条标注）</string>
+
+    <!-- 设置屏 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_status_group">模块状态</string>
+    <string name="settings_status_note">读的是模块端此刻的活状态，不是界面推断：熔断、装配失败、判定被停用都会在这里露出来。</string>
+    <string name="settings_refresh_status">刷新模块状态</string>
+    <string name="settings_clear_safe_mode">清除熔断并恢复</string>
+    <string name="settings_assembly_show">本次装配明细</string>
+    <string name="settings_assembly_hide">收起装配明细</string>
+    <string name="settings_assembly_empty">（未读到装配明细）</string>
+    <string name="module_line_checking">检查中…</string>
+    <string name="module_line_no_reply">模块未响应（LSPosed 里未启用本模块、装完还没重启系统框架，或状态通道没注册上）</string>
+    <string name="module_line_safe_mode">已熔断：判定停用，通知全部放行</string>
+    <string name="module_line_judging">判定生效中（路径：%1$s）</string>
+    <string name="module_line_stopped">判定已停用（%1$s）</string>
+    <string name="module_line_not_installed">未装拦截：见下方装配明细</string>
+    <string name="module_slot_ext">扩展槽（主路径）</string>
+    <string name="module_slot_funnel">漏斗（兜底路径）</string>
+    <string name="module_slot_unknown">未知</string>
+    <string name="module_counters">扩展槽命中 %1$d · 漏斗判定 %2$d · 漏斗直通 %3$d · ROM 已拦 %4$d · 异常 %5$d</string>
+    <string name="module_detail_ai_ready">AI 模型就绪</string>
+    <string name="module_detail_ai_unavailable">AI 模型不可用（整段放行）</string>
+    <string name="module_detail_delta_on">微调 v%1$d</string>
+    <string name="module_detail_delta_off">微调未启用</string>
+    <string name="module_detail">%1$s · %2$s · 记录已落盘 %3$d 条（缓冲丢弃 %4$d）</string>
+    <string name="module_assembly">本代装配 OK %1$d / SKIP %2$d / FAIL %3$d（模块版本 %4$s）</string>
+    <string name="module_safe_mode_line">熔断触发：%1$s；%2$s。%3$s</string>
+    <string name="module_safe_mode_at">时间 %1$s</string>
+    <string name="module_safe_mode_at_unknown">时间未记录</string>
+    <string name="module_safe_mode_reason_unknown">原因未记录</string>
+    <string name="module_safe_mode_tail_watch">标志监听在跑，清除即可恢复判定。</string>
+    <string name="module_safe_mode_tail_no_watch">标志监听不可用，清除后仍需重启系统框架。</string>
+
+    <string name="settings_block_group">拦截</string>
+    <string name="settings_block_note">开关拨动即下发、阈值松手下发，模块端立刻生效 —— 这一屏没有「保存」按钮。</string>
+    <string name="settings_enabled">启用拦截判定</string>
+    <string name="settings_enabled_note">关闭后判定链直接放行（记录照写）</string>
+    <string name="settings_observe">观察模式</string>
+    <string name="settings_observe_note">只记录、不拦截：判定照跑，reason 里照出 AI 分数与命中规则</string>
+    <string name="settings_ai_group">AI 识别</string>
+    <string name="settings_spam">识别垃圾通知</string>
+    <string name="settings_spam_note">端侧哈希 n-gram + 逻辑回归，不联网</string>
+    <string name="settings_threshold_note">分数 ≥ 阈值即拦。关掉上面的开关时本滑杆置灰：这个值不参与判定。调低更激进，0 等于全拦。</string>
+    <string name="threshold_line">AI 分数阈值 %1$s（%2$s）</string>
+    <string name="threshold_line_no_config">AI 分数阈值 未读到生效值（框架服务未连接）</string>
+    <string name="threshold_note_ai_off">AI 未开启，不生效</string>
+    <string name="threshold_note_dirty">松手下发，当前生效 %1$s</string>
+    <string name="threshold_note_effective">当前生效</string>
+    <string name="settings_protect_group">保护类型</string>
+    <string name="settings_protect_note">命中即放行，不进入规则与 AI：被误拦的代价远大于漏掉一条广告。</string>
+    <string name="protect_call">通话</string>
+    <string name="protect_call_note">来电</string>
+    <string name="protect_alarm">闹钟</string>
+    <string name="protect_alarm_note">闹钟</string>
+    <string name="protect_navigation">导航</string>
+    <string name="protect_navigation_note">导航</string>
+    <string name="protect_media">媒体</string>
+    <string name="protect_media_note">媒体播放</string>
+    <string name="protect_foreground_service">前台服务</string>
+    <string name="protect_foreground_service_note">前台服务</string>
+    <string name="protect_conversation">对话</string>
+    <string name="protect_conversation_note">即时通讯对话</string>
+    <string name="settings_config_group">已生效配置</string>
+    <string name="settings_config_note">模块端此刻实际读到的那份配置（只读）。界面上的开关就是按它渲染的，排查「改了没生效」时先看这里。</string>
+    <string name="settings_config_show">展开配置 JSON</string>
+    <string name="settings_config_hide">收起配置 JSON</string>
+    <string name="settings_config_empty">（未连接，读不到生效配置）</string>
+
+    <string name="notice_service_disconnected">框架服务未连接，改动没有下发</string>
+    <string name="notice_delivery_failed_switch">下发失败，开关已还原为生效值</string>
+    <string name="notice_delivery_failed_threshold">下发失败，阈值已还原为生效值</string>
+    <string name="notice_clear_no_reply">清除请求没有回应（模块端没回执）</string>
+    <string name="notice_clear_still_safe">熔断标志还在：清除没成功，仍处熔断</string>
+    <string name="notice_clear_resumed">已清除熔断标志，判定已恢复</string>
+    <string name="notice_clear_reinstalling">已清除熔断标志，正在重装拦截</string>
+    <string name="notice_clear_no_watcher">已清除熔断标志，但标志监听不可用：仍需重启系统框架才恢复判定</string>
+
+    <!-- 规则屏 -->
+    <string name="rules_title">规则</string>
+    <string name="rules_keyword_group">关键词规则</string>
+    <string name="rules_keyword_note">命中即拦。按小写后的子串匹配（不是正则），所以 AD 与 ad 是同一条。</string>
+    <string name="rules_rule_enabled">启用这条规则</string>
+    <string name="rules_rule_enabled_note">关掉后关键词仍留在配置里，只是不再参与判定</string>
+    <string name="rules_rule_empty_note">还没有关键词：填好并保存之后这个开关才有内容可启停</string>
+    <string name="rules_keyword_hint">每行一个关键词</string>
+    <string name="rules_keyword_submit_note">打到一半就下发会被按半截词拦通知，所以只由下面的按钮提交；保存即下发，模块端立刻生效。</string>
+    <string name="rules_save_keywords">保存关键词并下发</string>
+    <string name="rules_save_keywords_dirty">保存关键词并下发（有未保存改动）</string>
+    <string name="rules_whitelist_group">白名单</string>
+    <string name="rules_whitelist_note">名单里的应用跳过 AI 识别；关键词规则照常生效（那是显式要求拦的）。</string>
+    <string name="rules_whitelist_candidates_note">候选取自模块端记录里出现过的包名 —— 有记录就是发过通知的那些，不必额外申请「读取已安装应用」。</string>
+    <string name="rules_refresh_candidates">从模块端刷新候选</string>
+    <string name="rules_refreshing">正在拉取…</string>
+    <string name="rules_no_candidates">暂时没有候选：模块端还没记下任何通知，或本页与记录页都还没拉取过。可以直接在下面填包名。</string>
+    <string name="rules_candidate_seen">记录里出现过 %1$d 次</string>
+    <string name="rules_candidate_unseen">记录里还没出现过</string>
+    <string name="rules_candidates_capped">只列出前 %1$d 个（已放行的排在前面）。要放行的应用不在其中时，在下面直接填包名。</string>
+    <string name="rules_pkg_hint">com.example.app</string>
+    <string name="rules_add_whitelist">加入白名单</string>
+
+    <string name="notice_save_failed_disconnected">保存失败：框架服务未连接</string>
+    <string name="notice_save_failed_delivery">保存失败：下发没有成功（模块端仍是上一份配置）</string>
+    <string name="notice_keywords_cleared">已清空关键词并下发：这条规则不再拦任何通知</string>
+    <string name="notice_keywords_saved">已保存 %1$d 个关键词并下发（模块端即时生效）</string>
+    <string name="notice_rule_no_keywords">还没有关键词：先在下面填关键词并保存</string>
+    <string name="notice_rule_enabled">关键词规则已启用</string>
+    <string name="notice_rule_disabled">关键词规则已停用（关键词仍保留在配置里）</string>
+    <string name="notice_whitelist_added_effects">%1$s 已加入白名单：它的通知不再进 AI 识别（关键词规则照常生效）</string>
+    <string name="notice_whitelist_added">%1$s 已加入白名单</string>
+    <string name="notice_whitelist_reverted">下发失败，白名单已还原为生效值</string>
+    <string name="notice_whitelist_removed">%1$s 已移出白名单</string>
+    <string name="notice_whitelist_already">%1$s 已在白名单里</string>
+    <string name="notice_pkg_bad_format">包名格式不对：应形如 com.example.app（这里要的是包名，不是应用名）</string>
+    <string name="notice_candidates_timeout">候选拉取超时：模块未激活或装完还没重启过系统框架（已有的候选照常可用）</string>
+    <string name="notice_candidates_updated">候选已更新</string>
+
+    <!-- 微调状态行 -->
+    <string name="fit_none">微调：未下发（标注满 %1$d 条且两类各 ≥ %2$d 条后自动拟合）</string>
+    <string name="fit_not_enough">微调：未下发（可训练样本 %1$d/%2$d，垃圾 %3$d/%4$d、正常 %5$d/%6$d）</string>
+    <string name="fit_unavailable_line">微调：未下发（%1$s）</string>
+    <string name="fit_sent">微调：已下发 v%1$s（%2$d 个权重）</string>
+    <string name="fit_sent_no_file">微调：已下发 v%1$s（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）</string>
+    <string name="fit_reason_model">内置模型不可用</string>
+    <string name="fit_reason_module">模块未连接</string>
+    <string name="fit_reason_write">写入微调文件失败</string>
+    <string name="fit_reason_config">读不到当前配置</string>
+    <string name="fit_reason_version">下发版本号失败</string>
+    <string name="fit_error">拟合异常：%1$s</string>
+    <string name="fit_state_error">状态读取异常：%1$s</string>
+</resources>

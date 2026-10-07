@@ -1,9 +1,11 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import io.github.vstory.notifyguard.R
 
 @Composable
 fun HomeScreen() = PlaceholderScreen(
-    title = "首页",
-    plan = "规划：拦截统计与命中排行（被拦总量、按 App 分布、观察模式下的判定分布）。",
+    title = stringResource(R.string.nav_home),
+    plan = stringResource(R.string.home_plan),
 )

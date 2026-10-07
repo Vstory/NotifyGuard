@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.LabelRecord
@@ -12,6 +13,7 @@ import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.sync.DeltaFitter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
+import io.github.vstory.notifyguard.ui.UiText
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -25,6 +27,9 @@ import java.util.Locale
  *
  * 状态放 ViewModel 而不是 `remember`：在途标志、清空确认这类状态必须跨重组与屏幕旋转存活，
  * 否则「等回执时转屏」会让标志位复位，用户再点一下就并发发出两条指令。
+ *
+ * 这里只产出 [UiText]（资源号 + 参数）与原始数据，不产出成品文案：文案的解析必须发生在重组里，
+ * 见 ui/UiText.kt。
  */
 class RecordsViewModel : ViewModel() {
 
@@ -33,10 +38,11 @@ class RecordsViewModel : ViewModel() {
         val groups: Int = 0,
         val rawCount: Int = 0,
         val fetching: Boolean = false,
-        val fetchError: String? = null,
+        val fetchError: UiText? = null,
         val labelCount: Int = 0,
-        val labelError: String? = null,
-        val fitText: String? = null,
+        val labelError: UiText? = null,
+        /** 拟合状态；null = 还没拉过（界面显示「尚未拉取」而不是「未下发」）。 */
+        val fit: DeltaFitter.State? = null,
         val busy: Boolean = false,
         val notice: Notice? = null,
         /** 非空即弹二次确认，值是点下去那一刻的标注条数。 */
@@ -44,7 +50,7 @@ class RecordsViewModel : ViewModel() {
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次（连标两条）也要各弹一次。 */
-    data class Notice(val id: Long, val text: String)
+    data class Notice(val id: Long, val text: UiText)
 
     enum class Verdict { Block, Would, Pass }
 
@@ -60,6 +66,7 @@ class RecordsViewModel : ViewModel() {
         val pkg: String,
         val title: String?,
         val text: String?,
+        /** 模块端回传的技术串（`ai:0.87` 这类），不翻译。 */
         val reason: String,
         /** `null` = 未标注。 */
         val marked: Boolean?,
@@ -102,7 +109,7 @@ class RecordsViewModel : ViewModel() {
     fun askClearLabels(ctx: Context) {
         val n = LabelStore.get(ctx.applicationContext ?: ctx).size()
         if (n == 0) {
-            notify("当前没有标注")
+            notify(UiText.Res(R.string.notice_no_labels))
             return
         }
         state = state.copy(confirmClearLabels = n)
@@ -115,13 +122,14 @@ class RecordsViewModel : ViewModel() {
     fun clearLabels(ctx: Context) {
         val app = ctx.applicationContext ?: ctx
         state = state.copy(confirmClearLabels = null)
-        submit(app, "清空标注") { done -> LabelClient.clear(app, done) }
+        submit(app, UiText.Res(R.string.label_action_clear)) { done -> LabelClient.clear(app, done) }
     }
 
     fun mark(ctx: Context, key: String, spam: Boolean) {
         val app = ctx.applicationContext ?: ctx
         val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
-        submit(app, if (spam) "标为垃圾" else "标为正常") { done ->
+        val what = if (spam) UiText.Res(R.string.label_action_mark_spam) else UiText.Res(R.string.label_action_mark_ham)
+        submit(app, what) { done ->
             LabelClient.set(
                 app,
                 LabelRecord.of(r, spam, System.currentTimeMillis(), DeltaFitter.baseFingerprint()),
@@ -132,7 +140,7 @@ class RecordsViewModel : ViewModel() {
 
     fun undo(ctx: Context, key: String) {
         val app = ctx.applicationContext ?: ctx
-        submit(app, "撤销标注") { done -> LabelClient.delete(app, key, done) }
+        submit(app, UiText.Res(R.string.label_action_undo)) { done -> LabelClient.delete(app, key, done) }
     }
 
     fun noticeShown(n: Notice) {
@@ -145,23 +153,23 @@ class RecordsViewModel : ViewModel() {
      * 广播是异步的、超时窗 5s，连点会并发发出多条；模块端按到达顺序串行落盘，而 App 侧**先到的
      * 回执**会把后点那次的结果覆盖掉 —— 界面最终留下的可能是用户最后一次没点的那个标注。
      */
-    private fun submit(ctx: Context, what: String, call: ((List<LabelRecord>?) -> Unit) -> Unit) {
+    private fun submit(ctx: Context, what: UiText, call: ((List<LabelRecord>?) -> Unit) -> Unit) {
         if (state.busy) {
-            notify("上一个标注动作还在等回执")
+            notify(UiText.Res(R.string.notice_label_busy))
             return
         }
         state = state.copy(busy = true)
         call { list -> onLabelResult(ctx, what, list) }
     }
 
-    private fun onLabelResult(ctx: Context, what: String, list: List<LabelRecord>?) {
+    private fun onLabelResult(ctx: Context, what: UiText, list: List<LabelRecord>?) {
         state = state.copy(busy = false)
         // 没有回执时 LabelClient 不动本地缓存 ⇒ 重绘后显示的仍是原状态，界面与权威源仍一致
         notify(
             if (list == null) {
-                "$what 未生效：模块端没有回执（模块未激活 / 装完还没重启过系统框架 / labels.json 损坏）"
+                UiText.Res(R.string.notice_label_failed, listOf(what))
             } else {
-                "$what 已生效（共 ${list.size} 条标注）"
+                UiText.Res(R.string.notice_label_done, listOf(what, list.size))
             },
         )
         repaint(ctx)
@@ -181,7 +189,7 @@ class RecordsViewModel : ViewModel() {
     }
 
     private fun onFit(fit: DeltaFitter.State) {
-        state = state.copy(fitText = DeltaFitter.describe(fit))
+        state = state.copy(fit = fit)
     }
 
     private fun repaint(ctx: Context) {
@@ -213,7 +221,7 @@ class RecordsViewModel : ViewModel() {
         marked = marked,
     )
 
-    private fun notify(text: String) {
+    private fun notify(text: UiText) {
         state = state.copy(notice = Notice(++noticeSeq, text))
     }
 
@@ -222,8 +230,7 @@ class RecordsViewModel : ViewModel() {
         /** 列表上限：聚合后一组的信息量远大于一条，20 组足够覆盖「刚才发生了什么」。 */
         const val RECENT_LIMIT = 20
 
-        const val TIMEOUT_HINT =
-            "拉取超时：模块未激活或装完还没重启过系统框架（数据本身没丢，仍在模块端的 /data/misc/notifyguard 下）"
+        private val TIMEOUT_HINT = UiText.Res(R.string.records_fetch_timeout)
 
         private val TIME = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
     }

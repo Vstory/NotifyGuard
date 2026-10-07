@@ -15,8 +15,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ui.UiText
+import io.github.vstory.notifyguard.ui.text
 
 /**
  * 多屏共用的最小零件（状态卡 / 分组卡 / 开关行）。
@@ -26,20 +30,20 @@ import androidx.compose.ui.unit.dp
  */
 
 @Composable
-internal fun StatusCard(serviceText: String, connected: Boolean, loaded: Boolean) {
+internal fun StatusCard(serviceText: UiText, connected: Boolean, loaded: Boolean) {
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = serviceText,
+                text = serviceText.text(),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (connected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
             )
             if (connected && !loaded) {
                 Text(
-                    text = "连上了框架服务，但读不出生效配置（配置内容损坏？）—— 下面显示的是默认值，改动仍可下发。",
+                    text = stringResource(R.string.status_cfg_unreadable),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
