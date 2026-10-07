@@ -3,7 +3,7 @@ package io.github.vstory.notifyguard.sync
 import android.content.Context
 import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.data.LogStore
-import io.github.vstory.notifyguard.data.RecordDir
+import io.github.vstory.notifyguard.data.ModuleDir
 import io.github.vstory.notifyguard.judge.LogRecord
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
@@ -52,13 +52,13 @@ object LogSink {
     fun bindContext(c: Context) {
         if (bound) return
         bound = true
-        val dir = RecordDir.forSystemServer(c).resolve()
+        val dir = ModuleDir.ensure(c)
         if (dir == null) {
-            ModuleLogger.error("记录落盘目录不可用（${RecordDir.BASE}）⇒ 记录不落盘（判定不受影响）")
+            ModuleLogger.error("记录落盘目录不可用（${ModuleDir.PATH}）⇒ 记录不落盘（判定不受影响）")
             return
         }
         worker.execute {
-            store = LogStore(java.io.File(dir, LogStore.FILE_NAME))
+            store = LogStore(ModuleDir.logs())
             ModuleLogger.info("记录落盘就绪（目录=${dir.absolutePath}）")
         }
         LogChannel.register(c)

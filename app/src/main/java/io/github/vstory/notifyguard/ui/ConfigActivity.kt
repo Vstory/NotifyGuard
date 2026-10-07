@@ -107,7 +107,7 @@ class ConfigActivity : Activity() {
     }
 
     /**
-     * 记录权威源在模块端（`/data/misc/notifyguard_<random16>/logs.json`），App 侧只有上次拉取的缓存：
+     * 记录权威源在模块端（`/data/misc/notifyguard/logs.json`），App 侧只有上次拉取的缓存：
      * 进页面先渲染缓存（立刻有内容），再拉一次覆盖。
      */
     private fun refreshRecords() {
@@ -116,7 +116,7 @@ class ConfigActivity : Activity() {
         LogFetcher.fetch(this) { list ->
             renderRecords(
                 if (list == null) {
-                    "拉取超时：模块未激活或装完还没重启过系统框架（记录本身没丢，仍在模块端的 /data/misc 下）"
+                    "拉取超时：模块未激活或装完还没重启过系统框架（记录本身没丢，仍在模块端的 /data/misc/notifyguard 下）"
                 } else {
                     null
                 },
@@ -132,7 +132,7 @@ class ConfigActivity : Activity() {
             error?.let { append("\n$it") }
         }
         recordView.text = if (list.isEmpty()) {
-            "（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard_*/logs.json）"
+            "（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）"
         } else {
             list.joinToString("\n\n") { r ->
                 val mark = when {

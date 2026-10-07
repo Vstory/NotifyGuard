@@ -8,7 +8,7 @@ import java.io.File
 
 /**
  * 记录落盘（设计方案.md §7.3：首版不用 Room）。两端同一份实现、只换了文件路径：
- * - system_server 侧：`/data/misc/notifyguard_<random16>/logs.json`（记录权威源）
+ * - system_server 侧：`/data/misc/notifyguard/logs.json`（记录权威源）
  * - App 侧：`filesDir/logs.json`（拉取结果的本地缓存，打开即显示，不依赖模块端可用）
  *
  * 单文件 JSON + 内存列表，上限 [MAX_RECORDS]，超出裁掉最旧。查询面只有「按时间倒序取最近 N 条」，

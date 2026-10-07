@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.core
 
+import io.github.vstory.notifyguard.data.ModuleDir
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -23,7 +24,7 @@ class CrashGuardTest {
         dir = tmp.newFolder("safety")
         now = 1_000L
         CrashGuard.watchEnabled = false
-        CrashGuard.dirOverride = dir
+        ModuleDir.dirOverride = dir
         CrashGuard.deathWindowMs = 30_000L
         CrashGuard.clock = { now }
         CrashGuard.onStorm = null
@@ -37,7 +38,7 @@ class CrashGuardTest {
         // trip 是异步写盘：先把标志删掉再同步，否则状态会渗到下个用例
         flag().delete()
         CrashGuard.syncFromDisk()
-        CrashGuard.dirOverride = null
+        ModuleDir.dirOverride = null
         CrashGuard.watchEnabled = true
         CrashGuard.clock = { System.currentTimeMillis() }
     }
@@ -123,7 +124,8 @@ class CrashGuardTest {
         assertEquals(1, stops)
     }
 
-    private fun flag() = File(dir, "safe_mode")
+    /** 标志走 [ModuleDir.safeMode]：与生产路径同源，断开就说明合并后两处路径漂移了。 */
+    private fun flag() = ModuleDir.safeMode()
 
     private fun waitUntil(cond: () -> Boolean): Boolean {
         val end = System.currentTimeMillis() + 3_000

@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.core
 
 import android.os.FileObserver
 import io.github.libxposed.api.XposedInterface
+import io.github.vstory.notifyguard.data.ModuleDir
 import java.io.File
 import java.util.ArrayDeque
 import java.util.concurrent.CopyOnWriteArrayList
@@ -18,15 +19,15 @@ import java.util.concurrent.atomic.AtomicInteger
  * 用「SystemUI 死亡」当信号而不是别的：我们注入在 system_server 内，它自己崩了就没有自我观测的余地，
  * 只能取代理信号；SystemUI 是新通知链路上第一个可见消费者，它连续崩说明系统状态已经不稳。
  *
- * 标志文件是**粘滞**的：装配前先看它，存在就只装监听不装拦截（宁可没有过滤，也不能重启循环）。
- * [FileObserver] 盯着它 ⇒ 用户删掉即免重启恢复。
+ * 标志文件是**粘滞**的，且只在**装配期**生效：装配前先看它，存在就只装监听不装拦截（宁可没有过滤，
+ * 也不能重启循环）。[FileObserver] 盯着它 ⇒ 用户删掉即免重启恢复；反向（运行期新建标志）不卸已装的 hook，
+ * 因为 `tripped` 只在装配期被读一次（见 M1e实施方案.md §1.4）。
  *
- * 跨重启的状态只能落 /data/system（system_server 的 SELinux 域可写）；App 无权限操作该目录，只能删。
+ * 标志落在 [ModuleDir] 的固定路径：本方法在注入最早期被调用，那时**还没有 Context**，路径必须是常量。
  */
 object CrashGuard {
 
     /** 单测注入点。 */
-    internal var dirOverride: File? = null
     internal var deathWindowMs = 30_000L
     internal var watchEnabled = true
     internal var clock: () -> Long = { System.currentTimeMillis() }
@@ -39,8 +40,6 @@ object CrashGuard {
     private const val ERROR_STORM = 50
     private const val DEATH_WINDOW_MS = 30_000L
     private const val MAX_RESTARTS = 2
-    private const val DIR = "/data/system/io.github.vstory.notifyguard"
-    private const val SAFE_MODE_FILE = "safe_mode"
     private const val SYSTEMUI = "com.android.systemui"
 
     private const val AMS_CLASS = "com.android.server.am.ActivityManagerService"
@@ -84,7 +83,7 @@ object CrashGuard {
         skip: (String) -> Unit,
     ) {
         syncFromDisk()
-        if (tripped) ModuleLogger.error("safe_mode 标志存在 ⇒ 本代不装拦截（删掉 $DIR/$SAFE_MODE_FILE 即免重启恢复）")
+        if (tripped) ModuleLogger.error("safe_mode 标志存在 ⇒ 本代不装拦截（删掉 ${ModuleDir.safeMode().path} 即免重启恢复）")
         installAmsWatch(iface, cl, ok, skip)
         watchFlag(ok, skip)
     }
@@ -109,7 +108,7 @@ object CrashGuard {
 
     /** 以磁盘为准同步内存状态。返回同步后的熔断状态。 */
     fun syncFromDisk(): Boolean {
-        val onDisk = runCatching { safeModeFile().exists() }.getOrDefault(false)
+        val onDisk = runCatching { ModuleDir.safeMode().exists() }.getOrDefault(false)
         synchronized(this) {
             if (onDisk != tripped) {
                 tripped = onDisk
@@ -192,12 +191,12 @@ object CrashGuard {
 
     private fun watchFlag(ok: (String) -> Unit, skip: (String) -> Unit) {
         if (!watchEnabled || watcher != null) return
-        val d = dir()
+        val d = ModuleDir.dir
         runCatching {
             if (!d.exists()) d.mkdirs()
             watcher = object : FileObserver(d, CREATE or DELETE or MOVED_TO or MOVED_FROM) {
                 override fun onEvent(event: Int, path: String?) {
-                    if (path != SAFE_MODE_FILE) return
+                    if (path != ModuleDir.FILE_SAFE_MODE) return
                     worker.execute {
                         val now = syncFromDisk()
                         ModuleLogger.info("safe_mode 标志变化 ⇒ 熔断=${now}")
@@ -214,15 +213,11 @@ object CrashGuard {
 
     private fun writeFlag(reason: String) {
         runCatching {
-            val d = dir()
+            val d = ModuleDir.dir
             if (!d.exists()) d.mkdirs()
-            safeModeFile().writeText("tripped_at=${clock()}\nreason=$reason\n")
+            ModuleDir.safeMode().writeText("tripped_at=${clock()}\nreason=$reason\n")
         }.onFailure {
-            ModuleLogger.error("写 $SAFE_MODE_FILE 失败 ⇒ 熔断只在本代内存生效（重启后会重新装拦截）", it)
+            ModuleLogger.error("写 ${ModuleDir.FILE_SAFE_MODE} 失败 ⇒ 熔断只在本代内存生效（重启后会重新装拦截）", it)
         }
     }
-
-    private fun dir(): File = dirOverride ?: File(DIR)
-
-    private fun safeModeFile(): File = File(dir(), SAFE_MODE_FILE)
 }
