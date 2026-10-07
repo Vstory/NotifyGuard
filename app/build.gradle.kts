@@ -56,7 +56,10 @@ android {
             if (hasSigning) signingConfig = signingConfigs.getByName("release")
         }
         release {
-            isMinifyEnabled = false
+            // 开 R8：release 与正式版同构建类型，CI 每次出 release 包即顺带验证 keep 规则
+            // （入口类在 java_init.list 里按名反射加载，keep 漏了是「装得上、模块不加载」的静默失败）
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (hasSigning) signingConfig = signingConfigs.getByName("release")
         }
     }

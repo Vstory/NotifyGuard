@@ -1,6 +1,6 @@
 name: Build · CI
 
-# CI 渠道（测试版）：任意分支 push 都出包（debug 变体），发进固定 tag `ci` 的**同一个滚动页**，
+# CI 渠道（测试版）：任意分支 push 都出包（本项目固定 debug + release 两个包），发进固定 tag `ci` 的**同一个滚动页**，
 # 产物按时间戳追加、页面永不新增。分支本来就是用来试的 ⇒ 每次提交都该能立刻拿到包。
 # 多分支**并发**共用这一页（不设并发锁）—— 页面只有一张表，每个包一行，不按分支分页。
 # 手动触发可选 debug / release / both：release 与正式版同构建类型，用来验证 release 变体；
@@ -60,8 +60,8 @@ env:
   EXPECTED_CERT_SHA256: '8D1B6022D3E3BB837A3BA1870E0EEAC8650F9470B8287EDF549DACEC9E9E2A64'
   APK_OUT_DEBUG: app/build/outputs/apk/debug/app-debug.apk
   APK_OUT_RELEASE: app/build/outputs/apk/release/app-release.apk
-  # push 触发时构建哪些变体（debug 最省时；both 用来同时验证 release 变体）
-  PUSH_VARIANT: debug
+  # push 触发时构建哪些变体。本项目专属：一次 CI 出 debug + release 两个包
+  PUSH_VARIANT: both
   # ═════════════════════════ PROJECT-CUSTOM-END ═════════════════════════
 
 jobs:
@@ -330,6 +330,18 @@ jobs:
             [ "$FOUND" -eq 1 ] || { echo "::error::$NAME 的入口类 $ENTRY（$ENTRY_DESC）不在任何 dex 里 —— 被裁剪或改名，模块不会加载"; exit 1; }
             echo "  ✅ 入口类在 dex 中：$ENTRY"
 
+            # ③b release 开了 R8：api 类不在 APK 内（compileOnly），若 R8 没把它们当 library，
+            #     入口类 override 的框架回调方法会被改名 ⇒ 框架按原名反射回调落空、模块静默不加载。
+            #     （入口类名已被上一条护住，这里护的是方法名。）
+            for M in onModuleLoaded onSystemServerStarting onPackageReady onHotReloaded; do
+              MFOUND=0
+              for d in $(unzip -l "$APK" | awk '$4 ~ /^classes[0-9]*\.dex$/ {print $4}'); do
+                if unzip -p "$APK" "$d" | grep -qaF "$M"; then MFOUND=1; break; fi
+              done
+              [ "$MFOUND" -eq 1 ] || { echo "::error::$NAME 缺生命周期方法 $M —— R8 把入口类的 override 改名/删掉了，框架回调会落空"; exit 1; }
+            done
+            echo "  ✅ 入口类生命周期方法名完整（R8 未改名）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ⚠️ 本步骤每个 `VAR="$(... | grep ...)"` 都带 `|| true`：grep 无匹配时返回 1，在
@@ -460,7 +472,7 @@ jobs:
           # 富脚注由 workflow 拼（页面语义因项目而异）；脚本自带的部分见其 FOOTER_EXTRA 说明。
           FOOTER_EXTRA="$(
             echo "- 各包共用同一把固定钥（${SIGN_SCHEMES:-未读取到}），可互相覆盖安装。"
-            echo "- debug 包调试日志最全（由 \`BuildConfig.DEBUG\` 在编译期决定），排障优先用它；release 包与正式版同构建类型，调试日志已在编译期裁掉。"
+            echo "- debug 包调试日志最全（由 \`BuildConfig.DEBUG\` 在编译期决定），排障优先用它；release 包 R8 已裁剪、与正式版同构建类型，可用来验证 minify/keep 规则。"
             echo "- 作用域 \`${SCOPE:-未读取到}\` 已在 \`META-INF/xposed/scope.list\` 静态声明，LSPosed 里无需手动勾选。"
           )" \
           "$REFRESH_SCRIPT"
