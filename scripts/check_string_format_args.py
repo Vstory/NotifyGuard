@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-# TEMPLATE_VERSION=1.0.0    # 基于模板的版本（合并模板更新后升到模板版；勿删）
-# SCRIPT_VERSION=1.0.0      # 项目侧迭代（复制后随定制改动 bump，初始=模板版）
+# TEMPLATE_VERSION=1.1.0    # 基于模板的版本（合并模板更新后升到模板版；勿删）
+# SCRIPT_VERSION=1.0.1      # 项目侧迭代（复制后随定制改动 bump，初始=模板版）
 # =============================================================
 # check_string_format_args.py — 字符串资源格式化参数核对（Android / Gradle 工程通用）
 #
-# 定位：项目脚本副本，内容与母版一致（本项目零定制，UiText.Res 由 CI 命令行 --call 传入）。
-#       母版在知识库 dev-guide/工程模板/check_string_format_args.py。
-#       同步：对比两处 TEMPLATE_VERSION，母版高就整体覆盖、并把 TEMPLATE_VERSION 升到母版版、
-#       SCRIPT_VERSION +1（项目定制段若有，合并时保留）。
+# 定位：跨语言共享脚本。母版在知识库 dev-guide/工程模板/，项目 scripts/ 下是副本
+#       （脚手架自动复制，复制后追加 SCRIPT_VERSION）。同步：对比两处 TEMPLATE_VERSION；
+#       母版更高就整体覆盖，并把 TEMPLATE_VERSION 升到母版版、SCRIPT_VERSION +1 ——
+#       项目定制优先走命令行参数（--call / --src / --res / --strict），尽量零定制。
 #
 # 补的是哪一层盲区（这道检查为什么必须存在）：
 #   · 编译期：stringResource(id, vararg formatArgs: Any) 与 getString(id, Object...) 的实参
@@ -29,9 +29,14 @@
 # 用法：
 #   python3 check_string_format_args.py [项目根]
 #   python3 check_string_format_args.py --src app/src/main/java --res app/src/main/res .
+#   python3 check_string_format_args.py --call UiText.Res --strict .   # 项目自有包装 + 锁死静默跳过
 # 默认（给了项目根时）：扫 <根>/app/src/main/{java,kotlin} 下的 *.kt / *.java，
 #   读 <根>/app/src/main/res/values*/strings.xml。
-# 退出码：有错 1（并打印 GitHub Actions 注解 ::error::），全绿 0。
+#
+# 不适用即跳过：工程没有 res/（脚手架生成的项目本就没有 strings.xml）时打印 ::notice:: 并退 0。
+#   跳过必须**看得见** —— 否则「资源表被改名/移走」会以一片绿的样子混过去；故已做字符串资源化
+#   的项目加 --strict，把这一档从「跳过」翻成失败。（显式给的 --src/--res 路径不存在则始终是硬错。）
+# 退出码：有错 1（并打印 GitHub Actions 注解 ::error::），全绿或跳过 0。
 #
 # 识别范围：只认「取资源函数(R.string.字面量键, 实参…)」——
 #   stringResource(R.string.k, a, b) · getString(R.string.k, a, b) ·
@@ -160,6 +165,17 @@ def check_strings(strings, bad):
             bad.append(f"{key}: 各语言包的占位符不一致 {shown}")
 
 
+def not_applicable(reason, strict):
+    """工程没做字符串资源化 ⇒ 默认跳过退 0（脚手架生成的项目本就没有 res/）。
+    跳过必须**看得见**：静默绿会让「资源表被改名/移走」也一路放行，故 --strict 供已资源化的项目
+    把这一档翻成失败。"""
+    if strict:
+        print(f"::error::本项目已声明 --strict，但{reason} —— 资源表不该消失，核对布局是否被改名/移走")
+        return 1
+    print(f"::notice::跳过字符串格式参数检查：{reason}（未做字符串资源化；已资源化请加 --strict）")
+    return 0
+
+
 def check_calls(src_roots, strings, bad, rx):
     checked = skipped = 0
     for root in src_roots:
@@ -214,6 +230,7 @@ def main():
     ap.add_argument("--src", action="append", default=[], help="源码根，可多次；默认 <根>/app/src/main/{java,kotlin}")
     ap.add_argument("--res", action="append", default=[], help="资源根，可多次；默认 <根>/app/src/main/res")
     ap.add_argument("--call", action="append", default=[], help="追加取资源的函数名（如 --call UiText.Res），可多次")
+    ap.add_argument("--strict", action="store_true", help="无资源表即失败（没做资源化的项目别加：脚手架生成的工程本就没有 res/）")
     a = ap.parse_args()
 
     root = Path(a.root).resolve()
@@ -224,14 +241,17 @@ def main():
     res_roots = [Path(p) for p in a.res] or [root / "app/src/main/res"]
     src_roots = [p for p in src_roots if p.is_dir()]
     res_roots = [p for p in res_roots if p.exists()]
-    if not src_roots or not res_roots:
-        print(f"::error::没找到源码根或资源根（源码 {src_roots} / 资源 {res_roots}）—— 用 --src / --res 指定")
+    if (a.src and not src_roots) or (a.res and not res_roots):
+        print(f"::error::显式指定的路径不存在（源码 {src_roots} / 资源 {res_roots}）")
         return 1
+    if not src_roots:
+        return not_applicable("没有源码根 app/src/main/{java,kotlin}", a.strict)
+    if not res_roots:
+        return not_applicable("没有资源根 app/src/main/res", a.strict)
 
     strings = load_strings(res_roots)
     if not strings:
-        print(f"::error::{res_roots} 下没读到任何 strings.xml")
-        return 1
+        return not_applicable(f"{res_roots} 下没有 values*/strings.xml", a.strict)
 
     bad = []
     check_strings(strings, bad)
