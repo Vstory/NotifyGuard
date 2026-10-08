@@ -14,7 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -74,7 +73,11 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
             TopAppBar(
                 title = { Text(stringResource(R.string.learning_title)) },
                 actions = {
-                    IconButton(onClick = { viewModel.refresh(ctx) }, enabled = !state.fetching) {
+                    TooltippedIconButton(
+                        tooltip = stringResource(R.string.learning_refresh),
+                        onClick = { viewModel.refresh(ctx) },
+                        enabled = !state.fetching,
+                    ) {
                         Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.learning_refresh))
                     }
                 },

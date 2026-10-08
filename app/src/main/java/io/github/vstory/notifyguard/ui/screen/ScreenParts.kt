@@ -8,10 +8,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,6 +108,29 @@ internal fun SwitchRow(
             }
         }
         Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+/**
+ * 带 tooltip 的图标按钮：触屏长按弹出说明（Material 规范里 plain tooltip 的用途就是给无文字的
+ * 图标按钮标注作用）。
+ *
+ * 锚点强制 Below：顶栏按钮贴着屏幕顶端，默认的 Above 只能出屏。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TooltippedIconButton(
+    tooltip: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    icon: @Composable () -> Unit,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
+        state = rememberTooltipState(),
+        tooltip = { PlainTooltip { Text(tooltip) } },
+    ) {
+        IconButton(onClick = onClick, enabled = enabled) { icon() }
     }
 }
 
