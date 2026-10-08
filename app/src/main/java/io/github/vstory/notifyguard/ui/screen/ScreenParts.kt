@@ -1,6 +1,9 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -32,6 +35,13 @@ import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.PointerType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
@@ -129,6 +139,10 @@ internal fun SwitchRow(
  * 图标按钮标注作用）。
  *
  * 锚点强制 Below：顶栏按钮贴着屏幕顶端，默认的 Above 只能出屏。
+ *
+ * 长按顺带给一次系统 `LONG_PRESS` 触感：Material3 的长按判定自己实现（全库无触感调用），而平台
+ * 自己的 tooltip 走 `View` 的长按路径是会震的 —— 不补这一步，同一个「长按看说明」在系统控件上
+ * 有触感、在这里没有。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -138,12 +152,39 @@ internal fun TooltippedIconButton(
     enabled: Boolean = true,
     icon: @Composable () -> Unit,
 ) {
+    val haptics = LocalHapticFeedback.current
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
         state = rememberTooltipState(),
         tooltip = { PlainTooltip { Text(tooltip) } },
     ) {
-        IconButton(onClick = onClick, enabled = enabled) { icon() }
+        IconButton(onClick = onClick, enabled = enabled, modifier = Modifier.longPressHaptic(haptics)) {
+            icon()
+        }
+    }
+}
+
+/**
+ * 长按判定成功那一刻触发一次触感。只观察、不消费事件，也不看 `enabled` —— 库的提示无论子级是否
+ * 可用都会弹（`TooltipBox` 不下传 `enabled`），触感得跟着提示走。
+ *
+ * 超时用 `AwaitPointerEventScope` 自己的那个 `withTimeout`（不是 kotlinx 的同名函数，M3 源码那份
+ * import 就是没生效的）：只有它抛 [PointerEventTimeoutCancellationException]，捕获 kotlinx 的
+ * `TimeoutCancellationException` 永远 catch 不到。
+ */
+private fun Modifier.longPressHaptic(haptics: HapticFeedback): Modifier = pointerInput(haptics) {
+    awaitEachGesture {
+        val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+        if (down.type != PointerType.Touch && down.type != PointerType.Stylus) return@awaitEachGesture
+        try {
+            withTimeout(viewConfiguration.longPressTimeoutMillis) {
+                waitForUpOrCancellation(pass = PointerEventPass.Initial)
+            }
+        } catch (_: PointerEventTimeoutCancellationException) {
+            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+            // 不等抬手就会在按住期间反复判定；consume 由库负责（吞掉长按之后那次点击）。
+            waitForUpOrCancellation(pass = PointerEventPass.Initial)
+        }
     }
 }
 
