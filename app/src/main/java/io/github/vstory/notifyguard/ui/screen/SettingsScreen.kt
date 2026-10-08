@@ -91,6 +91,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             // 不置灰就会出现「观察模式显示为开、而它承诺的『判定照跑』并没发生」这种自相矛盾的
             // 界面状态（官方 Settings 模式对父开关与从属控件的规定即：关闭父开关即禁用从属控件）。
             val judgeOn = connected && cfg?.enabled == true
+            // 用 == false 而不是 != true：cfg 为 null（连上了但配置读不到）时原因不在总开关，
+            // StatusCard 已就绪地说「未读到生效值」，这里再挂一条就会把用户指错方向
+            val gated = connected && cfg?.enabled == false
 
             StatusCard(state.serviceText, connected, cfg != null)
 
@@ -174,6 +177,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     enabled = connected,
                     onCheckedChange = viewModel::setEnabled,
                 )
+                if (gated) AlertNote(stringResource(R.string.settings_judge_gated))
                 SwitchRow(
                     label = stringResource(R.string.settings_observe),
                     note = stringResource(R.string.settings_observe_note),
@@ -184,6 +188,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
             }
 
             GroupCard(stringResource(R.string.settings_ai_group)) {
+                if (gated) AlertNote(stringResource(R.string.settings_judge_gated))
                 SwitchRow(
                     label = stringResource(R.string.settings_spam),
                     note = stringResource(R.string.settings_spam_note),

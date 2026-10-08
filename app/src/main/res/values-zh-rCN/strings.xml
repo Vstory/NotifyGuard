@@ -21,7 +21,7 @@
     <string name="home_stat_pass">放行：%1$d</string>
     <string name="home_stat_scope">组数：%1$d · 事件：%2$d</string>
     <string name="home_top_group">命中排行（按应用）</string>
-    <string name="home_top_empty">此窗口内还没有拦截。观察模式下不会真拦 —— 要生效请到设置屏关掉观察模式；否则请查框架日志确认判定链在跑。</string>
+    <string name="home_top_empty">此窗口内还没有拦截。观察模式下不会真拦 —— 要生效请到设置屏：先确认「启用拦截判定」是打开的，再关掉观察模式；否则请查框架日志确认判定链在跑。</string>
     <string name="home_top_other">其余 %1$d 个应用 · %2$d 次</string>
     <string name="home_observe_group">观察模式</string>
     <string name="home_observe_note">当前是观察模式：判定照跑也照记录，但还不拦 —— 上面的已拦截数为 0，关掉之后才会真的拦。</string>
@@ -131,12 +131,13 @@
     <string name="settings_block_note">开关拨动即下发、阈值松手下发，模块端立刻生效 —— 这一屏没有「保存」按钮。</string>
     <string name="settings_enabled">启用拦截判定</string>
     <string name="settings_enabled_note">关闭后判定链直接放行（记录照写）</string>
+    <string name="settings_judge_gated">总开关关着：判定链在第 2 步就整体短路（reason 只记 disabled），标灰的项既不生效也拨不动 —— 先打开「启用拦截判定」。</string>
     <string name="settings_observe">观察模式</string>
     <string name="settings_observe_note">只记录、不拦截：判定照跑，reason 里照出 AI 分数与命中规则</string>
     <string name="settings_ai_group">AI 识别</string>
     <string name="settings_spam">识别垃圾通知</string>
     <string name="settings_spam_note">端侧哈希 n-gram + 逻辑回归，不联网</string>
-    <string name="settings_threshold_note">分数 ≥ 阈值即拦。关掉上面的开关时本滑杆置灰：这个值不参与判定。调低更激进，0 等于全拦。</string>
+    <string name="settings_threshold_note">分数 ≥ 阈值即拦。关掉上面的开关或总开关时本滑杆置灰：这个值不参与判定。调低更激进，0 等于全拦。</string>
     <string name="threshold_line">AI 分数阈值 %1$s（%2$s）</string>
     <string name="threshold_line_no_config">AI 分数阈值 未读到生效值（框架服务未连接）</string>
     <string name="threshold_note_ai_off">AI 未开启，不生效</string>

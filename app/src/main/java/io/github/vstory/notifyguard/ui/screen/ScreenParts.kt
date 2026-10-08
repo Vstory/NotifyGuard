@@ -144,6 +144,21 @@ internal fun Note(text: String) {
 }
 
 /**
+ * 需要注意的状态行（某项在当前配置下不生效之类）。
+ *
+ * 与 [Note] 同字号但换 [MaterialTheme.colorScheme.error]：灰字是背景说明、扫过去不读也不影响操作，
+ * 这条说的是「你看到的开关为什么拨不动」，混在灰字里就等于没说。
+ */
+@Composable
+internal fun AlertNote(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+    )
+}
+
+/**
  * 服务状态行的「事实 → 文案」映射，用到状态卡的屏共用一份。
  *
  * 两处各拼一遍的代价不是重复而是**分歧**：改文案只改到一处时，另一处就成了假话（同 FitLine 的取舍）。
