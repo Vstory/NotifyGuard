@@ -90,7 +90,7 @@ jobs:
       #   单测也看不见（没有 Android 资源表），只在真机点进那一屏时抛
       #   IllegalFormatConversionException（records_filter_hit 在记录屏切档即崩过）。
       #   它只读源码与资源 XML、不需要产物 ⇒ 前移到编译之前，早失败省下几分钟构建。
-      #   脚本母版在知识库 dev-guide/工程模板/（项目内为副本，版本号见文件头）；
+      #   脚本母版在知识库 100_System/templates/（项目内为副本，版本号见文件头）；
       #   本步骤与工程模板 build-ci.workflow.yml 的同名步骤同源，改动请两边对齐。
       - name: Static check (string format args)
         run: |
