@@ -235,16 +235,7 @@ private fun OrphanCard(state: LearningViewModel.UiState, onUndo: (String) -> Uni
                         .padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = row.time,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    RowHead(row.time, row.spam)
                     Text(
                         text = row.pkg,
                         style = MaterialTheme.typography.labelMedium,
@@ -267,21 +258,24 @@ private fun OrphanCard(state: LearningViewModel.UiState, onUndo: (String) -> Uni
     }
 }
 
-/** 行的公共部分：时间 + 标注状态 + 包名 + 文本 + 判定串与分数。 */
+/**
+ * 行的头行：时间 +（右侧）标注状态。三块卡共用 —— 孤儿卡原先自己手写了一套时间行，于是把标注状态
+ * 整个落下了，而那张卡正是唯一能撤销标注的地方（撤销前看不到标的是哪个方向）。
+ */
 @Composable
-private fun RowBody(row: LearningViewModel.Row) {
+private fun RowHead(time: String, marked: Boolean?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = row.time,
+            text = time,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.weight(1f))
-        row.marked?.let { spam ->
+        marked?.let { spam ->
             Text(
                 text = stringResource(
                     if (spam) R.string.records_marked_spam else R.string.records_marked_ham
@@ -291,6 +285,12 @@ private fun RowBody(row: LearningViewModel.Row) {
             )
         }
     }
+}
+
+/** 行的公共部分：头行 + 包名 + 文本 + 判定串与分数。 */
+@Composable
+private fun RowBody(row: LearningViewModel.Row) {
+    RowHead(row.time, row.marked)
     Text(
         text = row.pkg,
         style = MaterialTheme.typography.labelMedium,
