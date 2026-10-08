@@ -16,6 +16,7 @@ import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.StatusClient
 import io.github.vstory.notifyguard.sync.StatusReport
 import io.github.vstory.notifyguard.ui.UiText
+import io.github.vstory.notifyguard.ui.slotLabel
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -294,12 +295,6 @@ class SettingsViewModel : ViewModel() {
                 else -> UiText.Res(R.string.threshold_note_effective)
             }
             return UiText.Res(R.string.threshold_line, listOf(fmt(shown.toDouble()), note))
-        }
-
-        fun slotLabel(slot: String): UiText = when (slot) {
-            "EXT_SLOT" -> UiText.Res(R.string.module_slot_ext)
-            "FUNNEL" -> UiText.Res(R.string.module_slot_funnel)
-            else -> if (slot.isEmpty()) UiText.Res(R.string.module_slot_unknown) else UiText.Raw(slot)
         }
 
         private fun timeText(at: Long): String =
