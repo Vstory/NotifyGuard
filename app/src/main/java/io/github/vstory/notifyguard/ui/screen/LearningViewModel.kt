@@ -20,6 +20,7 @@ import io.github.vstory.notifyguard.sync.DeltaFitter
 import io.github.vstory.notifyguard.sync.DeltaWriter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
+import io.github.vstory.notifyguard.ui.ReasonExplanation
 import io.github.vstory.notifyguard.ui.UiText
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -57,6 +58,8 @@ class LearningViewModel : ViewModel() {
         /** 展开中的那条；null = 都收着。 */
         val openKey: String? = null,
         val detail: Detail? = null,
+        /** 非空即弹某条记录的判定说明（与记录屏共用同一份说明件）。 */
+        val explanation: ReasonExplanation? = null,
         val busy: Boolean = false,
         val notice: Notice? = null,
     )
@@ -74,8 +77,12 @@ class LearningViewModel : ViewModel() {
         val pkg: String,
         val title: String?,
         val text: String?,
-        /** 模块端回传的技术串（`ai:0.87` 这类），不翻译。 */
-        val reason: String,
+        /**
+         * 底部那行：原因短语与判定槽（都是人话，槽位与设置页同一套文案）。
+         *
+         * 原始技术串不在这儿 —— 这行是给用户读的，解释与原文都在 [UiState.explanation] 里。
+         */
+        val meta: List<UiText>,
         val score: Double?,
         /** `null` = 未标注。 */
         val marked: Boolean?,
@@ -206,6 +213,21 @@ class LearningViewModel : ViewModel() {
     }
 
     /**
+     * 点开行底部那行元数据：讲清这条为什么这么判。
+     *
+     * 与记录屏同一份说明件 —— 同一条记录在两屏点开必须是同一段话。展开归因（[UiState.openKey]）与
+     * 弹窗各管各的：关弹窗不该把展开态一起收掉。
+     */
+    fun askExplain(key: String) {
+        val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
+        state = state.copy(explanation = ReasonExplanation.of(r))
+    }
+
+    fun dismissExplain() {
+        state = state.copy(explanation = null)
+    }
+
+    /**
      * 标注动作串行化：一次只允许一条指令在途（同 [RecordsViewModel]）。
      * 广播异步、超时窗 5s，连点会并发发出多条，而 App 侧**先到的回执**会把后点那次的结果覆盖掉。
      */
@@ -302,12 +324,12 @@ class LearningViewModel : ViewModel() {
         pkg = r.pkg,
         title = r.title,
         text = r.text,
-        reason = listOfNotNull(r.reason, r.ruleId).joinToString(" · "),
+        // 判定元数据出人话（与记录屏同一份实现），界面只管画
+        meta = ReasonExplanation.meta(r),
         score = r.score,
         marked = marks[LabelRecord.keyOf(r)],
         aiText = r.aiText,
     )
-
     private fun orphan(l: LabelRecord): OrphanRow = OrphanRow(
         key = l.key,
         // 标注时间：孤儿卡要说的是「这条什么时候标的」，不是通知什么时候来的

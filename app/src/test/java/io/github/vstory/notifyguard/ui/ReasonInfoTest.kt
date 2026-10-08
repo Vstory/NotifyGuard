@@ -1,7 +1,9 @@
 package io.github.vstory.notifyguard.ui
 
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.judge.LogRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -105,4 +107,43 @@ class ReasonInfoTest {
         // 认不出的槽给原文：那是个能拿去对日志的枚举名，抹掉等于扔线索
         assertEquals("nms", (slotLabel("nms") as UiText.Raw).text)
     }
+
+    /** 说明里的判定槽只在记录带槽时给出：没带槽的记录弹窗不该多出一行空槽。 */
+    @Test
+    fun explanationCarriesTheSlotOnlyWhenTheRecordHasOne() {
+        assertEquals("EXT_SLOT", ReasonExplanation.of(rec(slot = "EXT_SLOT")).slot)
+        assertNull(ReasonExplanation.of(rec(slot = null)).slot)
+    }
+
+    /** 行内元数据 = 原因短语 + 槽位，且槽位与设置页同一句话（两屏取的是同一份实现）。 */
+    @Test
+    fun metaPairsTheReasonPhraseWithTheSettingsSlotLabel() {
+        val meta = ReasonExplanation.meta(rec(slot = "EXT_SLOT"))
+
+        assertEquals(2, meta.size)
+        assertEquals(R.string.reason_short_disabled, (meta[0] as UiText.Res).id)
+        assertEquals(R.string.module_slot_ext, (meta[1] as UiText.Res).id)
+    }
+
+    /** 规则 id 由原因短语自带，不另占一段：早先那行会把同一个 id 说两遍。 */
+    @Test
+    fun metaHasNoSeparateRuleIdSegment() {
+        assertEquals(1, ReasonExplanation.meta(rec(reason = "rule:custom", ruleId = "custom")).size)
+    }
+
+    private fun rec(
+        reason: String = "disabled",
+        slot: String? = null,
+        ruleId: String? = null,
+    ) = LogRecord(
+        ts = 1L,
+        pkg = "com.example.app",
+        title = "t",
+        text = "b",
+        reason = reason,
+        would = false,
+        block = false,
+        slot = slot,
+        ruleId = ruleId,
+    )
 }

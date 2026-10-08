@@ -4,18 +4,27 @@ import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
@@ -25,10 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.judge.LogRecord
+import io.github.vstory.notifyguard.ui.ReasonExplanation
 import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
 
@@ -158,6 +169,74 @@ internal fun AlertNote(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,
     )
+}
+
+/**
+ * 行内可点的判定元数据。记录屏与学习屏共用 —— 同一串在一屏能点开、到另一屏点了没反应，用户会
+ * 以为那屏坏了。
+ *
+ * 图标承担「这儿能点」的提示：这行是小字元数据，用 primary 色会跟行里那几个真动作抢层级。
+ */
+@Composable
+internal fun ReasonLine(meta: List<UiText>, onClick: () -> Unit) {
+    TextButton(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp),
+        contentPadding = PaddingValues(horizontal = 0.dp),
+    ) {
+        Text(
+            text = meta.joinToString(" · ") { it.text() },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.width(4.dp))
+        Icon(
+            imageVector = Icons.Filled.Info,
+            contentDescription = null,
+            modifier = Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.secondary,
+        )
+    }
+}
+
+/**
+ * 判定说明弹窗（两屏共用）。
+ *
+ * 可读化不替代排障：人话下面并排给出原始原因码与判定槽，出问题时两边都要能拿到。
+ */
+@Composable
+internal fun ReasonDialog(ex: ReasonExplanation, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(ex.reason.short.text()) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(ex.reason.why.text(), style = MaterialTheme.typography.bodyMedium)
+                RawLine(R.string.reason_raw_reason, ex.reason.raw)
+                ex.slot?.let { RawLine(R.string.reason_raw_slot, it) }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.reason_close)) }
+        },
+    )
+}
+
+/** 「标签 + 等宽原文」一行。等宽是为了让技术串一眼认出不是给人读的话。 */
+@Composable
+private fun RawLine(@StringRes label: Int, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(label),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelSmall,
+            fontFamily = FontFamily.Monospace,
+        )
+    }
 }
 
 /**
