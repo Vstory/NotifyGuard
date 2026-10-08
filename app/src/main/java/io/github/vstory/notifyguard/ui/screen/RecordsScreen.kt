@@ -135,7 +135,6 @@ fun RecordsScreen(
                     Note(
                         stringResource(
                             R.string.records_filter_hit,
-                            stringResource(state.filter.labelRes),
                             state.matched,
                             RecordsViewModel.LIST_LIMIT,
                         )
@@ -263,7 +262,7 @@ private fun EmptyHint(filter: RecordsViewModel.Filter) {
         text = if (filter == RecordsViewModel.Filter.All) {
             stringResource(R.string.records_empty)
         } else {
-            stringResource(R.string.records_filter_empty, stringResource(filter.labelRes))
+            stringResource(R.string.records_filter_empty)
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
