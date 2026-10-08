@@ -472,6 +472,14 @@ jobs:
             done
             echo "  ✅ App 侧首页统计入口在（含中文值）"
 
+            # ③n App 侧学习屏入口（M4h）。四块卡各有各的用途，缺哪块都能在包内静默：
+            #     缺「待处理」= 误杀只能回记录屏翻流水；缺「孤儿标注」= 一条已离开记录窗口的标注
+            #     用户永远删不掉；缺「读不到微调量」那句说明 = 把 base-only 归因当成实际判定的依据。
+            for A in learning_pending_group learning_ai_group learning_orphan_group learning_detail_base_only; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧学习屏资源「$A」—— 学习屏的清单或归因说明在 App 侧没了（或被 R8 裁掉）"; exit 1; }
+            done
+            echo "  ✅ App 侧学习屏入口在（含中文值）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ③k 语言包齐全：默认（无语言限定词）必须是英文、简体中文包必须真在包里。两条错都会在包内
