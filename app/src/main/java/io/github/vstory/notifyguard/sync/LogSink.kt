@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.sync
 
 import android.content.Context
+import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.data.ModuleDir
@@ -28,8 +29,6 @@ object LogSink {
     internal var maxPending = 500
     internal var storeOverride: LogStore? = null
 
-    private const val FLUSH_NOW_TIMEOUT_MS = 3_000L
-
     /** 写盘失败后的静默期：本地写失败基本是权限/磁盘问题，不该被每条通知撞一次。 */
     private const val PERSIST_RETRY_MS = 30_000L
 
@@ -46,6 +45,7 @@ object LogSink {
 
     private val persisted = AtomicLong()
     private val dropped = AtomicLong()
+    private val snapshotSeq = AtomicLong()
 
     @Volatile private var bound = false
 
@@ -79,11 +79,39 @@ object LogSink {
         }
     }
 
-    /** 拉取前把缓冲刷进文件：缓冲意味着最多 [flushDelayMs] 的记录还没落盘，不刷就看不到刚发生的通知。 */
+    /**
+     * 拉取前把缓冲刷进文件：缓冲意味着最多 [flushDelayMs] 的记录还没落盘，不刷就看不到刚发生的通知。
+     *
+     * **必须在 [worker] 线程上调用**（生产路径是 LogChannel 的 `onWorker`）：它直接读 `pending`，
+     * 那是 worker 私有状态。历史写法是「提交 flush 任务再等它回来」（`submit { flush() }.get(3s)`），
+     * 但调用点本身就在 worker 上 —— 那个任务永远排在当前任务之后，必然超时，结果是白等 3 秒、
+     * 缓冲依旧没落盘，拉取永远滞后一拍。现在直接调 [flush]（同一线程上串行，本就等价）。
+     *
+     * 自检行的用途：D 级日志里直接给出「缓冲是否全部落盘 / 回传多少条」，排障时不必再推断。
+     */
     internal fun snapshotJson(): String {
-        awaitFlush()
-        val s = storeOverride ?: store ?: return "[]"
-        return LogCodec.encodeList(s.recent(LogStore.MAX_RECORDS))
+        val before = pending.size
+        flush()
+        val after = pending.size
+        val s = storeOverride ?: store
+        if (s == null) {
+            if (BuildConfig.DEBUG) {
+                ModuleLogger.debugRaw(
+                    "[DBG] 拉取#${snapshotSeq.incrementAndGet()} 未就绪（目录不可用/Context 未取到）：" +
+                        "缓冲=$before→$after 回传=[]"
+                )
+            }
+            return "[]"
+        }
+        val recent = s.recent(LogStore.MAX_RECORDS)
+        if (BuildConfig.DEBUG) {
+            ModuleLogger.debugRaw(
+                "[DBG] 拉取#${snapshotSeq.incrementAndGet()} 缓冲=$before→$after 文件=${s.size()} " +
+                    "回传=${recent.size} 最新=${recent.firstOrNull()?.lastTs} 最旧=${recent.lastOrNull()?.lastTs} " +
+                    "自检=${if (after == 0) "✓ 缓冲已全部落盘" else "✗ $after 条仍在缓冲（写盘未成功）"}"
+            )
+        }
+        return LogCodec.encodeList(recent)
     }
 
     internal fun clearAll() {
@@ -117,11 +145,6 @@ object LogSink {
             retryAfter = 0L
         }
         awaitIdle()
-    }
-
-    private fun awaitFlush() {
-        runCatching { worker.submit { flush() }.get(FLUSH_NOW_TIMEOUT_MS, TimeUnit.MILLISECONDS) }
-            .onFailure { ModuleLogger.error("等待记录落盘超时：${describe(it)}") }
     }
 
     private fun schedule() {
@@ -158,7 +181,4 @@ object LogSink {
         retryAfter = 0L
         schedule()
     }
-
-    private fun describe(t: Throwable): String =
-        "${t.javaClass.simpleName}${t.message?.let { ": $it" }.orEmpty()}"
 }
