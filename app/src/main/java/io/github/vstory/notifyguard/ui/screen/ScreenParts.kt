@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -27,6 +28,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
 
@@ -156,6 +158,33 @@ internal fun AlertNote(text: String) {
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,
     )
+}
+
+/**
+ * 判定三态（展示用）。记录屏与学习屏共用一套标签与配色：同一个量在两屏有两种视觉，就是两套口径。
+ *
+ * 从 [LogRecord] 的 `block` / `would` 派生，不解析 `reason` 前缀 —— 技术串的形态随判定链增删而变，字段不会
+ * （与 `hasAiVerdict` 取 `score` 同一条口径）。
+ */
+enum class Verdict(@StringRes val labelRes: Int) {
+    Block(R.string.verdict_block),
+    Would(R.string.verdict_would),
+    Pass(R.string.verdict_pass);
+
+    companion object {
+        fun of(record: LogRecord): Verdict = when {
+            record.block -> Block
+            record.would -> Would
+            else -> Pass
+        }
+    }
+}
+
+@Composable
+internal fun verdictColor(verdict: Verdict) = when (verdict) {
+    Verdict.Block -> MaterialTheme.colorScheme.error
+    Verdict.Would -> MaterialTheme.colorScheme.tertiary
+    Verdict.Pass -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 /**

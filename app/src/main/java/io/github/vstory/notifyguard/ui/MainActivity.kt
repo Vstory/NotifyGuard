@@ -18,12 +18,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import io.github.vstory.notifyguard.ui.screen.HomeScreen
 import io.github.vstory.notifyguard.ui.screen.LearningScreen
 import io.github.vstory.notifyguard.ui.screen.RecordsScreen
+import io.github.vstory.notifyguard.ui.screen.RecordsViewModel
 import io.github.vstory.notifyguard.ui.screen.RulesScreen
 import io.github.vstory.notifyguard.ui.screen.SettingsScreen
 import io.github.vstory.notifyguard.ui.theme.NotifyGuardTheme
+
+/** 记录屏的判定筛选参数名（进 route 与 query）。 */
+private const val FILTER_ARG = "filter"
 
 /**
  * App 入口（launcher）。
@@ -54,7 +59,11 @@ private fun NotifyGuardApp() {
                 item(
                     icon = { Icon(destination.icon, contentDescription = stringResource(destination.labelRes)) },
                     label = { Text(stringResource(destination.labelRes)) },
-                    selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
+                    // 带 query 参数的屏，其 destination.route 是模式串（含 `{filter}`），
+                    // 直接比会永远判不中；底部栏的选中看的是「哪一屏」，故取问号前那段
+                    selected = currentDestination?.hierarchy?.any {
+                        it.route?.substringBefore('?') == destination.route
+                    } == true,
                     onClick = {
                         navController.navigate(destination.route) {
                             // 五个 tab 平级：跳转前弹回起始目的地并保存各自状态，避免返回栈越堆越深
@@ -72,9 +81,23 @@ private fun NotifyGuardApp() {
             startDestination = Destination.Home.route,
             modifier = Modifier.fillMaxSize(),
         ) {
-            composable(Destination.Home.route) { HomeScreen() }
+            composable(Destination.Home.route) {
+                HomeScreen(onOpenRecords = { filter ->
+                    navController.navigate("${Destination.Records.route}?$FILTER_ARG=${filter.arg}") {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        // 不能 restoreState：恢复旧返回栈会连旧参数一起复活，点「已拦截」却停在「全部」
+                        restoreState = false
+                    }
+                })
+            }
             composable(Destination.Rules.route) { RulesScreen() }
-            composable(Destination.Records.route) { RecordsScreen() }
+            composable(
+                route = Destination.Records.route + "?$FILTER_ARG={$FILTER_ARG}",
+                arguments = listOf(navArgument(FILTER_ARG) { defaultValue = RecordsViewModel.Filter.All.arg }),
+            ) { entry ->
+                RecordsScreen(initialFilter = RecordsViewModel.Filter.of(entry.arguments?.getString(FILTER_ARG)))
+            }
             composable(Destination.Learning.route) { LearningScreen() }
             composable(Destination.Settings.route) { SettingsScreen() }
         }

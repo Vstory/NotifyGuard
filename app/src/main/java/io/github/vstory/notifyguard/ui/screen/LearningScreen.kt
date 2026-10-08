@@ -235,7 +235,7 @@ private fun OrphanCard(state: LearningViewModel.UiState, onUndo: (String) -> Uni
                         .padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    RowHead(row.time, row.spam)
+                    RowHead(row.time, null, row.spam)
                     Text(
                         text = row.pkg,
                         style = MaterialTheme.typography.labelMedium,
@@ -259,11 +259,13 @@ private fun OrphanCard(state: LearningViewModel.UiState, onUndo: (String) -> Uni
 }
 
 /**
- * 行的头行：时间 +（右侧）标注状态。三块卡共用 —— 孤儿卡原先自己手写了一套时间行，于是把标注状态
- * 整个落下了，而那张卡正是唯一能撤销标注的地方（撤销前看不到标的是哪个方向）。
+ * 行的头行：时间 +（紧随）判定 +（右端）标注状态。三块卡共用 —— 各卡自己手写头行时，
+ * 孤儿卡就把标注状态整个落下了，而那张卡正是唯一能撤销标注的地方。
+ *
+ * 判定为 `null` 的只有孤儿标注：它没有对应记录，给不出判定。
  */
 @Composable
-private fun RowHead(time: String, marked: Boolean?) {
+private fun RowHead(time: String, verdict: Verdict?, marked: Boolean?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -274,6 +276,13 @@ private fun RowHead(time: String, marked: Boolean?) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        verdict?.let {
+            Text(
+                text = stringResource(it.labelRes),
+                style = MaterialTheme.typography.labelMedium,
+                color = verdictColor(it),
+            )
+        }
         Spacer(Modifier.weight(1f))
         marked?.let { spam ->
             Text(
@@ -290,7 +299,7 @@ private fun RowHead(time: String, marked: Boolean?) {
 /** 行的公共部分：头行 + 包名 + 文本 + 判定串与分数。 */
 @Composable
 private fun RowBody(row: LearningViewModel.Row) {
-    RowHead(row.time, row.marked)
+    RowHead(row.time, row.verdict, row.marked)
     Text(
         text = row.pkg,
         style = MaterialTheme.typography.labelMedium,

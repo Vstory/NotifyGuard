@@ -1,8 +1,12 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,9 +21,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
@@ -37,7 +43,10 @@ import io.github.vstory.notifyguard.ui.text
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
+fun HomeScreen(
+    onOpenRecords: (RecordsViewModel.Filter) -> Unit = {},
+    viewModel: HomeViewModel = viewModel(),
+) {
     val ctx = LocalContext.current.applicationContext
     val state = viewModel.state
 
@@ -83,10 +92,18 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
             val stats = state.stats
             GroupCard(stringResource(R.string.home_stats_group)) {
                 Note(stringResource(R.string.home_stats_note, LogStore.MAX_RECORDS))
-                StatLine(stringResource(R.string.home_stat_blocked, stats.blocked))
-                StatLine(stringResource(R.string.home_stat_would, stats.would))
-                StatLine(stringResource(R.string.home_stat_pass, stats.pass))
+                StatLine(stringResource(R.string.home_stat_blocked, stats.blocked)) {
+                    onOpenRecords(RecordsViewModel.Filter.Block)
+                }
+                StatLine(stringResource(R.string.home_stat_would, stats.would)) {
+                    onOpenRecords(RecordsViewModel.Filter.Would)
+                }
+                StatLine(stringResource(R.string.home_stat_pass, stats.pass)) {
+                    onOpenRecords(RecordsViewModel.Filter.Pass)
+                }
                 Note(stringResource(R.string.home_stat_scope, stats.groups, stats.events))
+                // 整行可点但没有任何可点的样子，不写一句就没人会去点
+                Note(stringResource(R.string.home_stats_tap_hint))
             }
 
             GroupCard(stringResource(R.string.home_top_group)) {
@@ -110,7 +127,19 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     }
 }
 
+/**
+ * 整行可点：这三行是「哪些通知被拦了」的入口，只报数不给出路时用户看到「已拦截 12」也无从下钻。
+ * 触控目标按无障碍口径撑到 48dp（文本本身远低于此）。
+ */
 @Composable
-private fun StatLine(text: String) {
-    Text(text = text, style = MaterialTheme.typography.bodyMedium)
+private fun StatLine(text: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(text = text, style = MaterialTheme.typography.bodyMedium)
+    }
 }

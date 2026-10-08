@@ -480,6 +480,13 @@ jobs:
             done
             echo "  ✅ App 侧学习屏入口在（含中文值）"
 
+            # ③o App 侧记录屏判定筛选入口（M4i）。筛选整块没了 ⇒ 被拦的条目被放行的淹在混排列表里，
+            #     「哪些通知被拦了」在界面上无解；首页那三行统计只剩数字、点不进去，也就下钻不了。
+            for A in records_filter_all records_filter_block records_filter_would records_filter_pass records_filter_hit home_stats_tap_hint; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧判定筛选资源「$A」—— 记录屏的筛选档或首页的行提示在 App 侧没了（或被 R8 裁掉）"; exit 1; }
+            done
+            echo "  ✅ App 侧判定筛选入口在（含中文值）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ③k 语言包齐全：默认（无语言限定词）必须是英文、简体中文包必须真在包里。两条错都会在包内

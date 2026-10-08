@@ -22,6 +22,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -52,7 +55,10 @@ import io.github.vstory.notifyguard.ui.text
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
+fun RecordsScreen(
+    initialFilter: RecordsViewModel.Filter = RecordsViewModel.Filter.All,
+    viewModel: RecordsViewModel = viewModel(),
+) {
     val ctx = LocalContext.current.applicationContext
     val state = viewModel.state
     val snackbar = remember { SnackbarHostState() }
@@ -60,6 +66,8 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
 
     // 进屏拉一次（切回本屏也算进屏）；超时不重试，刷新入口就在顶栏
     LaunchedEffect(Unit) { viewModel.refresh(ctx) }
+    // 导航带进来的筛选只在**参数变化**时套用：套在每次重组上会把用户手动切的档当场拨回去
+    LaunchedEffect(initialFilter) { viewModel.setFilter(ctx, initialFilter) }
     // 文案必须在 Composable 上下文里解析：LaunchedEffect 的 block 不是 @Composable，
     // 里面调不了 stringResource
     val notice = state.notice
@@ -120,8 +128,22 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item { StatusCard(state) }
+            item { FilterRow(state.filter) { viewModel.setFilter(ctx, it) } }
+            // 命中数紧跟筛选行：切档后视线就在这里，把窗口口径写在筛选项旁边才有人读到
+            if (state.filter != RecordsViewModel.Filter.All) {
+                item {
+                    Note(
+                        stringResource(
+                            R.string.records_filter_hit,
+                            stringResource(state.filter.labelRes),
+                            state.matched,
+                            RecordsViewModel.LIST_LIMIT,
+                        )
+                    )
+                }
+            }
             if (state.rows.isEmpty()) {
-                item { EmptyHint() }
+                item { EmptyHint(state.filter) }
             } else {
                 items(state.rows, key = { it.key }) { row ->
                     RecordCard(
@@ -154,6 +176,29 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
     }
 }
 
+/**
+ * 判定筛选。官方对单选分段按钮的定位就是「从一组选项里选一个、切换视图、或排序」，
+ * 与这里互斥的四档正好对齐，选中态与单语义不必自造。
+ */
+@Composable
+private fun FilterRow(
+    selected: RecordsViewModel.Filter,
+    onSelect: (RecordsViewModel.Filter) -> Unit,
+) {
+    val filters = RecordsViewModel.Filter.entries
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        filters.forEachIndexed { index, filter ->
+            SegmentedButton(
+                selected = filter == selected,
+                onClick = { onSelect(filter) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = filters.size),
+            ) {
+                Text(stringResource(filter.labelRes))
+            }
+        }
+    }
+}
+
 @Composable
 private fun StatusCard(state: RecordsViewModel.UiState) {
     OutlinedCard(Modifier.fillMaxWidth()) {
@@ -167,7 +212,6 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
                     state.groups,
                     state.rawCount,
                     LogStore.MAX_RECORDS,
-                    RecordsViewModel.RECENT_LIMIT,
                 ),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -209,10 +253,18 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
     }
 }
 
+/**
+ * 空态两分：窗口真的为空（判定链可能没跑，要去查框架日志）与当前档没有命中（换一档就有）是两种事实，
+ * 合成一句会把「没记录」说成「筛没了」，用户就不会去查日志了。
+ */
 @Composable
-private fun EmptyHint() {
+private fun EmptyHint(filter: RecordsViewModel.Filter) {
     Text(
-        text = stringResource(R.string.records_empty),
+        text = if (filter == RecordsViewModel.Filter.All) {
+            stringResource(R.string.records_empty)
+        } else {
+            stringResource(R.string.records_filter_empty, stringResource(filter.labelRes))
+        },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -241,7 +293,7 @@ private fun RecordCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
-                    text = verdictLabel(row.verdict),
+                    text = stringResource(row.verdict.labelRes),
                     style = MaterialTheme.typography.labelMedium,
                     color = verdictColor(row.verdict),
                 )
@@ -308,20 +360,4 @@ private fun RecordCard(
             }
         }
     }
-}
-
-@Composable
-private fun verdictLabel(verdict: RecordsViewModel.Verdict): String = stringResource(
-    when (verdict) {
-        RecordsViewModel.Verdict.Block -> R.string.verdict_block
-        RecordsViewModel.Verdict.Would -> R.string.verdict_would
-        RecordsViewModel.Verdict.Pass -> R.string.verdict_pass
-    }
-)
-
-@Composable
-private fun verdictColor(verdict: RecordsViewModel.Verdict) = when (verdict) {
-    RecordsViewModel.Verdict.Block -> MaterialTheme.colorScheme.error
-    RecordsViewModel.Verdict.Would -> MaterialTheme.colorScheme.tertiary
-    RecordsViewModel.Verdict.Pass -> MaterialTheme.colorScheme.onSurfaceVariant
 }
