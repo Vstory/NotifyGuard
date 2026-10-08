@@ -80,8 +80,19 @@ class LearningViewModel : ViewModel() {
         val aiText: String?,
     )
 
-    /** 孤儿标注一行。没有对应记录，所以给不出判定与分数。 */
-    data class OrphanRow(val key: String, val time: String, val pkg: String, val text: String)
+    /**
+     * 孤儿标注一行。没有对应记录，所以给不出判定与分数。
+     *
+     * [spam] 必须带上：孤儿卡是**唯一能撤销标注的地方**，而撤销前要先判断这条标的是哪个方向 ——
+     * 不给方向，用户就只能靠回忆决定撤不撤（撤错了还不会知道）。
+     */
+    data class OrphanRow(
+        val key: String,
+        val time: String,
+        val pkg: String,
+        val text: String,
+        val spam: Boolean,
+    )
 
     /**
      * 展开一条后的归因状态。
@@ -290,6 +301,7 @@ class LearningViewModel : ViewModel() {
         time = TIME.format(Date(l.at)),
         pkg = l.pkg,
         text = l.text,
+        spam = l.spam,
     )
 
     private fun notify(text: UiText) {
