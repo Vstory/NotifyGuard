@@ -86,6 +86,11 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         ) {
             val cfg = state.cfg
             val connected = state.connected
+            // README 判定链第 2 行：总开关关闭即整链短路（reason 落 `disabled`）。所以「观察模式」
+            // 「AI 开关」「AI 阈值」都是它的从属项 —— 总开关关着时判定根本不跑，这些项无处生效。
+            // 不置灰就会出现「观察模式显示为开、而它承诺的『判定照跑』并没发生」这种自相矛盾的
+            // 界面状态（官方 Settings 模式对父开关与从属控件的规定即：关闭父开关即禁用从属控件）。
+            val judgeOn = connected && cfg?.enabled == true
 
             StatusCard(state.serviceText, connected, cfg != null)
 
@@ -173,7 +178,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     label = stringResource(R.string.settings_observe),
                     note = stringResource(R.string.settings_observe_note),
                     checked = cfg?.observe ?: false,
-                    enabled = connected,
+                    enabled = judgeOn,
                     onCheckedChange = viewModel::setObserve,
                 )
             }
@@ -183,7 +188,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     label = stringResource(R.string.settings_spam),
                     note = stringResource(R.string.settings_spam_note),
                     checked = cfg?.spamEnabled ?: false,
-                    enabled = connected,
+                    enabled = judgeOn,
                     onCheckedChange = viewModel::setSpam,
                 )
                 Text(
@@ -198,7 +203,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     onValueChangeFinished = viewModel::commitThreshold,
                     valueRange = 0f..1f,
                     steps = SettingsViewModel.THRESHOLD_STEPS - 1,
-                    enabled = connected && cfg?.spamEnabled == true,
+                    enabled = judgeOn && cfg?.spamEnabled == true,
                 )
                 Note(stringResource(R.string.settings_threshold_note))
             }

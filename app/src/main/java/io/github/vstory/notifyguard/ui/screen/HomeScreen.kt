@@ -73,7 +73,8 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
         ) {
             StatusCard(state.serviceText, state.connected, state.cfg != null)
 
-            if (state.cfg?.observe == true) {
+            // 总开关关着时判定链不跑，这条提示就是假话（M4g 已有「未知不等于开着」的口径，同理）
+            if (state.cfg?.let { it.enabled && it.observe } == true) {
                 GroupCard(stringResource(R.string.home_observe_group)) {
                     Note(stringResource(R.string.home_observe_note))
                 }
