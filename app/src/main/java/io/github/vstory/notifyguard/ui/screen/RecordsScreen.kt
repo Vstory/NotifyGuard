@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -22,12 +24,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -212,6 +218,7 @@ private fun EmptyHint() {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun RecordCard(
     row: RecordsViewModel.RecordRow,
@@ -219,89 +226,120 @@ private fun RecordCard(
     onMark: (Boolean) -> Unit,
     onUndo: () -> Unit,
 ) {
-    OutlinedCard(Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+    val card: @Composable () -> Unit = {
+        OutlinedCard(Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Text(
-                    text = row.time,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    text = verdictLabel(row.verdict),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = verdictColor(row.verdict),
-                )
-                if (row.count > 1) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     Text(
-                        text = stringResource(R.string.records_count_badge, row.count),
+                        text = row.time,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                Spacer(Modifier.weight(1f))
-                row.marked?.let { spam ->
                     Text(
-                        text = stringResource(
-                            if (spam) R.string.records_marked_spam else R.string.records_marked_ham
-                        ),
+                        text = verdictLabel(row.verdict),
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (spam) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        color = verdictColor(row.verdict),
                     )
+                    if (row.count > 1) {
+                        Text(
+                            text = stringResource(R.string.records_count_badge, row.count),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.weight(1f))
+                    row.marked?.let { spam ->
+                        Text(
+                            text = stringResource(
+                                if (spam) R.string.records_marked_spam else R.string.records_marked_ham
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (spam) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
-            }
-            Text(
-                text = row.pkg,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
                 Text(
-                    text = stringResource(R.string.records_no_text),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = row.pkg,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            } else {
-                row.title?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
+                    Text(
+                        text = stringResource(R.string.records_no_text),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    row.title?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    row.text?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
                 }
-                row.text?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = row.reason,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // 三个动作对已标注状态互斥收敛：已标垃圾时「标垃圾」置灰，免得按出一串同义指令。
+                // 在途（busy）时全部置灰：连点会并发发出多条指令，而先到的回执会盖掉后点那次的状态
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(
+                        onClick = { onMark(true) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        enabled = !busy && row.marked != true,
+                    ) { Text(stringResource(R.string.action_mark_spam)) }
+                    TextButton(
+                        onClick = { onMark(false) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        enabled = !busy && row.marked != false,
+                    ) { Text(stringResource(R.string.action_mark_ham)) }
+                    TextButton(
+                        onClick = onUndo,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        enabled = !busy && row.marked != null,
+                    ) { Text(stringResource(R.string.action_undo)) }
                 }
-            }
-            Text(
-                text = row.reason,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            // 三个动作对已标注状态互斥收敛：已标垃圾时「标垃圾」置灰，免得按出一串同义指令。
-            // 在途（busy）时全部置灰：连点会并发发出多条指令，而先到的回执会盖掉后点那次的状态
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(
-                    onClick = { onMark(true) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != true,
-                ) { Text(stringResource(R.string.action_mark_spam)) }
-                TextButton(
-                    onClick = { onMark(false) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != false,
-                ) { Text(stringResource(R.string.action_mark_ham)) }
-                TextButton(
-                    onClick = onUndo,
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != null,
-                ) { Text(stringResource(R.string.action_undo)) }
             }
         }
     }
+
+    // 标题与正文都被 maxLines 截断了，长按弹提示看全文；两者皆空的行不挂手势与焦点
+    // （气泡里也没内容，弹出来只会挡住卡片）
+    val hasText = !row.title.isNullOrBlank() || !row.text.isNullOrBlank()
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        state = rememberTooltipState(),
+        focusable = hasText,
+        enableUserInput = hasText,
+        tooltip = {
+            PlainTooltip {
+                // 气泡自身不滚，而正文可能很长 —— 限高并在气泡内滚动，免得撑出屏幕
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 240.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    row.title?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.titleSmall)
+                    }
+                    row.text?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        content = card,
+    )
 }
 
 @Composable
