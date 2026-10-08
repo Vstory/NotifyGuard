@@ -60,7 +60,12 @@ class LogSinkTest {
         assertTrue(LogSink.statsLine().contains("丢弃=2"))
     }
 
-    /** 拉取前必须把缓冲刷进文件：缓冲里的是「刚发生的通知」，用户打开 App 就该看到。 */
+    /**
+     * 拉取前必须把缓冲刷进文件：缓冲里的是「刚发生的通知」，用户打开 App 就该看到。
+     *
+     * 从 worker 上取快照 —— 这正是生产路径（LogChannel 的 `onWorker`）的调用方式。
+     * 用「提交 flush 再等它」的旧写法会在这里等自己 3 秒后超时、缓冲仍未落盘，本用例即该缺陷的回归。
+     */
     @Test
     fun snapshotFlushesBufferedRecords() {
         val store = store()
@@ -72,7 +77,11 @@ class LogSinkTest {
         LogSink.awaitIdle()
         assertEquals(0, store.size())
 
-        val json = LogSink.snapshotJson()
+        var out: String? = null
+        LogSink.onWorker { out = LogSink.snapshotJson() }
+        LogSink.awaitIdle()
+
+        val json = requireNotNull(out)
         assertEquals(2, store.size())
         assertTrue(json.contains("\"ts\":1") && json.contains("\"ts\":2"))
     }
