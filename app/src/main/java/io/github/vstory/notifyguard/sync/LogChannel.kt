@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
+import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
 
 /**
@@ -31,10 +32,18 @@ object LogChannel {
                     return
                 }
                 when (action) {
-                    LogContract.ACTION_GET_LOGS ->
+                    LogContract.ACTION_GET_LOGS -> {
+                        if (BuildConfig.DEBUG) {
+                            ModuleLogger.debugRaw("[DBG] 记录通道：收到拉取请求（uid=${Binder.getCallingUid()}）")
+                        }
                         // 刷缓冲 + 编码 + 回传都是 IO，投给 worker；onReceive 立刻返回，不占 system_server 主线程
                         LogSink.onWorker { reply(c, LogSink.snapshotJson()) }
-                    LogContract.ACTION_CLEAR_LOGS -> LogSink.clearAll()
+                    }
+
+                    LogContract.ACTION_CLEAR_LOGS -> {
+                        if (BuildConfig.DEBUG) ModuleLogger.debugRaw("[DBG] 记录通道：收到清空请求")
+                        LogSink.clearAll()
+                    }
                 }
             }
         }

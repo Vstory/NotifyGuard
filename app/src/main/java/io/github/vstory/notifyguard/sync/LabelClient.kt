@@ -7,6 +7,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import io.github.vstory.notifyguard.BuildConfig
+import io.github.vstory.notifyguard.core.AppLogger
 import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.judge.LabelRecord
 
@@ -51,6 +53,8 @@ object LabelClient {
         val handler = Handler(Looper.getMainLooper())
         var finished = false
         var receiver: BroadcastReceiver? = null
+        var sentAt = 0L
+        val what = action.substringAfterLast('.')
 
         val finish: (List<LabelRecord>?) -> Unit = { list ->
             if (!finished) {
@@ -68,6 +72,12 @@ object LabelClient {
                 val store = LabelStore.get(ctx)
                 // 覆盖式：模块端那份是唯一真相，本地只是它的缓存
                 store.replaceAll(LabelCodec.decodeList(json))
+                if (BuildConfig.DEBUG) {
+                    AppLogger.debugRaw(
+                        "[DBG] 标注：$what 收到回执 ${store.all().size} 条 " +
+                            "往返=${System.currentTimeMillis() - sentAt}ms"
+                    )
+                }
                 finish(store.all())
             }
         }
@@ -87,8 +97,13 @@ object LabelClient {
             return
         }
 
-        handler.postDelayed({ finish(null) }, TIMEOUT_MS)
+        handler.postDelayed({
+            if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 标注：$what 等 ${TIMEOUT_MS}ms 无回执 ⇒ 超时")
+            finish(null)
+        }, TIMEOUT_MS)
         // 不能 setPackage：system_server 里的 receiver 不属于任何包，定向投递永远收不到
+        sentAt = System.currentTimeMillis()
+        if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 标注：发出 $what")
         ctx.sendBroadcast(
             Intent(action).apply { extra?.let { (k, v) -> putExtra(k, v) } }
         )

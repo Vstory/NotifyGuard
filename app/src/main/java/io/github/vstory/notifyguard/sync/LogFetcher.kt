@@ -7,6 +7,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import io.github.vstory.notifyguard.BuildConfig
+import io.github.vstory.notifyguard.core.AppLogger
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.LogRecord
 
@@ -26,6 +28,7 @@ object LogFetcher {
         val handler = Handler(Looper.getMainLooper())
         var finished = false
         var receiver: BroadcastReceiver? = null
+        var sentAt = 0L
 
         val finish: (List<LogRecord>?) -> Unit = { list ->
             if (!finished) {
@@ -43,7 +46,13 @@ object LogFetcher {
                 val json = intent?.getStringExtra(LogContract.EXTRA_LOGS) ?: return
                 val store = LogStore.get(ctx)
                 store.replaceAll(LogCodec.decodeList(json))
-                finish(store.recent(LogStore.MAX_RECORDS))
+                val recent = store.recent(LogStore.MAX_RECORDS)
+                if (BuildConfig.DEBUG) {
+                    AppLogger.debugRaw(
+                        "[DBG] 拉取：收到回执 ${recent.size} 条 往返=${System.currentTimeMillis() - sentAt}ms"
+                    )
+                }
+                finish(recent)
             }
         }
 
@@ -62,8 +71,17 @@ object LogFetcher {
             return
         }
 
-        handler.postDelayed({ finish(null) }, TIMEOUT_MS)
+        handler.postDelayed({
+            if (BuildConfig.DEBUG) {
+                AppLogger.debugRaw(
+                    "[DBG] 拉取：等 ${TIMEOUT_MS}ms 无回执 ⇒ 超时（模块未激活 / 装完没重启过系统框架）"
+                )
+            }
+            finish(null)
+        }, TIMEOUT_MS)
         // 不能 setPackage：system_server 里的 receiver 不属于任何包，定向投递永远收不到
+        sentAt = System.currentTimeMillis()
+        if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 拉取：发出 GET_LOGS")
         ctx.sendBroadcast(Intent(LogContract.ACTION_GET_LOGS))
     }
 
