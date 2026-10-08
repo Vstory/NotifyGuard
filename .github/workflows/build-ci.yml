@@ -320,7 +320,9 @@ jobs:
           #     编译期不查类型；单测没有 Android 资源表；上面 ③g–③p 只查「资源在不在」。
           #     于是「模板 %1$d ↔ 实参给了 String」三层全漏，只在真机点进那一屏时抛
           #     IllegalFormatConversionException（records_filter_hit 在记录屏切档即崩）。
-          python3 scripts/check_format_args.py .
+          #     脚本母版在知识库 dev-guide/工程模板/（项目内为副本，版本号见文件头）；
+          #     --call 是本项目的文案载体 UiText.Res（等同 stringResource，母版不硬编它）。
+          python3 scripts/check_string_format_args.py --call UiText.Res .
 
           for APK in dist/*.apk; do
             NAME="$(basename "$APK")"
