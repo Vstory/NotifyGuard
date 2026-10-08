@@ -111,6 +111,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
             item {
                 OrphanCard(
                     state = state,
+                    onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
                     onUndo = { viewModel.undo(ctx, it) },
                 )
             }
@@ -169,7 +170,7 @@ private fun PendingCard(state: LearningViewModel.UiState, onMark: (String, Boole
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     RowBody(row)
-                    MarkActions(row, state.busy, undoable = false, onMark = onMark, onUndo = { _ -> })
+                    MarkActions(row.key, row.marked, state.busy, undoable = false, onMark = onMark, onUndo = { _ -> })
                 }
             }
         }
@@ -201,7 +202,7 @@ private fun AiCard(
                     if (open) {
                         DetailBlock(row, state.detail)
                     }
-                    MarkActions(row, state.busy, undoable = true, onMark = onMark, onUndo = onUndo)
+                    MarkActions(row.key, row.marked, state.busy, undoable = true, onMark = onMark, onUndo = onUndo)
                     // 展开用独立按钮而不是整行可点：行里已经有三个动作按钮，整行可点会让它们的
                     // 点按区域互相盖住，误触的后果是标注被改掉（不可感知）
                     TextButton(
@@ -220,9 +221,16 @@ private fun AiCard(
     }
 }
 
-/** 孤儿标注卡：记录窗口里已经找不到的标注。 */
+/**
+ * 孤儿标注卡：记录窗口里已经找不到的标注。撤销（不再认可这条）与改判（方向标反了）并列 ——
+ * 只有撤销的话，一条标反的样本唯一的下场是被删掉，而它正是模型错过、用户当场纠正过的那类样本。
+ */
 @Composable
-private fun OrphanCard(state: LearningViewModel.UiState, onUndo: (String) -> Unit) {
+private fun OrphanCard(
+    state: LearningViewModel.UiState,
+    onMark: (String, Boolean) -> Unit,
+    onUndo: (String) -> Unit,
+) {
     GroupCard(stringResource(R.string.learning_orphan_group)) {
         Note(stringResource(R.string.learning_orphan_note))
         if (state.orphans.isEmpty()) {
@@ -247,11 +255,15 @@ private fun OrphanCard(state: LearningViewModel.UiState, onUndo: (String) -> Uni
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    TextButton(
-                        onClick = { onUndo(row.key) },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                        enabled = !state.busy,
-                    ) { Text(stringResource(R.string.action_undo)) }
+                    MarkActions(
+                        key = row.key,
+                        marked = row.spam,
+                        busy = state.busy,
+                        undoable = true,
+                        onMark = onMark,
+                        onUndo = onUndo,
+                    )
+                    Note(stringResource(R.string.learning_orphan_flip_note))
                 }
             }
         }
@@ -337,32 +349,38 @@ private fun RowBody(row: LearningViewModel.Row) {
 /**
  * 改判 / 撤销。已标注的那一侧置灰（同义指令按出来没有意义），在途时全部置灰（连点会并发发出多条，
  * 而先到的回执会盖掉后点那次的状态）。
+ *
+ * 收 key 与当前方向而不是整个行模型：三张卡的行模型不同（[LearningViewModel.Row] 与
+ * [LearningViewModel.OrphanRow]），而动作需要的只有这两样 —— 各卡自己写一份动作行，迟早有一处把
+ * 「已经是当前方向」的那侧画成可点。
  */
 @Composable
 private fun MarkActions(
-    row: LearningViewModel.Row,
+    key: String,
+    /** 当前方向；`null` = 未标注。 */
+    marked: Boolean?,
     busy: Boolean,
-    /** AI 卡里是「改判」（可能已标注），待处理卡里是「表态」（按构造必然未标注，撤销没有对象）。 */
+    /** AI 卡与孤儿卡里是「改判」（可能已标注），待处理卡里是「表态」（按构造必然未标注，撤销没有对象）。 */
     undoable: Boolean,
     onMark: (String, Boolean) -> Unit,
     onUndo: (String) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         TextButton(
-            onClick = { onMark(row.key, true) },
+            onClick = { onMark(key, true) },
             modifier = Modifier.heightIn(min = 48.dp),
-            enabled = !busy && row.marked != true,
+            enabled = !busy && marked != true,
         ) { Text(stringResource(R.string.action_mark_spam)) }
         TextButton(
-            onClick = { onMark(row.key, false) },
+            onClick = { onMark(key, false) },
             modifier = Modifier.heightIn(min = 48.dp),
-            enabled = !busy && row.marked != false,
+            enabled = !busy && marked != false,
         ) { Text(stringResource(R.string.action_mark_ham)) }
         if (undoable) {
             TextButton(
-                onClick = { onUndo(row.key) },
+                onClick = { onUndo(key) },
                 modifier = Modifier.heightIn(min = 48.dp),
-                enabled = !busy && row.marked != null,
+                enabled = !busy && marked != null,
             ) { Text(stringResource(R.string.action_undo)) }
         }
     }

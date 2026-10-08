@@ -40,7 +40,8 @@
     <string name="learning_ai_note">Tap Why to see which fragments pushed the score up. The highlight uses the very weights the verdict used, and the feature buckets hold weights with no word list — so it can point at fragments, never at words.</string>
     <string name="learning_ai_empty">No record carries an AI score right now.</string>
     <string name="learning_orphan_group">Orphan labels</string>
-    <string name="learning_orphan_note">Labelled notifications that have left the record window. They still feed fine-tuning — undo the ones you no longer stand by.</string>
+    <string name="learning_orphan_note">Labelled notifications that have left the record window. They still feed fine-tuning — flip the ones you marked the wrong way, undo the ones you no longer stand by.</string>
+    <string name="learning_orphan_flip_note">Flipping changes this sample\'s direction only. The notification has left the window, so the row stays here.</string>
     <string name="learning_orphan_empty">No orphan label.</string>
     <string name="learning_score">Score %1$s</string>
     <string name="learning_detail_show">Why</string>

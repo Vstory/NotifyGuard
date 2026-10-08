@@ -31,7 +31,7 @@ import java.util.concurrent.Executors
  *
  * 四块卡各自的用途不同，别把它们并成一个列表：拟合状态（这条链路走到哪一步）、待处理（被拦但还没标，
  * 也就是误杀回溯的入口）、有 AI 判定的记录（回看「为什么判成这样」，可展开看高亮）、孤儿标注
- * （记录窗口裁掉后仍在库里、否则用户永远删不掉的标注）。
+ * （记录窗口裁掉后仍在库里、否则用户永远删不掉也改不了的标注）。
  *
  * 数据源与记录屏一样：全是模块端权威、App 侧只读缓存的 [LogStore] / [LabelStore]，进屏先渲染缓存
  * 再各拉一次。标注动作沿用记录屏的口径（串行化 + 无回执不改本地状态），两个入口的语义不互相覆盖：
@@ -86,8 +86,9 @@ class LearningViewModel : ViewModel() {
     /**
      * 孤儿标注一行。没有对应记录，所以给不出判定与分数。
      *
-     * [spam] 必须带上：孤儿卡是**唯一能撤销标注的地方**，而撤销前要先判断这条标的是哪个方向 ——
-     * 不给方向，用户就只能靠回忆决定撤不撤（撤错了还不会知道）。
+     * [spam] 必须带上：孤儿卡是**唯一能撤销与改判标注的地方**，而两个动作都要先知道这条标的是哪个
+     * 方向 —— 撤销前不给方向，用户就只能靠回忆决定撤不撤（撤错了还不会知道）；改判前不给方向，
+     * 界面上那两个动作就没有置灰的依据（按同义的一次等于白跑一趟广播）。
      */
     data class OrphanRow(
         val key: String,
@@ -121,8 +122,11 @@ class LearningViewModel : ViewModel() {
     var state by mutableStateOf(UiState())
         private set
 
-    /** 标注动作要拿原始记录构造 [LabelRecord]，而界面只持 [Row.key]。 */
+    /** 标注动作要拿原始记录构造 [LabelRecord]，而界面只持 [Row.key] / [OrphanRow.key]。 */
     private var records: List<LogRecord> = emptyList()
+
+    /** 改判的来源：孤儿卡的条目在记录里已经找不到，只能拿库里那份标注翻方向。 */
+    private var labels: List<LabelRecord> = emptyList()
 
     private var noticeSeq = 0L
 
@@ -147,21 +151,25 @@ class LearningViewModel : ViewModel() {
         }
     }
 
+    /**
+     * 标注 / 改判。两种目标（有记录、只有标注）由 [labelFor] 统一解析，界面不必先判断这条有没有记录。
+     */
     fun mark(ctx: Context, key: String, spam: Boolean) {
         val app = ctx.applicationContext ?: ctx
-        val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
+        val label = labelFor(
+            records,
+            labels,
+            key,
+            spam,
+            System.currentTimeMillis(),
+            DeltaFitter.baseFingerprint(),
+        ) ?: return
         val what = if (spam) {
             UiText.Res(R.string.label_action_mark_spam)
         } else {
             UiText.Res(R.string.label_action_mark_ham)
         }
-        submit(app, what) { done ->
-            LabelClient.set(
-                app,
-                LabelRecord.of(r, spam, System.currentTimeMillis(), DeltaFitter.baseFingerprint()),
-                done,
-            )
-        }
+        submit(app, what) { done -> LabelClient.set(app, label, done) }
     }
 
     fun undo(ctx: Context, key: String) {
@@ -273,15 +281,16 @@ class LearningViewModel : ViewModel() {
 
     private fun repaint(ctx: Context) {
         val store = LogStore.get(ctx)
-        val labels = LabelStore.get(ctx).all()
+        val labels0 = LabelStore.get(ctx).all()
         records = store.all()
+        labels = labels0
         // 标注索引算一次给所有行与所有卡用：每行各构造一遍是 O(行 × 标注数)，标注上限 5000 条
-        val marks = LabelRecord.marksOf(records, labels)
+        val marks = LabelRecord.marksOf(records, labels0)
         state = state.copy(
-            labelTotal = labels.size,
+            labelTotal = labels0.size,
             pending = pendingOf(records, marks).take(LIST_LIMIT).map { row(it, marks) },
             aiRows = aiRowsOf(records).take(LIST_LIMIT).map { row(it, marks) },
-            orphans = orphansOf(records, labels).take(LIST_LIMIT).map { orphan(it) },
+            orphans = orphansOf(records, labels0).take(LIST_LIMIT).map { orphan(it) },
         )
     }
 
@@ -335,6 +344,35 @@ class LearningViewModel : ViewModel() {
 
         fun aiRowsOf(records: List<LogRecord>): List<LogRecord> =
             records.sortedByDescending { it.lastTs }.filter(::hasAiVerdict)
+
+        /**
+         * 「这个 key 该发出去的标注」：记录还在窗口里就按记录派生，只在标注库里（孤儿）就翻转原来那条。
+         *
+         * 两条来源收进同一个函数，是为了让界面不判断「这条有没有记录」—— 判断落在界面上时，
+         * 漏判的那一侧点下去**静默无动作**（没有通知、没有日志、状态也不变），是最难查的一类失效。
+         *
+         * 改判只翻 [LabelRecord.spam]，`key`/`ts`/`pkg`/`text` 逐字保留：`key` 是 upsert 的身份，
+         * 换了它库里会同时留下方向相反的两条样本（而界面只看得到一条）；`ts` 是组的首见时间；
+         * `text` 在记录被裁掉后是仅存的那份训练文本。
+         *
+         * `at` 与 `modelVersion` 刷新是有意的：`at` 是淘汰依据（保留旧值会让刚表过态的样本继续排在
+         * 淘汰队首），`modelVersion` 是样本产生时的 base 指纹（保留旧值会让「筛出旧样本重标」的清单
+         * 永远清不掉这条）。
+         */
+        fun labelFor(
+            records: List<LogRecord>,
+            labels: List<LabelRecord>,
+            key: String,
+            spam: Boolean,
+            at: Long,
+            modelVersion: Int,
+        ): LabelRecord? {
+            records.firstOrNull { LabelRecord.keyOf(it) == key }?.let {
+                return LabelRecord.of(it, spam, at, modelVersion)
+            }
+            return labels.firstOrNull { it.key == key }
+                ?.copy(spam = spam, at = at, modelVersion = modelVersion)
+        }
 
         /**
          * 孤儿标注 = 记录窗口里已经找不到的标注。

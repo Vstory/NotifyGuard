@@ -487,6 +487,14 @@ jobs:
             done
             echo "  ✅ App 侧判定筛选入口在（含中文值）"
 
+            # ③p App 侧孤儿标注改判入口（M4j）。孤儿卡只给撤销时，一条标反的样本唯一的下场是被删掉，
+            #     而它正是模型错过、用户当场纠正过的那类样本（撤销 ≠ 修正方向）。断言词取只在改判
+            #     动作区出现的那句说明 —— learning_orphan_group 等旧键本来就绿，撑不起这条断言。
+            for A in learning_orphan_flip_note; do
+              res_entry "$A" || { echo "::error::$NAME 缺 App 侧孤儿标注改判资源「$A」—— 学习屏的孤儿卡回到只有撤销（或被 R8 裁掉），标反的标注只能删掉"; exit 1; }
+            done
+            echo "  ✅ App 侧孤儿标注改判入口在（含中文值）"
+
             BADGING="$("$AAPT2" dump badging "$APK" 2>/dev/null || true)"
 
             # ③k 语言包齐全：默认（无语言限定词）必须是英文、简体中文包必须真在包里。两条错都会在包内
