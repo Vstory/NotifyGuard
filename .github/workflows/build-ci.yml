@@ -62,6 +62,12 @@ env:
   APK_OUT_RELEASE: app/build/outputs/apk/release/app-release.apk
   # push 触发时构建哪些变体。本项目专属：一次 CI 出 debug + release 两个包
   PUSH_VARIANT: both
+  # 源码层静态检查（scripts/check_string_format_args.py，门禁 ③q）。
+  #   STR_RES_CALLS：本项目的文案都经 UiText.Res 取（等同 stringResource，母版不硬编本项目包装）
+  STR_RES_CALLS: UiText.Res
+  #   STR_STRICT：本项目有 res/values* 且脚本常驻仓库 ⇒ 资源根或脚本消失时不许静默跳过
+  #   （跳过等于这道门禁根本没跑；见脚本头的「不适用即跳过」说明）
+  STR_STRICT: '1'
   # ═════════════════════════ PROJECT-CUSTOM-END ═════════════════════════
 
 jobs:
@@ -78,6 +84,31 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0   # AGP 会往 APK 里写 version-control-info；浅克隆下该信息不完整
+
+      # ③q（原在 Verify APK 步骤内，排在编译之后）：源码层静态检查，秒级。
+      #   这类错编译期看不见（`stringResource(id, vararg Any)` 的实参是 Any，类型与个数都不查）、
+      #   单测也看不见（没有 Android 资源表），只在真机点进那一屏时抛
+      #   IllegalFormatConversionException（records_filter_hit 在记录屏切档即崩过）。
+      #   它只读源码与资源 XML、不需要产物 ⇒ 前移到编译之前，早失败省下几分钟构建。
+      #   脚本母版在知识库 dev-guide/工程模板/（项目内为副本，版本号见文件头）；
+      #   本步骤与工程模板 build-ci.workflow.yml 的同名步骤同源，改动请两边对齐。
+      - name: Static check (string format args)
+        run: |
+          set -euo pipefail
+          SCRIPT=scripts/check_string_format_args.py
+          if [ ! -f "$SCRIPT" ]; then
+            # 模板里这一档是给「还没接这道检查的老项目」留的；本项目 STR_STRICT=1 ⇒ 不放行
+            if [ -n "${STR_STRICT:-}" ]; then
+              echo "::error::未找到 $SCRIPT（本项目已声明 STR_STRICT）—— 视为误删/改名，拒绝静默跳过"
+              exit 1
+            fi
+            echo "::notice::未找到 $SCRIPT —— 跳过"
+            exit 0
+          fi
+          # shellcheck disable=SC2086  # STR_RES_CALLS 故意不加引号：按空格拆成多个函数名
+          CALL_ARGS=()
+          for c in ${STR_RES_CALLS:-}; do CALL_ARGS+=(--call "$c"); done
+          python3 "$SCRIPT" ${STR_STRICT:+--strict} "${CALL_ARGS[@]}" .
 
       - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
@@ -290,6 +321,8 @@ jobs:
       # 断言产物真的可用：三件套齐全 + 作用域有效 + **变体正确** + **真的被固定密钥签过**
       #   + 入口类真在 dex 里 + 版本号未漂移。全是**静默失败模式**（包照样装、照样跑，只是模块
       #   不生效或版本不对），故必须做成门禁而不是「发布前看一眼」。
+      # ⚠️ 门禁 ③a–③k 要求产物，故留在本步骤；③l（en/zh 键全集）与 ③q 只读源码与资源 XML，
+      #    其中 ③q 已前移到编译前的 `Static check (string format args)`。
       - name: Verify APK (xposed files + scope + variant + dex entry + signature)
         run: |
           set -euo pipefail
@@ -314,17 +347,6 @@ jobs:
           [ -z "${MISSING_ZH}${MISSING_EN}" ] \
             || { echo "::error::两个 strings.xml 的键不一致 —— 英文多[$MISSING_ZH] 中文多[$MISSING_EN]（漏键会静默回落英文）"; exit 1; }
           echo "  ✅ 英文与中文资源键逐条一致（$(printf '%s\n' "$EN_KEYS" | wc -l | tr -d ' ') 条）"
-
-          # ③q 源码层：字符串资源的格式化参数（模板 ↔ 调用实参 ↔ 各语言包占位符）。
-          #     ⚠️ 这是真崩过一次的地方：`stringResource(id, vararg Any)` 的实参是 Any，
-          #     编译期不查类型；单测没有 Android 资源表；上面 ③g–③p 只查「资源在不在」。
-          #     于是「模板 %1$d ↔ 实参给了 String」三层全漏，只在真机点进那一屏时抛
-          #     IllegalFormatConversionException（records_filter_hit 在记录屏切档即崩）。
-          #     脚本母版在知识库 dev-guide/工程模板/（项目内为副本，版本号见文件头）。
-          #     --call 是本项目的文案载体 UiText.Res（等同 stringResource，母版不硬编它）；
-          #     --strict 是因为本项目确实有资源表（res/values*）—— 没有它，「资源表被改名/移走」
-          #     只会打一行 notice 就放行（门禁看着绿、其实没查）。
-          python3 scripts/check_string_format_args.py --call UiText.Res --strict .
 
           for APK in dist/*.apk; do
             NAME="$(basename "$APK")"
