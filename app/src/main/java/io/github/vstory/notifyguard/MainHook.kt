@@ -44,9 +44,26 @@ class MainHook : XposedModule() {
         installAll(param.classLoader)
     }
 
-    override fun onHotReloading(param: XposedModuleInterface.HotReloadingParam): Boolean = true
+    /**
+     * 热重载**暂不开放**，一律拒绝。
+     *
+     * 本模块在 system_server 里持有 7 个常驻线程池、3 个动态注册的 receiver、一个 FileObserver
+     * 与一份内置模型；换代只换代码、不回收这些资源，旧代那批全部滞留 —— 线程是 GC root，
+     * 持有旧 ClassLoader ⇒ 旧代（连同模型）永远卸载不掉，每次热重载净增一份。
+     * 更麻烦的是框架 unhook 旧句柄后**不重放** `onSystemServerStarting`，判定链停在半路，
+     * 日志上却看不出任何异常（表现就是「记录不再增长」）。
+     *
+     * 这一行是装完模块后**唯一**能说明「为什么改了代码没生效」的线索，故为 I 级（正式版保留）。
+     */
+    override fun onHotReloading(param: XposedModuleInterface.HotReloadingParam): Boolean {
+        ModuleLogger.info("拒绝热重载：teardown 未实现（本代继续运行，改代码需重启 system_server）")
+        return false
+    }
 
+    /** 当前不会触发（[onHotReloading] 恒拒绝）；保留为开放热重载时的实现。 */
     override fun onHotReloaded(param: XposedModuleInterface.HotReloadedParam) {
+        // 热重载不重放 onModuleLoaded ⇒ 不重绑则新代 iface 为 null，新代日志会被静默丢弃
+        ModuleLogger.bind(this)
         param.oldHookHandles.forEach { runCatching { it.unhook() } }
         val cl = classLoader
             ?: param.oldHookHandles.firstOrNull()?.executable?.declaringClass?.classLoader
