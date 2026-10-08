@@ -220,13 +220,16 @@ internal fun AlertNote(text: String) {
  */
 @Composable
 internal fun ReasonLine(meta: List<UiText>, onClick: () -> Unit) {
+    // 先在 composable 上下文里把每段求出来再拼：joinToString 的 transform 不是 inline，
+    // 在里面调 @Composable 的 text() 编译器不认（map 是 inline，可以）。
+    val line = meta.map { it.text() }.joinToString(" · ")
     TextButton(
         onClick = onClick,
         modifier = Modifier.heightIn(min = 48.dp),
         contentPadding = PaddingValues(horizontal = 0.dp),
     ) {
         Text(
-            text = meta.joinToString(" · ") { it.text() },
+            text = line,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
