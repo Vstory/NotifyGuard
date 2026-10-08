@@ -22,7 +22,7 @@
     <string name="home_stat_pass">Passed: %1$d</string>
     <string name="home_stat_scope">Groups: %1$d · events: %2$d</string>
     <string name="home_top_group">Top apps (blocked)</string>
-    <string name="home_top_empty">Nothing has been blocked in this window. Nothing is ever blocked while observe mode is on — turn it off in Settings to let verdicts take effect; otherwise check the framework log to confirm the verdict chain is running.</string>
+    <string name="home_top_empty">Nothing has been blocked in this window. Nothing is ever blocked while observe mode is on — in Settings, make sure verdicts are enabled and then turn observe mode off; otherwise check the framework log to confirm the verdict chain is running.</string>
     <string name="home_top_other">Other apps: %1$d · %2$d events</string>
     <string name="home_observe_group">Observe mode</string>
     <string name="home_observe_note">Observe mode is on: verdicts still run and are recorded, but nothing is blocked yet — the blocked count above stays 0 until you turn it off.</string>
@@ -132,12 +132,13 @@
     <string name="settings_block_note">Switches are delivered the moment they are flicked, the threshold on release — there is no Save button on this screen.</string>
     <string name="settings_enabled">Enable verdicts</string>
     <string name="settings_enabled_note">when off, the chain passes everything (records are still written)</string>
+    <string name="settings_judge_gated">Master switch is off: the verdict chain short-circuits at step 2 and every reason stays disabled, so the greyed-out rows neither take effect nor respond — turn the master switch on first.</string>
     <string name="settings_observe">Observe mode</string>
     <string name="settings_observe_note">record only, never block: verdicts still run and reason still shows the AI score and the matched rule</string>
     <string name="settings_ai_group">AI recognition</string>
     <string name="settings_spam">Detect spam notifications</string>
     <string name="settings_spam_note">on-device hashed n-gram + logistic regression, no network</string>
-    <string name="settings_threshold_note">A score ≥ the threshold blocks. The slider is greyed out while the switch above is off — the value takes no part in verdicts then. Lower is more aggressive; 0 blocks everything.</string>
+    <string name="settings_threshold_note">A score ≥ the threshold blocks. The slider is greyed out while the switch above or the master switch is off — the value takes no part in verdicts then. Lower is more aggressive; 0 blocks everything.</string>
     <string name="threshold_line">AI score threshold %1$s (%2$s)</string>
     <string name="threshold_line_no_config">AI score threshold: no live value read (framework service not connected)</string>
     <string name="threshold_note_ai_off">AI is off, so it has no effect</string>
