@@ -39,7 +39,8 @@
     <string name="learning_ai_note">点「为什么」看是哪些片段把分数推高的。高亮用的是与判定同一份权重；特征桶里只有权重、没有词表，所以只能落到片段、到不了词。</string>
     <string name="learning_ai_empty">当前没有带 AI 分数的记录。</string>
     <string name="learning_orphan_group">孤儿标注</string>
-    <string name="learning_orphan_note">已经不在记录窗口里的标注。它们仍会参与微调 —— 不再认可的就撤销。</string>
+    <string name="learning_orphan_note">已经不在记录窗口里的标注。它们仍会参与微调 —— 标反的改判，不再认可的就撤销。</string>
+    <string name="learning_orphan_flip_note">改判只翻这条样本的方向。通知已经离开窗口，所以这一条仍留在这里。</string>
     <string name="learning_orphan_empty">没有孤儿标注。</string>
     <string name="learning_score">分数 %1$s</string>
     <string name="learning_detail_show">为什么</string>
