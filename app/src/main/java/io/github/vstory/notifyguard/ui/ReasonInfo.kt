@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.ui
 
 import androidx.annotation.StringRes
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.judge.LogRecord
 import java.util.Locale
 
 /**
@@ -109,26 +110,56 @@ data class ReasonInfo(
 
 /** 判定链每条出口的文案槽位。 */
 enum class ReasonKind(@StringRes val shortRes: Int, @StringRes val whyRes: Int) {
-    BAD_ARGS(R.string.records_reason_short_bad_args, R.string.records_reason_why_bad_args),
-    DISABLED(R.string.records_reason_short_disabled, R.string.records_reason_why_disabled),
-    SELF_PKG(R.string.records_reason_short_self_pkg, R.string.records_reason_why_self_pkg),
-    GROUP_SUMMARY(R.string.records_reason_short_group_summary, R.string.records_reason_why_group_summary),
-    EMPTY_TEXT(R.string.records_reason_short_empty_text, R.string.records_reason_why_empty_text),
-    PROTECT(R.string.records_reason_short_protect, R.string.records_reason_why_protect),
-    RULE(R.string.records_reason_short_rule, R.string.records_reason_why_rule),
-    TEXT_TOO_SHORT(R.string.records_reason_short_text_too_short, R.string.records_reason_why_text_too_short),
-    HARD_WORD(R.string.records_reason_short_hard_word, R.string.records_reason_why_hard_word),
-    WHITELISTED(R.string.records_reason_short_whitelisted, R.string.records_reason_why_whitelisted),
-    AI_OFF(R.string.records_reason_short_ai_off, R.string.records_reason_why_ai_off),
-    NO_MODEL(R.string.records_reason_short_no_model, R.string.records_reason_why_no_model),
-    AI_ERROR(R.string.records_reason_short_ai_error, R.string.records_reason_why_ai_error),
-    AI_HIT(R.string.records_reason_short_ai_hit, R.string.records_reason_why_ai_hit),
-    BELOW_THRESHOLD(R.string.records_reason_short_below_threshold, R.string.records_reason_why_below_threshold),
-    UNKNOWN(R.string.records_reason_short_unknown, R.string.records_reason_why_unknown),
+    BAD_ARGS(R.string.reason_short_bad_args, R.string.reason_why_bad_args),
+    DISABLED(R.string.reason_short_disabled, R.string.reason_why_disabled),
+    SELF_PKG(R.string.reason_short_self_pkg, R.string.reason_why_self_pkg),
+    GROUP_SUMMARY(R.string.reason_short_group_summary, R.string.reason_why_group_summary),
+    EMPTY_TEXT(R.string.reason_short_empty_text, R.string.reason_why_empty_text),
+    PROTECT(R.string.reason_short_protect, R.string.reason_why_protect),
+    RULE(R.string.reason_short_rule, R.string.reason_why_rule),
+    TEXT_TOO_SHORT(R.string.reason_short_text_too_short, R.string.reason_why_text_too_short),
+    HARD_WORD(R.string.reason_short_hard_word, R.string.reason_why_hard_word),
+    WHITELISTED(R.string.reason_short_whitelisted, R.string.reason_why_whitelisted),
+    AI_OFF(R.string.reason_short_ai_off, R.string.reason_why_ai_off),
+    NO_MODEL(R.string.reason_short_no_model, R.string.reason_why_no_model),
+    AI_ERROR(R.string.reason_short_ai_error, R.string.reason_why_ai_error),
+    AI_HIT(R.string.reason_short_ai_hit, R.string.reason_why_ai_hit),
+    BELOW_THRESHOLD(R.string.reason_short_below_threshold, R.string.reason_why_below_threshold),
+    UNKNOWN(R.string.reason_short_unknown, R.string.reason_why_unknown),
 }
 
 /**
- * 判定槽 → 文案（设置页与记录页共用，同一概念在两屏必须是同一句话）。
+ * 点开某条记录的判定元数据时给出的说明：原因 + 判定槽。
+ *
+ * 记录屏与学习屏共用一份：同一条记录在两屏点开必须是同一段话（两处各写一遍，改文案只改到一处时，
+ * 另一屏就成了假话）。
+ */
+data class ReasonExplanation(
+    val reason: ReasonInfo,
+    /** 判定槽的原始枚举名；`null` = 记录没带。 */
+    val slot: String?,
+) {
+    companion object {
+
+        fun of(r: LogRecord): ReasonExplanation =
+            ReasonExplanation(ReasonInfo.of(r.reason, r.score, r.ruleId), r.slot)
+
+        /**
+         * 行内那行元数据：原因短语 + 判定槽（槽位与设置页同一套文案）。
+         *
+         * 原始技术串不在这儿 —— 这行是给用户读的，解释与原文都在 [of] 给出的那份说明里。
+         */
+        fun meta(r: LogRecord): List<UiText> = listOfNotNull(
+            // 规则 id 由原因短语自带（`命中规则：xx`），不另列一份 —— 早先 reason 是 `rule:xx`、
+            // ruleId 又是 `xx`，那行会把它说两遍
+            ReasonInfo.of(r.reason, r.score, r.ruleId).short,
+            r.slot?.let(::slotLabel),
+        )
+    }
+}
+
+/**
+ * 判定槽 → 文案（设置页与记录屏共用，同一概念在两屏必须是同一句话）。
  *
  * 认不出的槽值给原文而不是「未知」：那是个可拿去对日志的枚举名，抹掉等于把线索扔掉。
  */

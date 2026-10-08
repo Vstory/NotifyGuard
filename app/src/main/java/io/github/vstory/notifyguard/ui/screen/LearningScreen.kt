@@ -98,6 +98,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
                 PendingCard(
                     state = state,
                     onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
+                    onExplain = { viewModel.askExplain(it) },
                 )
             }
             item {
@@ -106,6 +107,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
                     onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
                     onUndo = { viewModel.undo(ctx, it) },
                     onToggle = { viewModel.toggleDetail(it) },
+                    onExplain = { viewModel.askExplain(it) },
                 )
             }
             item {
@@ -116,6 +118,11 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
                 )
             }
         }
+    }
+
+    // 判定说明与记录屏同一份：同一条记录在两屏点开必须是同一段话
+    state.explanation?.let { ex ->
+        ReasonDialog(ex, viewModel::dismissExplain)
     }
 }
 
@@ -156,7 +163,11 @@ private fun FitCard(state: LearningViewModel.UiState) {
  * 这里只给「标垃圾 / 标正常」两个动作、不给撤销：按构造这些条必然未标注，撤销没有对象。
  */
 @Composable
-private fun PendingCard(state: LearningViewModel.UiState, onMark: (String, Boolean) -> Unit) {
+private fun PendingCard(
+    state: LearningViewModel.UiState,
+    onMark: (String, Boolean) -> Unit,
+    onExplain: (String) -> Unit,
+) {
     GroupCard(stringResource(R.string.learning_pending_group)) {
         Note(stringResource(R.string.learning_pending_note))
         if (state.pending.isEmpty()) {
@@ -169,7 +180,7 @@ private fun PendingCard(state: LearningViewModel.UiState, onMark: (String, Boole
                         .padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    RowBody(row)
+                    RowBody(row, onExplain)
                     MarkActions(row.key, row.marked, state.busy, undoable = false, onMark = onMark, onUndo = { _ -> })
                 }
             }
@@ -184,6 +195,7 @@ private fun AiCard(
     onMark: (String, Boolean) -> Unit,
     onUndo: (String) -> Unit,
     onToggle: (String) -> Unit,
+    onExplain: (String) -> Unit,
 ) {
     GroupCard(stringResource(R.string.learning_ai_group)) {
         Note(stringResource(R.string.learning_ai_note))
@@ -198,7 +210,7 @@ private fun AiCard(
                         .padding(top = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    RowBody(row)
+                    RowBody(row, onExplain)
                     if (open) {
                         DetailBlock(row, state.detail)
                     }
@@ -308,9 +320,14 @@ private fun RowHead(time: String, verdict: Verdict?, marked: Boolean?) {
     }
 }
 
-/** 行的公共部分：头行 + 包名 + 文本 + 判定串与分数。 */
+/**
+ * 行的公共部分：头行 + 包名 + 文本 + 判定元数据。
+ *
+ * 那行元数据与它的弹窗由 [ReasonLine] / [ReasonDialog] 提供（记录屏用同一份）：分数、规则 id 都已在
+ * 短语里，紧挨着再写一行「分数 0.87」是同一个数说两遍。
+ */
 @Composable
-private fun RowBody(row: LearningViewModel.Row) {
+private fun RowBody(row: LearningViewModel.Row, onExplain: (String) -> Unit) {
     RowHead(row.time, row.verdict, row.marked)
     Text(
         text = row.pkg,
@@ -331,19 +348,7 @@ private fun RowBody(row: LearningViewModel.Row) {
             Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
     }
-    Text(
-        text = row.reason,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    // 分数单独取 score 字段而不是解析 reason：reason 里只有两位小数，是给日志看的技术串
-    row.score?.let {
-        Text(
-            text = stringResource(R.string.learning_score, "%.2f".format(it)),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    ReasonLine(row.meta) { onExplain(row.key) }
 }
 
 /**

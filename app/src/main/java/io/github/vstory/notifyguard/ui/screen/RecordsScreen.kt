@@ -1,6 +1,5 @@
 package io.github.vstory.notifyguard.ui.screen
 
-import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -10,12 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -44,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,16 +51,17 @@ import io.github.vstory.notifyguard.ui.text
  * 记录屏（M4）：模块端回流记录的展示 + 就地标注。
  *
  * 每行底部的判定元数据（M4k）出人话、点开给解释：早先直贴 `reason · ruleId · slot` 三段技术串，
- * 看不懂「这条为什么没被判」。原始串只留一份在弹窗里，排障仍对得上框架日志。
+ * 看不懂「这条为什么没被判」。原始串只留一份在弹窗里，排障仍对得上框架日志（那行与弹窗由
+ * [ReasonLine] / [ReasonDialog] 提供，学习屏用同一份）。
+ *
+ * 档位（全部 / 拦截 / 建议拦截 / 放行）记在 [RecordsFilterMemory] 里：本屏的 ViewModel 会随导航被
+ * 销毁，档位不能跟着丢。首页点统计行跳进来时走那条一次性通道，不会改掉「上次用的档」。
  *
  * 行不做折叠、屏上不做筛选：观察模式下标定阈值要的是「一屏看全每条的判定与分数」。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecordsScreen(
-    initialFilter: RecordsViewModel.Filter = RecordsViewModel.Filter.All,
-    viewModel: RecordsViewModel = viewModel(),
-) {
+fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
     val ctx = LocalContext.current.applicationContext
     val state = viewModel.state
     val snackbar = remember { SnackbarHostState() }
@@ -73,8 +69,6 @@ fun RecordsScreen(
 
     // 进屏拉一次（切回本屏也算进屏）；超时不重试，刷新入口就在顶栏
     LaunchedEffect(Unit) { viewModel.refresh(ctx) }
-    // 导航带进来的筛选只在**参数变化**时套用：套在每次重组上会把用户手动切的档当场拨回去
-    LaunchedEffect(initialFilter) { viewModel.setFilter(ctx, initialFilter) }
     // 文案必须在 Composable 上下文里解析：LaunchedEffect 的 block 不是 @Composable，
     // 里面调不了 stringResource
     val notice = state.notice
@@ -183,40 +177,7 @@ fun RecordsScreen(
     }
 
     state.explanation?.let { ex ->
-        AlertDialog(
-            onDismissRequest = { viewModel.dismissExplain() },
-            title = { Text(ex.reason.short.text()) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(ex.reason.why.text(), style = MaterialTheme.typography.bodyMedium)
-                    // 可读化不替代排障：这一行的原文与它的人话并排，出问题时两边都要能拿到
-                    RawLine(R.string.records_reason_raw_reason, ex.reason.raw)
-                    ex.slot?.let { RawLine(R.string.records_reason_raw_slot, it) }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.dismissExplain() }) {
-                    Text(stringResource(R.string.records_reason_close))
-                }
-            },
-        )
-    }
-}
-
-/** 「标签 + 等宽原文」一行。等宽是为了让技术串一眼认出不是给人读的话。 */
-@Composable
-private fun RawLine(@StringRes label: Int, value: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = stringResource(label),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelSmall,
-            fontFamily = FontFamily.Monospace,
-        )
+        ReasonDialog(ex, viewModel::dismissExplain)
     }
 }
 
@@ -327,7 +288,6 @@ private fun RecordCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val meta = row.meta.joinToString(" · ") { it.text() }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -382,26 +342,7 @@ private fun RecordCard(
             }
             // 这行原本直接贴模块端的技术串（`disabled · EXT_SLOT`），看不懂只能去翻代码。
             // 现在出人话、点开给解释；原始串挪进弹窗，排障时仍能与框架日志对上
-            TextButton(
-                onClick = onExplain,
-                modifier = Modifier.heightIn(min = 48.dp),
-                contentPadding = PaddingValues(horizontal = 0.dp),
-            ) {
-                Text(
-                    text = meta,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Spacer(Modifier.width(4.dp))
-                // 图标承担「这儿能点」的提示：这行是小字元数据，用 primary 色会跟卡里那三个
-                // 真动作（标垃圾 / 标正常 / 撤销）抢层级
-                Icon(
-                    imageVector = Icons.Filled.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.secondary,
-                )
-            }
+            ReasonLine(row.meta, onExplain)
             // 三个动作对已标注状态互斥收敛：已标垃圾时「标垃圾」置灰，免得按出一串同义指令。
             // 在途（busy）时全部置灰：连点会并发发出多条指令，而先到的回执会盖掉后点那次的状态
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

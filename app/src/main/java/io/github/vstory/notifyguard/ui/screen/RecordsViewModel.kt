@@ -15,8 +15,7 @@ import io.github.vstory.notifyguard.sync.DeltaFitter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
 import io.github.vstory.notifyguard.ui.UiText
-import io.github.vstory.notifyguard.ui.ReasonInfo
-import io.github.vstory.notifyguard.ui.slotLabel
+import io.github.vstory.notifyguard.ui.ReasonExplanation
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -44,7 +43,7 @@ class RecordsViewModel : ViewModel() {
         val fetchError: UiText? = null,
         val labelCount: Int = 0,
         val labelError: UiText? = null,
-        /** 当前筛选档。 */
+        /** 当前筛选档；进屏取哪一档由 [RecordsFilterMemory] 决定。 */
         val filter: Filter = Filter.All,
         /**
          * 当前档在**整个记录窗口**里的命中组数，可能大于 [rows] 的条数。
@@ -60,36 +59,23 @@ class RecordsViewModel : ViewModel() {
         /** 非空即弹二次确认，值是点下去那一刻的标注条数。 */
         val confirmClearLabels: Int? = null,
         /** 非空即弹某条记录的判定说明。 */
-        val explanation: Explanation? = null,
+        val explanation: ReasonExplanation? = null,
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次（连标两条）也要各弹一次。 */
     data class Notice(val id: Long, val text: UiText)
 
-    /** 点开底部那行时弹出的说明。原始串一并带着：可读化之后仍要能对上框架日志。 */
-    data class Explanation(
-        val reason: ReasonInfo,
-        /** 判定槽的原始枚举名；`null` = 记录没带。 */
-        val slot: String?,
-    )
-
     /**
-     * 判定筛选档。`arg` 是导航参数与 route 的值，取稳定小写串 —— 枚举名是要改的，导航标识不是。
+     * 判定筛选档。
      *
-     * 段内标签刻意用短词（`拦截` / `本应拦` / `放行`）：四段并排在手机宽度上放不下全称，
+     * 段内标签刻意用短词（`拦截` / `建议拦截` / `放行`）：四段并排在手机宽度上放不下全称，
      * 全称由状态卡的命中行给出。
      */
-    enum class Filter(val arg: String, @StringRes val labelRes: Int) {
-        All("all", R.string.records_filter_all),
-        Block("block", R.string.records_filter_block),
-        Would("would", R.string.records_filter_would),
-        Pass("pass", R.string.records_filter_pass);
-
-        companion object {
-
-            /** 认不出的参数退「全部」：导航参数是外部输入，坏值时给一个确定的档而不是空屏。 */
-            fun of(arg: String?): Filter = entries.firstOrNull { it.arg == arg } ?: All
-        }
+    enum class Filter(@StringRes val labelRes: Int) {
+        All(R.string.records_filter_all),
+        Block(R.string.records_filter_block),
+        Would(R.string.records_filter_would),
+        Pass(R.string.records_filter_pass),
     }
 
     /**
@@ -114,7 +100,11 @@ class RecordsViewModel : ViewModel() {
         val marked: Boolean?,
     )
 
-    var state by mutableStateOf(UiState())
+    /**
+     * 档位取 [RecordsFilterMemory]，而不是 [UiState] 的默认值：本 ViewModel 会随导航被销毁（从别的
+     * 板块切回记录屏就是一次重建），每次重建都算一次进屏，档位要跟着回来。
+     */
+    var state by mutableStateOf(UiState(filter = RecordsFilterMemory.take()))
         private set
 
     /** 标注动作要拿原始记录去构造 [LabelRecord]，而界面只持 [RecordRow.key]。 */
@@ -143,6 +133,8 @@ class RecordsViewModel : ViewModel() {
 
     fun setFilter(ctx: Context, filter: Filter) {
         if (state.filter == filter) return
+        // 用户手动切的档才是「上次使用的栏位」：顺手把首页那次定向请求清掉，否则它下次进屏还会生效
+        RecordsFilterMemory.remember(filter)
         state = state.copy(filter = filter)
         repaint(ctx.applicationContext ?: ctx)
     }
@@ -170,9 +162,7 @@ class RecordsViewModel : ViewModel() {
     /** 点开底部那行：讲清这条为什么没被判定（带参的那几档用记录里的结构字段，不抠串）。 */
     fun askExplain(key: String) {
         val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
-        state = state.copy(
-            explanation = Explanation(ReasonInfo.of(r.reason, r.score, r.ruleId), r.slot),
-        )
+        state = state.copy(explanation = ReasonExplanation.of(r))
     }
 
     fun dismissExplain() {
@@ -277,12 +267,8 @@ class RecordsViewModel : ViewModel() {
         pkg = r.pkg,
         title = r.title,
         text = r.text,
-        // 规则 id 由原因短语自带（`命中规则：xx`），不另列一份 —— 早先 reason 是 `rule:xx`、
-        // ruleId 又是 `xx`，那行会把它说两遍
-        meta = listOfNotNull(
-            ReasonInfo.of(r.reason, r.score, r.ruleId).short,
-            r.slot?.let { slotLabel(it) },
-        ),
+        // 规则 id 与槽位的人话由共用件给出（学习屏同一份），界面只管画
+        meta = ReasonExplanation.meta(r),
         marked = marked,
     )
 

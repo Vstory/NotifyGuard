@@ -48,7 +48,7 @@ class RecordsViewModelTest {
         assertEquals(rs.size, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All).size)
     }
 
-    /** 观察模式下 `would=true, block=false`：它属「本应拦」，不许同时落进「拦截」。 */
+    /** 观察模式下 `would=true, block=false`：它属「建议拦截」，不许同时落进「拦截」。 */
     @Test
     fun wouldBlockIsNotCountedAsBlocked() {
         val rs = listOf(record(1, would = true), record(2, would = true, block = true))
@@ -79,12 +79,47 @@ class RecordsViewModelTest {
         assertEquals(listOf(1L, 3L, 2L), RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All).map { it.ts })
     }
 
-    /** 认不出的导航参数退「全部」：坏值时给一个确定的档，而不是空屏。 */
+    /**
+     * 切屏不丢档：从别的板块切回记录屏，取的是上次用的那档。
+     *
+     * ViewModel 在切屏时被销毁、进屏时重建，所以「每次重建取一次」就是「切回来还是那档」。
+     */
     @Test
-    fun unknownFilterArgumentFallsBackToAll() {
-        assertEquals(RecordsViewModel.Filter.All, RecordsViewModel.Filter.of(null))
-        assertEquals(RecordsViewModel.Filter.All, RecordsViewModel.Filter.of("nonsense"))
-        assertEquals(RecordsViewModel.Filter.Block, RecordsViewModel.Filter.of("block"))
+    fun rememberedFilterSurvivesReentry() {
+        RecordsFilterMemory.reset()
+        RecordsFilterMemory.remember(RecordsViewModel.Filter.Pass)
+
+        assertEquals(RecordsViewModel.Filter.Pass, RecordsFilterMemory.take())
+        assertEquals(RecordsViewModel.Filter.Pass, RecordsFilterMemory.take())
+    }
+
+    /** 进程刚起来时是「全部」：档位记忆不做持久化。 */
+    @Test
+    fun freshProcessStartsAtAll() {
+        RecordsFilterMemory.reset()
+
+        assertEquals(RecordsViewModel.Filter.All, RecordsFilterMemory.take())
+    }
+
+    /** 首页的定向跳转是临时查看：本次进屏用它，但它不成为「上次用的档」。 */
+    @Test
+    fun homeJumpAppliesOnceAndIsNotRemembered() {
+        RecordsFilterMemory.reset()
+        RecordsFilterMemory.remember(RecordsViewModel.Filter.Pass)
+        RecordsFilterMemory.request(RecordsViewModel.Filter.Block)
+
+        assertEquals(RecordsViewModel.Filter.Block, RecordsFilterMemory.take())
+        assertEquals(RecordsViewModel.Filter.Pass, RecordsFilterMemory.take())
+    }
+
+    /** 用户手动切档压掉残留的定向请求：否则下次进屏又被送回首页那个档。 */
+    @Test
+    fun manualSelectionOverridesAPendingRequest() {
+        RecordsFilterMemory.reset()
+        RecordsFilterMemory.request(RecordsViewModel.Filter.Block)
+        RecordsFilterMemory.remember(RecordsViewModel.Filter.Would)
+
+        assertEquals(RecordsViewModel.Filter.Would, RecordsFilterMemory.take())
     }
 
     /** 判定由 `block` / `would` 派生，与筛选口径同源。 */

@@ -39,7 +39,7 @@ import io.github.vstory.notifyguard.ui.text
  * 已经有一套的生效值口径，两处各有一套时分歧的表现是「首页显示开着、判定却按关着跑」。
  *
  * 判定分布按三类展示而不是只报「已拦截」：观察模式下 `block` 恒为 false，只报 0 会让用户以为
- * 模块没工作，而此时真正有意义的是「本应被拦」。
+ * 模块没工作，而此时真正有意义的是「建议拦截」。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
