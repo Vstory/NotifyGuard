@@ -26,7 +26,33 @@
     <string name="home_top_other">Other apps: %1$d · %2$d events</string>
     <string name="home_observe_group">Observe mode</string>
     <string name="home_observe_note">Observe mode is on: verdicts still run and are recorded, but nothing is blocked yet — the blocked count above stays 0 until you turn it off.</string>
-    <string name="learning_plan">Planned: labelled set and fit status (threshold, delta version, delivery result), plus false-positive review.</string>
+    <!-- Learning screen -->
+    <string name="learning_title">Learning</string>
+    <string name="learning_refresh">Refresh learning data</string>
+    <string name="learning_fit_group">Fine-tuning status</string>
+    <string name="learning_fit_note">The sample counts below are the ones fine-tuning really uses — a label whose text yields no feature is not counted, so they can be lower than the label total.</string>
+    <string name="learning_labels_line">Labels: %1$d (kept even after a record leaves the window)</string>
+    <string name="learning_pending_group">To review: blocked, not labelled</string>
+    <string name="learning_pending_note">Read the text first: marking a false positive ham is what teaches the model not to block it again.</string>
+    <string name="learning_pending_empty">Nothing was blocked without a label.</string>
+    <string name="learning_ai_group">Records with an AI score</string>
+    <string name="learning_ai_note">Tap Why to see which fragments pushed the score up. The highlight uses the very weights the verdict used, and the feature buckets hold weights with no word list — so it can point at fragments, never at words.</string>
+    <string name="learning_ai_empty">No record carries an AI score right now.</string>
+    <string name="learning_orphan_group">Orphan labels</string>
+    <string name="learning_orphan_note">Labelled notifications that have left the record window. They still feed fine-tuning — undo the ones you no longer stand by.</string>
+    <string name="learning_orphan_empty">No orphan label.</string>
+    <string name="learning_score">Score %1$s</string>
+    <string name="learning_detail_show">Why</string>
+    <string name="learning_detail_hide">Collapse</string>
+    <string name="learning_detail_computing">Attributing…</string>
+    <string name="learning_detail_no_text">This record predates the verdict-text field, so there is nothing to highlight.</string>
+    <string name="learning_detail_no_model">The built-in model cannot be read, so there are no weights to attribute with.</string>
+    <string name="learning_detail_tuned">Weights: the built-in model plus the delivered fine-tuning.</string>
+    <string name="learning_detail_base_only">The delivered fine-tuning could not be read, so this is attributed with the built-in model alone and may differ from what actually blocked the notification.</string>
+    <string name="learning_detail_no_features">This text yields no feature at all (nothing but digits or symbols), so there is nothing to attribute.</string>
+    <string name="learning_detail_unmappable">The text cannot be mapped back onto the original characters, so no highlight is drawn.</string>
+    <string name="learning_detail_no_span">No fragment of this text stands out.</string>
+    <string name="learning_detail_span_note">Highlighted: the fragments that pushed the score up most (relative to this notification\'s own peak).</string>
 
     <string name="service_checking">Framework service: checking…</string>
     <string name="service_connected">Framework service: %1$s %2$s</string>

@@ -105,6 +105,12 @@ object DeltaFitter {
      */
     fun baseFingerprint(): Int = bundledBase()?.fingerprint ?: 0
 
+    /**
+     * 内置 base 的共享快照。学习屏的贡献归因要用它（归因的权重必须与判定同源），
+     * 而这层已经持有唯一一份解析结果 —— 别在界面侧再解析一遍 262 KB。
+     */
+    fun baseModel(): SpamModel? = bundledBase()
+
     private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
