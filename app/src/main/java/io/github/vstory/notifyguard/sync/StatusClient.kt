@@ -7,6 +7,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import io.github.vstory.notifyguard.BuildConfig
+import io.github.vstory.notifyguard.core.AppLogger
 
 /**
  * App 侧状态拉取器：发 [StatusContract.ACTION_GET_STATUS]（或清除熔断）→ 收模块端回传。
@@ -31,6 +33,8 @@ object StatusClient {
         val handler = Handler(Looper.getMainLooper())
         var finished = false
         var receiver: BroadcastReceiver? = null
+        var sentAt = 0L
+        val what = action.substringAfterLast('.')
 
         val finish: (StatusReport?) -> Unit = { report ->
             if (!finished) {
@@ -45,6 +49,9 @@ object StatusClient {
             override fun onReceive(c: Context?, intent: Intent?) {
                 if (finished) return
                 val json = intent?.getStringExtra(StatusContract.EXTRA_STATUS) ?: return
+                if (BuildConfig.DEBUG) {
+                    AppLogger.debugRaw("[DBG] 状态：$what 收到回执 往返=${System.currentTimeMillis() - sentAt}ms")
+                }
                 finish(StatusCodec.decode(json))
             }
         }
@@ -64,8 +71,15 @@ object StatusClient {
             return
         }
 
-        handler.postDelayed({ finish(null) }, TIMEOUT_MS)
+        handler.postDelayed({
+            if (BuildConfig.DEBUG) {
+                AppLogger.debugRaw("[DBG] 状态：$what 等 ${TIMEOUT_MS}ms 无回执 ⇒ 超时（界面按「未响应」渲染）")
+            }
+            finish(null)
+        }, TIMEOUT_MS)
         // 不能 setPackage：system_server 里的 receiver 不属于任何包，定向投递永远收不到
+        sentAt = System.currentTimeMillis()
+        if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 状态：发出 $what")
         ctx.sendBroadcast(Intent(action))
     }
 }

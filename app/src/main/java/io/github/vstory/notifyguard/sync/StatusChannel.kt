@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
+import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.ai.DeltaHolder
 import io.github.vstory.notifyguard.ai.ModelHolder
 import io.github.vstory.notifyguard.core.CrashGuard
@@ -40,6 +41,10 @@ object StatusChannel {
                 if (!ChannelAccess.isFromApp(c)) {
                     ModuleLogger.error("状态通道拒绝了非本模块的调用（uid=${Binder.getCallingUid()}，action=$action）")
                     return
+                }
+                // 指令名取自 action 末段：App 侧也打同一段名字，两端日志能直接对上
+                if (BuildConfig.DEBUG) {
+                    ModuleLogger.debugRaw("[DBG] 状态通道：收到 ${action.substringAfterLast('.')}")
                 }
                 when (action) {
                     StatusContract.ACTION_GET_STATUS -> worker.execute { reply(c) }
