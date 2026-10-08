@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-# TEMPLATE_VERSION=1.1.0    # 基于模板的版本（合并模板更新后升到模板版；勿删）
-# SCRIPT_VERSION=1.0.1      # 项目侧迭代（复制后随定制改动 bump，初始=模板版）
+# TEMPLATE_VERSION=1.1.1    # 模板版本号（模板内容变更时 bump；勿删）
+# SCRIPT_VERSION=1.0.2      # 项目侧迭代（复制后随定制改动 bump，初始=模板版）
 # =============================================================
 # check_string_format_args.py — 字符串资源格式化参数核对（Android / Gradle 工程通用）
 #
-# 定位：跨语言共享脚本。母版在知识库 dev-guide/工程模板/，项目 scripts/ 下是副本
+# 定位：跨语言共享脚本。母版在知识库 100_System/templates/，项目 scripts/ 下是副本
 #       （脚手架自动复制，复制后追加 SCRIPT_VERSION）。同步：对比两处 TEMPLATE_VERSION；
 #       母版更高就整体覆盖，并把 TEMPLATE_VERSION 升到母版版、SCRIPT_VERSION +1 ——
 #       项目定制优先走命令行参数（--call / --src / --res / --strict），尽量零定制。
