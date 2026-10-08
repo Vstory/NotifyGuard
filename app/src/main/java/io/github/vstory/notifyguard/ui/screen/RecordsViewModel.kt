@@ -15,6 +15,8 @@ import io.github.vstory.notifyguard.sync.DeltaFitter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
 import io.github.vstory.notifyguard.ui.UiText
+import io.github.vstory.notifyguard.ui.ReasonInfo
+import io.github.vstory.notifyguard.ui.slotLabel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -57,10 +59,19 @@ class RecordsViewModel : ViewModel() {
         val notice: Notice? = null,
         /** 非空即弹二次确认，值是点下去那一刻的标注条数。 */
         val confirmClearLabels: Int? = null,
+        /** 非空即弹某条记录的判定说明。 */
+        val explanation: Explanation? = null,
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次（连标两条）也要各弹一次。 */
     data class Notice(val id: Long, val text: UiText)
+
+    /** 点开底部那行时弹出的说明。原始串一并带着：可读化之后仍要能对上框架日志。 */
+    data class Explanation(
+        val reason: ReasonInfo,
+        /** 判定槽的原始枚举名；`null` = 记录没带。 */
+        val slot: String?,
+    )
 
     /**
      * 判定筛选档。`arg` 是导航参数与 route 的值，取稳定小写串 —— 枚举名是要改的，导航标识不是。
@@ -82,7 +93,7 @@ class RecordsViewModel : ViewModel() {
     }
 
     /**
-     * 界面直接渲染的一行。展示用的量（时间串、判定、原因拼接）在这里算好 ——
+     * 界面直接渲染的一行。展示用的量（时间串、判定、原因短语）在这里算好 ——
      * 界面只管画，也免得「同一份拼接逻辑在界面里再写一遍」。
      */
     data class RecordRow(
@@ -93,8 +104,12 @@ class RecordsViewModel : ViewModel() {
         val pkg: String,
         val title: String?,
         val text: String?,
-        /** 模块端回传的技术串（`ai:0.87` 这类），不翻译。 */
-        val reason: String,
+        /**
+         * 底部那行：原因短语与判定槽（都是人话，槽位与设置页同一套文案）。
+         *
+         * 原始技术串不在这儿 —— 这行是给用户读的，解释与原文都在 [Explanation] 里。
+         */
+        val meta: List<UiText>,
         /** `null` = 未标注。 */
         val marked: Boolean?,
     )
@@ -150,6 +165,18 @@ class RecordsViewModel : ViewModel() {
 
     fun dismissClearLabels() {
         state = state.copy(confirmClearLabels = null)
+    }
+
+    /** 点开底部那行：讲清这条为什么没被判定（带参的那几档用记录里的结构字段，不抠串）。 */
+    fun askExplain(key: String) {
+        val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
+        state = state.copy(
+            explanation = Explanation(ReasonInfo.of(r.reason, r.score, r.ruleId), r.slot),
+        )
+    }
+
+    fun dismissExplain() {
+        state = state.copy(explanation = null)
     }
 
     fun clearLabels(ctx: Context) {
@@ -250,7 +277,12 @@ class RecordsViewModel : ViewModel() {
         pkg = r.pkg,
         title = r.title,
         text = r.text,
-        reason = listOfNotNull(r.reason, r.ruleId, r.slot).joinToString(" · "),
+        // 规则 id 由原因短语自带（`命中规则：xx`），不另列一份 —— 早先 reason 是 `rule:xx`、
+        // ruleId 又是 `xx`，那行会把它说两遍
+        meta = listOfNotNull(
+            ReasonInfo.of(r.reason, r.score, r.ruleId).short,
+            r.slot?.let { slotLabel(it) },
+        ),
         marked = marked,
     )
 
