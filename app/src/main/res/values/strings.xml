@@ -21,6 +21,7 @@
     <string name="home_stat_would">Would have been blocked (observe mode): %1$d</string>
     <string name="home_stat_pass">Passed: %1$d</string>
     <string name="home_stat_scope">Groups: %1$d · events: %2$d</string>
+    <string name="home_stats_tap_hint">Tap a row to open Records filtered to just that verdict.</string>
     <string name="home_top_group">Top apps (blocked)</string>
     <string name="home_top_empty">Nothing has been blocked in this window. Nothing is ever blocked while observe mode is on — in Settings, make sure verdicts are enabled and then turn observe mode off; otherwise check the framework log to confirm the verdict chain is running.</string>
     <string name="home_top_other">Other apps: %1$d · %2$d events</string>
@@ -69,7 +70,13 @@
     <string name="records_clear_labels_body">%1$d labels will be deleted and cannot be restored. The model then falls back to the built-in one, and scores change back immediately.</string>
     <string name="records_clear_labels_confirm">Clear</string>
     <string name="records_clear_labels_cancel">Cancel</string>
-    <string name="records_summary">Groups: %1$d · events: %2$d (cap: %3$d groups); showing the latest %4$d. The module side holds the authoritative copy.</string>
+    <string name="records_summary">Groups: %1$d · events: %2$d (cap: %3$d groups). The module side holds the authoritative copy.</string>
+    <string name="records_filter_all">All</string>
+    <string name="records_filter_block">Blocked</string>
+    <string name="records_filter_would">Would block</string>
+    <string name="records_filter_pass">Passed</string>
+    <string name="records_filter_hit">%1$d groups in this filter (counted over the whole records window); showing the latest %2$d</string>
+    <string name="records_filter_empty">Nothing in this filter — the window holds no entry with that verdict. Whether the verdict chain is running is in the framework log; switch back to All to see the passed ones.</string>
     <string name="records_fetching">Pulling from the module side…</string>
     <string name="records_label_summary">Labels: %1$d · the authoritative copy is labels.json on the module side (it survives an app reinstall, just like records)</string>
     <string name="records_fit_pending">Fine-tuning: not pulled yet</string>

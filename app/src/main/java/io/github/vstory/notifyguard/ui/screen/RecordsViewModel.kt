@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import android.content.Context
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -41,6 +42,15 @@ class RecordsViewModel : ViewModel() {
         val fetchError: UiText? = null,
         val labelCount: Int = 0,
         val labelError: UiText? = null,
+        /** 当前筛选档。 */
+        val filter: Filter = Filter.All,
+        /**
+         * 当前档在**整个记录窗口**里的命中组数，可能大于 [rows] 的条数。
+         *
+         * 与 [rows] 分开：只报行数会把窗口口径说小（用户以为被拦的只有屏上这几条），
+         * 只报命中数又会让人以为界面丢了行。
+         */
+        val matched: Int = 0,
         /** 拟合状态；null = 还没拉过（界面显示「尚未拉取」而不是「未下发」）。 */
         val fit: DeltaFitter.State? = null,
         val busy: Boolean = false,
@@ -52,7 +62,24 @@ class RecordsViewModel : ViewModel() {
     /** 一次性提示。带自增 id：同一条文案连发两次（连标两条）也要各弹一次。 */
     data class Notice(val id: Long, val text: UiText)
 
-    enum class Verdict { Block, Would, Pass }
+    /**
+     * 判定筛选档。`arg` 是导航参数与 route 的值，取稳定小写串 —— 枚举名是要改的，导航标识不是。
+     *
+     * 段内标签刻意用短词（`拦截` / `本应拦` / `放行`）：四段并排在手机宽度上放不下全称，
+     * 全称由状态卡的命中行给出。
+     */
+    enum class Filter(val arg: String, @StringRes val labelRes: Int) {
+        All("all", R.string.records_filter_all),
+        Block("block", R.string.records_filter_block),
+        Would("would", R.string.records_filter_would),
+        Pass("pass", R.string.records_filter_pass);
+
+        companion object {
+
+            /** 认不出的参数退「全部」：导航参数是外部输入，坏值时给一个确定的档而不是空屏。 */
+            fun of(arg: String?): Filter = entries.firstOrNull { it.arg == arg } ?: All
+        }
+    }
 
     /**
      * 界面直接渲染的一行。展示用的量（时间串、判定、原因拼接）在这里算好 ——
@@ -97,6 +124,12 @@ class RecordsViewModel : ViewModel() {
             )
             repaint(app)
         }
+    }
+
+    fun setFilter(ctx: Context, filter: Filter) {
+        if (state.filter == filter) return
+        state = state.copy(filter = filter)
+        repaint(ctx.applicationContext ?: ctx)
     }
 
     fun clearRecords(ctx: Context) {
@@ -194,12 +227,16 @@ class RecordsViewModel : ViewModel() {
 
     private fun repaint(ctx: Context) {
         val store = LogStore.get(ctx)
-        records = store.recent(RECENT_LIMIT)
-        val marks = LabelRecord.marksOf(records, LabelStore.get(ctx).all())
+        val all = store.all()
+        // 标注索引按全窗口算：筛选档变了要重新截列表，索引在两处各算一遍就会漏掉被筛掉那批记录上的标注
+        val marks = LabelRecord.marksOf(all, LabelStore.get(ctx).all())
+        val hit = filteredOf(all, state.filter)
+        records = hit.take(LIST_LIMIT)
         state = state.copy(
             groups = store.size(),
             rawCount = store.rawCount(),
             labelCount = LabelStore.get(ctx).size(),
+            matched = hit.size,
             rows = records.map { row(it, marks[LabelRecord.keyOf(it)]) },
         )
     }
@@ -208,11 +245,7 @@ class RecordsViewModel : ViewModel() {
         key = LabelRecord.keyOf(r),
         // 一条记录是一组通知：时间取最近一次，首见时间对用户没有意义
         time = TIME.format(Date(r.lastTs)),
-        verdict = when {
-            r.block -> Verdict.Block
-            r.would -> Verdict.Would
-            else -> Verdict.Pass
-        },
+        verdict = Verdict.of(r),
         count = r.count,
         pkg = r.pkg,
         title = r.title,
@@ -227,11 +260,31 @@ class RecordsViewModel : ViewModel() {
 
     companion object {
 
-        /** 列表上限：聚合后一组的信息量远大于一条，20 组足够覆盖「刚才发生了什么」。 */
-        const val RECENT_LIMIT = 20
+        /**
+         * 每档在屏上列出的上限。筛选**先作用于整个窗口**再截到这里，所以命中数可以大于它。
+         *
+         * 聚合后一组的信息量远大于一条，20 组足够覆盖「刚才发生了什么」。
+         */
+        const val LIST_LIMIT = 20
 
         private val TIMEOUT_HINT = UiText.Res(R.string.records_fetch_timeout)
 
         private val TIME = SimpleDateFormat("MM-dd HH:mm:ss", Locale.getDefault())
+
+        /**
+         * 取全窗口、按判定过滤、再按最近活跃排序。
+         *
+         * 顺序不可颠倒：先截断再筛时，「拦截」档只覆盖最近若干组里恰好被拦的那几条，
+         * 窗口里更早被拦的条目永远进不了这个档 —— 而档名叫「拦截」。
+         */
+        fun filteredOf(records: List<LogRecord>, filter: Filter): List<LogRecord> =
+            records.filter { matches(it, filter) }.sortedByDescending { it.lastTs }
+
+        private fun matches(r: LogRecord, filter: Filter): Boolean = when (filter) {
+            Filter.All -> true
+            Filter.Block -> r.block
+            Filter.Would -> r.would && !r.block
+            Filter.Pass -> !r.block && !r.would
+        }
     }
 }

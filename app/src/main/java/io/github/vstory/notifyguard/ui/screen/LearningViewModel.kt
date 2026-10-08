@@ -64,10 +64,13 @@ class LearningViewModel : ViewModel() {
     /** 一次性提示。带自增 id：同一条文案连发两次也要各弹一次。 */
     data class Notice(val id: Long, val text: UiText)
 
-    /** 记录侧的一行（待处理卡与 AI 卡共用：行长相一样，只是动作与展开行为不同）。 */
+    /**
+     * 记录侧的一行（待处理卡与 AI 卡共用：行长相一样，只是动作与展开行为不同）。
+     */
     data class Row(
         val key: String,
         val time: String,
+        val verdict: Verdict,
         val pkg: String,
         val title: String?,
         val text: String?,
@@ -286,6 +289,7 @@ class LearningViewModel : ViewModel() {
         key = LabelRecord.keyOf(r),
         // 一条记录是一组通知：时间取最近一次（与记录屏同口径）
         time = TIME.format(Date(r.lastTs)),
+        verdict = Verdict.of(r),
         pkg = r.pkg,
         title = r.title,
         text = r.text,

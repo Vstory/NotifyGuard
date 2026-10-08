@@ -20,6 +20,7 @@
     <string name="home_stat_would">本应被拦（观察模式）：%1$d</string>
     <string name="home_stat_pass">放行：%1$d</string>
     <string name="home_stat_scope">组数：%1$d · 事件：%2$d</string>
+    <string name="home_stats_tap_hint">点任一行可跳到记录屏、只看该判定档。</string>
     <string name="home_top_group">命中排行（按应用）</string>
     <string name="home_top_empty">此窗口内还没有拦截。观察模式下不会真拦 —— 要生效请到设置屏：先确认「启用拦截判定」是打开的，再关掉观察模式；否则请查框架日志确认判定链在跑。</string>
     <string name="home_top_other">其余 %1$d 个应用 · %2$d 次</string>
@@ -68,7 +69,13 @@
     <string name="records_clear_labels_body">%1$d 条标注会被删除且无法恢复。清空后模型退回纯内置模型，分数会立刻变回去。</string>
     <string name="records_clear_labels_confirm">清空</string>
     <string name="records_clear_labels_cancel">取消</string>
-    <string name="records_summary">共 %1$d 组 / 累计 %2$d 次（上限 %3$d 组），下列最近 %4$d 组；权威源在模块端</string>
+    <string name="records_summary">共 %1$d 组 / 累计 %2$d 次（上限 %3$d 组）；权威源在模块端</string>
+    <string name="records_filter_all">全部</string>
+    <string name="records_filter_block">拦截</string>
+    <string name="records_filter_would">本应拦</string>
+    <string name="records_filter_pass">放行</string>
+    <string name="records_filter_hit">本档命中 %1$d 组（按整个记录窗口算），下列最近 %2$d 组</string>
+    <string name="records_filter_empty">这一档没有记录：窗口里没有该判定的条目。判定链在不在跑看框架日志；切回「全部」能看到放行的那些。</string>
     <string name="records_fetching">正在从模块端拉取…</string>
     <string name="records_label_summary">标注 %1$d 条 · 权威源在模块端的 labels.json（与记录一样，卸载重装 App 不会丢）</string>
     <string name="records_fit_pending">微调：尚未拉取</string>
