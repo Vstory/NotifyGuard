@@ -1,9 +1,11 @@
 package io.github.vstory.notifyguard.sync
 
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
 import io.github.vstory.notifyguard.judge.Config
+import java.io.FileOutputStream
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -63,15 +65,30 @@ object ConfigWriter {
 
     fun save(config: Config): Boolean {
         val s = service ?: return false
+        val json = ConfigCodec.encode(config)
+        // 先落镜像文件、再写 remote prefs：文件是模块端 push 失效时的兜底源（见 ConfigReader.verifyFromFile），
+        // 而 prefs 的写入本身是「有配置了」的信号。反序的话 push 送不到就什么都没有。
+        if (!writeMirror(s, json)) Log.e(TAG, "write config mirror failed")
         return runCatching {
             s.getRemotePreferences(ConfigReader.GROUP).edit()
-                .putString(ConfigReader.KEY, ConfigCodec.encode(config))
+                .putString(ConfigReader.KEY, json)
                 .commit()
         }.getOrElse {
             Log.e(TAG, "write config failed", it)
             false
         }
     }
+
+    /** 写失败不阻塞 prefs 那条主路径：镜像只是兜底。 */
+    private fun writeMirror(s: XposedService, json: String): Boolean = runCatching {
+        ParcelFileDescriptor.AutoCloseOutputStream(s.openRemoteFile(ConfigReader.REMOTE_FILE)).use { out ->
+            // 同 DeltaWriter：这个 fd 指向已存在的同名文件，不截断就会留下上一次的尾部字节
+            (out as FileOutputStream).channel.truncate(0)
+            out.write(json.toByteArray())
+            out.flush()
+        }
+        true
+    }.getOrElse { false }
 
     /** 一个订阅者抛异常不该让后面的收不到通知。 */
     private fun notifyService(s: XposedService?) {
