@@ -23,6 +23,7 @@ import java.lang.reflect.Method
 class ConfigReaderTest {
 
     private val originalDelays = ConfigReader.retryDelaysMs
+    private val originalReader = ConfigReader.readRemoteFile
 
     @Before
     fun setUp() {
@@ -33,6 +34,7 @@ class ConfigReaderTest {
     @After
     fun tearDown() {
         ConfigReader.retryDelaysMs = originalDelays
+        ConfigReader.readRemoteFile = originalReader
         ConfigReader.resetForTest()
     }
 
@@ -81,6 +83,39 @@ class ConfigReaderTest {
 
         assertFalse("解析失败必须保留上一份有效配置", waitUntil { ConfigReader.config().observe })
         assertFalse(ConfigReader.config().enabled)
+    }
+
+    /**
+     * push 静默失效时靠镜像文件自愈：prefs 永远停在旧值（框架按 group 缓存那份内存快照），
+     * 文件是 App 顺手写的新值 —— 模块端除了认文件没有别的路。
+     */
+    @Test
+    fun fileMirrorRecoversWhenPushIsLost() {
+        val prefs = FakePrefs(JSON_STRICT)
+        ConfigReader.readRemoteFile = { _, name ->
+            if (name == ConfigReader.REMOTE_FILE) JSON_ENABLED else null
+        }
+        ConfigReader.start(FakeIface(failsBefore = 0, prefs = prefs))
+        assertTrue(waitUntil { !ConfigReader.config().observe })
+        assertFalse("启动时读的还是 prefs 里的旧值", ConfigReader.config().enabled)
+
+        ConfigReader.verifyFromFile()
+
+        assertTrue("核对文件后应换上新配置", ConfigReader.config().enabled)
+    }
+
+    /** 镜像文件读不到（App 还是老版本）只当兜底不可用，不动已生效的配置。 */
+    @Test
+    fun missingMirrorFileLeavesConfigAlone() {
+        val prefs = FakePrefs(JSON_STRICT)
+        ConfigReader.readRemoteFile = { _, _ -> null }
+        ConfigReader.start(FakeIface(failsBefore = 0, prefs = prefs))
+        assertTrue(waitUntil { !ConfigReader.config().observe })
+
+        ConfigReader.verifyFromFile()
+
+        assertFalse(ConfigReader.config().enabled)
+        assertFalse(ConfigReader.config().observe)
     }
 
     private fun waitUntil(cond: () -> Boolean): Boolean {
@@ -163,5 +198,9 @@ class ConfigReaderTest {
     private companion object {
         const val JSON_STRICT =
             """{"schema":1,"enabled":false,"observe":false,"protect":{"call":false}}"""
+
+        /** 镜像文件里的那份：enabled 与 observe 都与 [JSON_STRICT] 相反，便于断言是文件生效还是 prefs 生效。 */
+        const val JSON_ENABLED =
+            """{"schema":1,"enabled":true,"observe":false,"protect":{"call":false}}"""
     }
 }

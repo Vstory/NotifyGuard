@@ -90,6 +90,9 @@ object LogSink {
      * 自检行的用途：D 级日志里直接给出「缓冲是否全部落盘 / 回传多少条」，排障时不必再推断。
      */
     internal fun snapshotJson(): String {
+        // 拉取是「App 活着且与本进程通信」的信号，顺手核对一次配置镜像：
+        // push 静默失效时（见 ConfigReader.verifyFromFile），用户的改动靠这里回到本进程
+        ConfigReader.verifyFromFile()
         val before = pending.size
         flush()
         val after = pending.size
@@ -179,6 +182,8 @@ object LogSink {
         persisted.addAndGet(batch.size.toLong())
         failureLogged = false
         retryAfter = 0L
+        // 有记录在流动就等于本进程在干活：顺带核对配置镜像，让 push 失效最多自愈一个 flush 周期
+        ConfigReader.verifyFromFile()
         schedule()
     }
 }

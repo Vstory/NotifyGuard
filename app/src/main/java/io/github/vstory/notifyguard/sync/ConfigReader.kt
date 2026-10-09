@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.sync
 
+import android.os.ParcelFileDescriptor
 import io.github.libxposed.api.XposedInterface
 import io.github.vstory.notifyguard.ai.DeltaHolder
 import io.github.vstory.notifyguard.core.ModuleLogger
@@ -26,11 +27,30 @@ object ConfigReader {
     const val GROUP = "io.github.vstory.notifyguard_config"
     const val KEY = "config"
 
+    /** 配置镜像文件（App 写、本进程读）：push 静默失效时的兜底来源，理由见 [verifyFromFile]。 */
+    const val REMOTE_FILE = "config.json"
+
     /** 退避间隔；离线单测把它改小以验证重试路径。 */
     internal var retryDelaysMs = longArrayOf(1_000, 3_000, 10_000)
 
+    /** 兜底核对的最小间隔：拉取与落盘都会调它，节流后频率远低于通知流量。 */
+    internal var checkIntervalMs = 5_000L
+
+    /** 单测注入点：JVM 单测拿不到 ParcelFileDescriptor，替换成假读取。 */
+    internal var readRemoteFile: (XposedInterface, String) -> String? = { iface, name ->
+        runCatching {
+            ParcelFileDescriptor.AutoCloseInputStream(iface.openRemoteFile(name))
+                .use { it.readBytes() }
+                .toString(Charsets.UTF_8)
+        }.getOrNull()
+    }
+
     private val current = AtomicReference(Config())
     private val retries = AtomicInteger()
+
+    /** 已生效的配置原文：与镜像文件逐字比对，相同就不重复解析。 */
+    @Volatile private var appliedJson: String? = null
+    @Volatile private var lastCheckMs = 0L
 
     private val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "NotifyGuard-config").apply { isDaemon = true }
@@ -85,12 +105,34 @@ object ConfigReader {
         )
     }
 
+    /**
+     * 从镜像文件核对配置。**必须在后台线程调用**（有文件 IO）。
+     *
+     * 为什么不能只信 push：push 是框架侧的内存回调，注册成功后仍可能被静默换掉——daemon 侧一旦重建
+     * 本模块的注入服务对象（模块 apk 更新、节点缓存失效都会走到 `new LSPInjectedModuleService`），
+     * 长命的 system_server 仍握着旧对象，此后 App 每次写入都推给空回调集合，不报错也不打日志。
+     * 而模块端也自愈不了：框架按 group 缓存 prefs 实例，重新 `getRemotePreferences` 拿到的还是那份
+     * 只在 push 时更新的内存快照，再读永远是旧值。唯一真实的通道是 App 顺手写的这个文件。
+     */
+    internal fun verifyFromFile() {
+        val iface = ifaceRef ?: return
+        val now = System.currentTimeMillis()
+        if (now - lastCheckMs < checkIntervalMs) return
+        lastCheckMs = now
+        // 文件不存在（App 还是老版本）不是异常：本方法只是兜底，绕开即可
+        val json = readRemoteFile(iface, REMOTE_FILE) ?: return
+        if (json == appliedJson) return
+        reload(json, "file")
+    }
+
     /** 单测复用同一个 object 单例，跨用例必须清干净（热重载在生产里等价于重建本 object）。 */
     internal fun resetForTest() {
         current.set(Config())
         retries.set(0)
         listenerBound = false
         ifaceRef = null
+        appliedJson = null
+        lastCheckMs = 0L
     }
 
     private fun reload(json: String?, from: String) {
@@ -107,6 +149,7 @@ object ConfigReader {
         }
         parsed.compiledRules   // 先把正则编译掉，不能留给判定热路径
         current.set(parsed)
+        appliedJson = json
         ModuleLogger.info(
             "配置生效（$from）：enabled=${parsed.enabled} observe=${parsed.observe} " +
                 "规则=${parsed.rules.size}(有效 ${parsed.compiledRules.size}) 白名单=${parsed.whitelist.size} " +
