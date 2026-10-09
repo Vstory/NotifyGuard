@@ -96,8 +96,16 @@ class LogStore(private val file: File) {
             return
         }
         val old = records[i]
-        // lastTs 取较大者：同一批记录不保证按时间递增
-        records[i] = old.copy(count = old.count + r.count, lastTs = maxOf(old.lastTs, r.lastTs))
+        // 以 lastTs 较大那条为基底（同一批记录不保证按时间递增）：reason/score/slot/ruleId 都跟它走。
+        // 若只更新 count/lastTs 而保留首见那份，一条跨越配置变更（开关/阈值/模型改过）的组会把
+        // 旧配置下的判定原因贴到最新时间上 —— 记录页因此显示「刚发生 + 总开关关闭」，而实际判的是
+        // below_threshold。见 M2b实施方案.md §二（那里假设同键下 reason 必然一致）。
+        val latest = if (r.lastTs >= old.lastTs) r else old
+        records[i] = latest.copy(
+            ts = minOf(old.ts, r.ts),
+            count = old.count + r.count,
+            lastTs = maxOf(old.lastTs, r.lastTs),
+        )
     }
 
     /** 超限淘汰最久未活跃者，而不是最早插入者：首见早但持续在刷的组恰恰是最该留的。 */

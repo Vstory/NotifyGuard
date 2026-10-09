@@ -111,6 +111,37 @@ class LogStoreTest {
         assertEquals(2L, r.lastTs)
     }
 
+    /**
+     * 组内原因取**最近一次**判定，与展示用的 lastTs 同源。
+     *
+     * 首见那条可能落在另一次配置下（总开关/阈值/模型改过）：保留它就会显示「刚发生 + 总开关关闭」，
+     * 而实际最近一次判的是 below_threshold。
+     */
+    @Test
+    fun mergeKeepsReasonOfLatestJudgment() {
+        val s = store()
+        s.addAll(listOf(dup(1).copy(reason = "disabled", score = null)))
+        s.addAll(listOf(dup(2).copy(reason = "below_threshold:0.19", score = 0.19)))
+        val r = s.recent(1).first()
+        assertEquals(1L, r.ts)
+        assertEquals(2L, r.lastTs)
+        assertEquals(2, r.count)
+        assertEquals("below_threshold:0.19", r.reason)
+        assertEquals(0.19, r.score!!, 1e-9)
+    }
+
+    /** 同一批记录不保证按时间递增：基底要按 lastTs 选，不能按并入顺序。 */
+    @Test
+    fun mergePicksLatestByLastTsNotByOrder() {
+        val s = store()
+        s.addAll(listOf(dup(9).copy(reason = "disabled"), dup(3).copy(reason = "below_threshold:0.19")))
+        val r = s.recent(1).first()
+        assertEquals(3L, r.ts)
+        assertEquals(9L, r.lastTs)
+        assertEquals(2, r.count)
+        assertEquals("disabled", r.reason)
+    }
+
     /** M2 之前的文件没有 count/lastTs：载入时就地压实，用户不需要清空重来。 */
     @Test
     fun legacyFileIsCompactedOnLoad() {
