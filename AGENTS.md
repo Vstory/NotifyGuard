@@ -87,7 +87,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入瞬间的横幅是全量信息行（api / 框架 / 是否 system_server / 进程名）。
 - 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debugRaw("[DBG] …")`，并用 `BuildConfig.DEBUG` 闸住。
 - 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。
-- **微调版本标识 = `<下发时刻 ISO 8601 UTC>+<delta 文件字节 SHA-256 前 4 字节>`**（如 `2026-10-10T08:41:33Z+3f9a1c2b`），实现只有 `DeltaStamp` 一份，模块端日志与 App 侧界面显示的必须是同一串。摘要是「同毫秒重发」「版本号没变而文件被重写」的唯一判据。
+- **微调版本标识 = `<下发时刻按设备时区>+<delta 文件字节 SHA-256 前 4 字节>`**（如 `2026-10-10 16:41:33+3f9a1c2b`），实现只有 `DeltaStamp` 一份，模块端日志与 App 侧界面显示的必须是同一串。时刻一律按设备当前时区显示（界面与框架日志同口径），格式化前重取默认时区。摘要是「同毫秒重发」「版本号没变而文件被重写」的唯一判据。
 
 ## 文案与界面
 
