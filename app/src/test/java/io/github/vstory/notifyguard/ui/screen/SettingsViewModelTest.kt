@@ -208,20 +208,20 @@ class SettingsViewModelTest {
     }
 
     /**
-     * 「点了按钮之后的回执」：短按与长按的结局必须分得开 —— 用户分不清「没反应」与
-     * 「内容一致所以没重发」时，会一直点下去。
+     * 「点了按钮之后的回执」：内容有变化、内容一致、样本不够、模块没连上四种结局各一句 ——
+     * 用户分不清「没反应」与「内容一致所以没重发」时，会一直点下去。
      */
     @Test
-    fun fitNoticeTellsShortPressApartFromLongPress() {
+    fun fitNoticeReportsWhatResendDid() {
         assertEquals(
             UiText.Res(R.string.notice_fit_skipped),
             fitNotice(DeltaFitter.State.Sent(1L, 3, delivery = DeltaFitter.Delivery.SKIPPED)),
         )
-        assertEquals(
-            UiText.Res(R.string.notice_fit_reloaded),
-            fitNotice(DeltaFitter.State.Sent(1L, 3, delivery = DeltaFitter.Delivery.RELOADED)),
-        )
         assertEquals(UiText.Res(R.string.notice_fit_sent), fitNotice(DeltaFitter.State.Sent(1L, 3)))
+        assertEquals(
+            UiText.Res(R.string.notice_fit_failed, listOf(UiText.Res(R.string.fit_reason_module))),
+            fitNotice(DeltaFitter.State.Unavailable(DeltaFitter.Reason.ModuleDisconnected)),
+        )
         assertEquals(
             UiText.Res(R.string.notice_fit_not_enough, listOf(7, SpamTuner.MIN_LABELS)),
             fitNotice(DeltaFitter.State.NotEnough(SpamTuner.Readiness(usable = 7, spam = 2, ham = 5))),
@@ -313,23 +313,6 @@ class SettingsViewModelTest {
         assertEquals(DeltaStamp.of(1_700_000_000_000L, "e1ae973d"), skipped.args[0])
         assertEquals(524, skipped.args[1])
         assertEquals(DeltaStamp.timeOf(1_699_999_000_000L), skipped.args[2])
-    }
-
-    /** 长按重发：内容一致但推了版本号，文案要与「跳过」区分开（用户要的是模块端会重读）。 */
-    @Test
-    fun fitTextSaysWhenAnIdenticalDeltaWasPushedToForceReload() {
-        val reloaded = fitText(
-            DeltaFitter.State.Sent(
-                version = 1_700_000_000_000L,
-                weights = 524,
-                digest = "e1ae973d",
-                fittedAt = 1_699_999_000_000L,
-                delivery = DeltaFitter.Delivery.RELOADED,
-            )
-        ) as UiText.Res
-        assertEquals(R.string.fit_reloaded, reloaded.id)
-        assertEquals(DeltaStamp.of(1_700_000_000_000L, "e1ae973d"), reloaded.args[0])
-        assertEquals(524, reloaded.args[1])
     }
 
     /** 进度行要说「还差几条」；达标后换成「已达标」而不是消失 —— 那时 fitText 里已经没有门槛数了。 */
