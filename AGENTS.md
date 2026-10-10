@@ -7,8 +7,17 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 ## 工作规程
 
 - **构建交给 CI，本地不跑 Gradle 构建/打包**（`assemble*` / `bundle*` 一律不出现在本地命令里）。编译、单测、产物校验由 `.github/workflows/build-ci.yml` 在 push 后跑。
-- 本地自查只跑**纯脚本**：`python3 scripts/check_string_format_args.py`（秒级，字符串模板 ↔ 调用实参核对）。这是 CI 第一个门禁，先过它能省一整轮 CI。
+- 本地自查只跑**纯脚本**，且必须带 CI 的同款参数（少一个参数就是假通过 —— CI 报红时本地却是绿的）：
+
+  ```bash
+  python3 scripts/check_string_format_args.py --strict --call UiText.Res .
+  ```
+
+  这是 CI 的第一个门禁，先过它能省一整轮 CI。参数与 `.github/workflows/build-ci.yml` 的 `env`（`STR_STRICT` / `STR_RES_CALLS`）同源，改那边就要改这里。
 - 看 CI：`python3 100_System/tools/github.py --repo Vstory/NotifyGuard --run latest`，失败看 `--run latest-failed --logs`。**轮询一次不超过 5 秒**，超时就报当前状态，不做多轮等待（CI 由用户自行监督）。
+- 改**同构的多处**（四条通道、各常驻资源的 `release()`、成对的文案）时，改完逐项 grep 数一遍每个文件都改到了：
+  `grep -l "<新模式>" app/src/main/java/io/github/vstory/notifyguard/sync/{Log,Label,Status,Config}Channel.kt | wc -l` 应为 `4`。
+  批量替换会静默漏掉「结构略有不同」的那一个 —— 本仓已有两次 CI 红都属这类机械漏改，而本地因为不编译看不出来。
 - 本仓库的改动**改完直接提交并推送**，不必逐次询问：`python3 100_System/tools/github.py --dir /workspace/Project/NotifyGuard --yes`。授权仅限本仓库；知识库、其它仓库、以及任何历史改写都要先展示变更再确认。
 - **严禁强推、严禁 amend 或 rebase 已推送的提交**，任何仓库、任何理由都不例外。
 - 提交信息：**英文、一句话**，`<type>(<scope>): <summary>`，命令式、小写开头。scope 取实际改动面：`core` / `sync` / `judge` / `ai` / `ui` / `data` / `records` / `build` / `chore(ci)` / `docs` / `test` / `i18n` / `debug`。**不写正文**，更不写分步说明 —— 根因与取舍写进代码注释。

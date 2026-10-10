@@ -27,6 +27,10 @@ object StatusChannel {
 
     @Volatile private var registered = false
 
+    // 换代时要能注销：receiver 注册在系统里，留着它会继续应答，让「当前状态」变得不确定
+    @Volatile private var ctx: Context? = null
+    @Volatile private var receiver: BroadcastReceiver? = null
+
     /** 读标志文件与组载荷是磁盘 + 序列化工作，不放在 system_server 的主线程上。 */
     private val worker = Executors.newSingleThreadExecutor { r ->
         Thread(r, "NotifyGuard-status").apply { isDaemon = true }
@@ -46,7 +50,8 @@ object StatusChannel {
     fun register(c: Context) {
         if (registered) return
         registered = true
-        val receiver = object : BroadcastReceiver() {
+        ctx = c
+        val r = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 // 换代后旧代仍注册着：先确认自己还是当前代，过期就拆掉自己并放弃应答
                 if (ModuleTeardown.expired()) return
