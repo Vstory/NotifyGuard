@@ -31,6 +31,11 @@ object LabelSink {
 
     @Volatile private var bound = false
 
+    /** 过期代退场：关线程池（理由同 [LogSink.release]）。 */
+    fun release() {
+        worker.shutdown()
+    }
+
     fun bindContext(c: Context) {
         if (bound) return
         bound = true

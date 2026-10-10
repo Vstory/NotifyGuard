@@ -11,6 +11,7 @@ import io.github.vstory.notifyguard.ai.ModelHolder
 import io.github.vstory.notifyguard.core.CrashGuard
 import io.github.vstory.notifyguard.core.EntryHook
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.ModuleTeardown
 import io.github.vstory.notifyguard.core.ModuleStatus
 import java.util.concurrent.Executors
 
@@ -31,11 +32,24 @@ object StatusChannel {
         Thread(r, "NotifyGuard-status").apply { isDaemon = true }
     }
 
+    /** 过期代退场时注销：不注销就会与新代同时应答同一条广播。 */
+    fun release() {
+        val c = ctx ?: return
+        val r = receiver ?: return
+        ctx = null
+        receiver = null
+        registered = false
+        runCatching { c.unregisterReceiver(r) }
+        worker.shutdown()
+    }
+
     fun register(c: Context) {
         if (registered) return
         registered = true
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                // 换代后旧代仍注册着：先确认自己还是当前代，过期就拆掉自己并放弃应答
+                if (ModuleTeardown.expired()) return
                 val action = intent?.action ?: return
                 // 必须在 onReceive 里同步取：getCallingUid 读的是本线程的 IPC 上下文，换线程就丢了
                 if (!ChannelAccess.isFromApp(c)) {
@@ -64,7 +78,8 @@ object StatusChannel {
             addAction(StatusContract.ACTION_GET_STATUS)
             addAction(StatusContract.ACTION_CLEAR_SAFE_MODE)
         }
-        ChannelAccess.registerExported(c, receiver, filter).onFailure {
+        receiver = r
+        ChannelAccess.registerExported(c, r, filter).onFailure {
             registered = false
             ModuleLogger.error("注册状态通道失败（${it.javaClass.simpleName}: ${it.message}）")
         }
