@@ -1,6 +1,8 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.annotation.StringRes
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
@@ -33,6 +36,7 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedback
@@ -52,6 +56,8 @@ import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.ui.ReasonExplanation
 import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
+import kotlinx.coroutines.launch
+
 
 /**
  * 多屏共用的最小零件（状态卡 / 分组卡 / 开关行）。
@@ -186,6 +192,26 @@ private fun Modifier.longPressHaptic(haptics: HapticFeedback): Modifier = pointe
             waitForUpOrCancellation(pass = PointerEventPass.Initial)
         }
     }
+}
+
+/**
+ * 顶栏点一下回到顶部。记录 / 学习 / 规则三屏共用同一套手感 —— 一处带动画、另一处瞬移，用户是会察觉的。
+ *
+ * 挂在 TopAppBar 的 modifier 上不会抢掉 actions：顶栏里的按钮是子节点，Main pass 里子先拿到事件。
+ */
+@Composable
+internal fun topBarScrollToTop(state: LazyListState): Modifier {
+    val scope = rememberCoroutineScope()
+    val label = stringResource(R.string.scroll_to_top)
+    return Modifier.clickable(onClickLabel = label) { scope.launch { state.animateScrollToItem(0) } }
+}
+
+/** [topBarScrollToTop] 的普通滚动容器版（规则屏是 Column + verticalScroll）。 */
+@Composable
+internal fun topBarScrollToTop(state: ScrollState): Modifier {
+    val scope = rememberCoroutineScope()
+    val label = stringResource(R.string.scroll_to_top)
+    return Modifier.clickable(onClickLabel = label) { scope.launch { state.animateScrollTo(0) } }
 }
 
 @Composable

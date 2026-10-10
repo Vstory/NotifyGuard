@@ -4,6 +4,7 @@
       简体中文语言包（values-zh-rCN）。键必须与 res/values/strings.xml 逐条对应：漏掉的键会静默回落到英文。
       「%1$s」这类占位的含义也与英文版一致，不要调换顺序。
     -->
+    <string name="scroll_to_top">回到顶部</string>
     <string name="app_name">NotifyGuard</string>
 
     <string name="nav_home">首页</string>

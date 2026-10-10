@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -47,6 +48,7 @@ import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.ui.text
 
+
 /**
  * 记录屏（M4）：模块端回流记录的展示 + 就地标注。
  *
@@ -66,6 +68,7 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
     val state = viewModel.state
     val snackbar = remember { SnackbarHostState() }
     var menuOpen by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
     // 进屏拉一次（切回本屏也算进屏）；超时不重试，刷新入口就在顶栏
     LaunchedEffect(Unit) { viewModel.refresh(ctx) }
@@ -84,6 +87,7 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.records_title)) },
+                modifier = topBarScrollToTop(listState),
                 actions = {
                     TooltippedIconButton(
                         tooltip = stringResource(R.string.records_refresh),
@@ -122,6 +126,7 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner),

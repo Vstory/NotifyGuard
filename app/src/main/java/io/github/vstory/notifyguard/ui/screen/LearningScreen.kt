@@ -1,6 +1,6 @@
 package io.github.vstory.notifyguard.ui.screen
 
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,7 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -40,6 +41,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.ai.SpamAttribution
 import io.github.vstory.notifyguard.ui.text
+
+
 
 /**
  * 学习屏（M4h）：端侧学习这条链路的可解释面 —— 拟合走到哪一步、被拦的待表态、AI 判定的归因、孤儿标注。
@@ -54,6 +57,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
     val ctx = LocalContext.current.applicationContext
     val state = viewModel.state
     val snackbar = remember { SnackbarHostState() }
+    val listState = rememberLazyListState()
 
     DisposableEffect(Unit) {
         val unbind = viewModel.bind()
@@ -74,6 +78,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.learning_title)) },
+                modifier = topBarScrollToTop(listState),
                 actions = {
                     TooltippedIconButton(
                         tooltip = stringResource(R.string.learning_refresh),
@@ -88,6 +93,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner),
@@ -159,17 +165,25 @@ private fun FitCard(
                 modifier = Modifier.weight(1f),
             )
             // 短按 = 重算（内容一致就不下发）；长按 = 连模块端重读都要（内容一致时只推进版本号）。
-            // 用 pointerInput 而不是 combinedClickable：后者还挂在实验注解上，而这里只需要「多认一个长按」。
-            TextButton(
-                onClick = onResend,
-                enabled = !state.fitBusy,
-                modifier = Modifier.pointerInput(state.fitBusy) {
-                    if (state.fitBusy) return@pointerInput
-                    detectTapGestures(onLongPress = { onForceReload() })
+            // 别写成「TextButton + 外层 pointerInput」：按钮内部的 clickable 在 Main pass 里先消费事件，
+            // 外层的 detectTapGestures 永远收不到长按（表现是长按毫无反应）。两种手势都由这个 Text 自己承载。
+            Text(
+                text = stringResource(R.string.learning_fit_resend),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (state.fitBusy) {
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                } else {
+                    MaterialTheme.colorScheme.primary
                 },
-            ) {
-                Text(stringResource(R.string.learning_fit_resend))
-            }
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .combinedClickable(
+                        enabled = !state.fitBusy,
+                        onClick = onResend,
+                        onLongClick = onForceReload,
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            )
         }
         Note(stringResource(R.string.learning_fit_resend_hint))
         Note(stringResource(R.string.learning_labels_line, state.labelTotal))
