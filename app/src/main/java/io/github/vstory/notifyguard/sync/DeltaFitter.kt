@@ -24,6 +24,15 @@ import java.util.concurrent.Executors
  */
 object DeltaFitter {
 
+    /**
+     * 一次拟合的三种结局。
+     *
+     * [RELOADED] 与 [SKIPPED] 的差别只在**要不要让模块端重读**：内容没变时默认没必要（跳过），
+     * 但用户怀疑模块端没生效时可以长按按钮要求重载 —— 那种情况仍然不重写文件、只推进版本号，
+     * 因为模块端认的是版本号变化，重写同一份字节纯属多一次 IO。
+     */
+    enum class Delivery { SENT, SKIPPED, RELOADED }
+
     sealed interface State {
         /** 尚未下发（版本号为 0）。 */
         data object None : State
