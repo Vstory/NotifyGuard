@@ -242,7 +242,11 @@ class SettingsViewModel : ViewModel() {
                 if (it.modelReady) R.string.module_detail_ai_ready else R.string.module_detail_ai_unavailable
             )
             val delta = if (it.deltaVersion > 0) {
-                UiText.Res(R.string.module_detail_delta_on, listOf(it.deltaVersion))
+                // 版本号本体是下发时刻的毫秒时间戳：界面给人话，日志里两份都在
+                UiText.Res(
+                    R.string.module_detail_delta_on,
+                    listOf(timeText(it.deltaVersion), it.deltaWeights),
+                )
             } else {
                 UiText.Res(R.string.module_detail_delta_off)
             }
@@ -250,7 +254,10 @@ class SettingsViewModel : ViewModel() {
         }
 
         fun assemblySummary(s: StatusReport?): UiText? = s?.let {
-            UiText.Res(R.string.module_assembly, listOf(it.okCount, it.skipCount, it.failCount, it.version))
+            UiText.Res(
+                R.string.module_assembly,
+                listOf(it.okCount, it.skipCount, it.failCount, it.version, it.moduleSha),
+            )
         }
 
         fun safeModeLine(s: StatusReport?): UiText? {

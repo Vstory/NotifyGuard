@@ -158,10 +158,10 @@
     <string name="module_counters">扩展槽命中 %1$d · 漏斗判定 %2$d · 漏斗直通 %3$d · ROM 已拦 %4$d · 异常 %5$d</string>
     <string name="module_detail_ai_ready">AI 模型就绪</string>
     <string name="module_detail_ai_unavailable">AI 模型不可用（整段放行）</string>
-    <string name="module_detail_delta_on">微调 v%1$d</string>
+    <string name="module_detail_delta_on">微调 %1$s（%2$d 权重）</string>
     <string name="module_detail_delta_off">微调未启用</string>
     <string name="module_detail">%1$s · %2$s · 记录已落盘 %3$d 条（缓冲丢弃 %4$d）</string>
-    <string name="module_assembly">本代装配 OK %1$d / SKIP %2$d / FAIL %3$d（模块版本 %4$s）</string>
+    <string name="module_assembly">本代装配 OK %1$d / SKIP %2$d / FAIL %3$d（模块代码 %4$s+git.%5$s）</string>
     <string name="module_safe_mode_line">熔断触发：%1$s；%2$s。%3$s</string>
     <string name="module_safe_mode_at">时间 %1$s</string>
     <string name="module_safe_mode_at_unknown">时间未记录</string>

@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import io.github.vstory.notifyguard.BuildConfig
+import io.github.vstory.notifyguard.core.AppContextHolder
+import io.github.vstory.notifyguard.core.AppLogger
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -34,6 +37,13 @@ import io.github.vstory.notifyguard.ui.theme.NotifyGuardTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppContextHolder.install(this)
+        // App 侧版本横幅：App 进程与注入进程各自加载的是「各自启动那一刻」的代码，可能不是同一次构建，
+        // 排障时要能分别看出两边各跑的是哪份代码（这行走 logcat；模块端那行走框架日志页）
+        AppLogger.info(
+            "NotifyGuard App v${BuildConfig.VERSION_NAME}+git.${BuildConfig.GIT_SHA}" +
+                "（${if (BuildConfig.DEBUG) "debug" else "release"}）启动"
+        )
         enableEdgeToEdge()
         setContent {
             NotifyGuardTheme {

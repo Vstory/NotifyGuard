@@ -10,6 +10,7 @@ class StatusCodecTest {
 
     private fun sample() = StatusReport(
         version = "1.7.0",
+        moduleSha = "a5619f9",
         assembly = "[OK] 漏斗\n[SKIP] 扩展槽",
         assemblyAt = 1_234L,
         okCount = 2,
@@ -29,6 +30,7 @@ class StatusCodecTest {
         romBlocked = 6L,
         modelReady = true,
         deltaVersion = 7L,
+        deltaWeights = 524,
         recordsPersisted = 8L,
         recordsDropped = 9L,
     )

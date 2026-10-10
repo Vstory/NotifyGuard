@@ -159,10 +159,10 @@
     <string name="module_counters">Slot hits %1$d · funnel verdicts %2$d · funnel pass-through %3$d · blocked by ROM %4$d · errors %5$d</string>
     <string name="module_detail_ai_ready">AI model ready</string>
     <string name="module_detail_ai_unavailable">AI model unavailable (that whole step passes)</string>
-    <string name="module_detail_delta_on">fine-tuned v%1$d</string>
+    <string name="module_detail_delta_on">fine-tuned %1$s (%2$d weights)</string>
     <string name="module_detail_delta_off">fine-tuning off</string>
     <string name="module_detail">%1$s · %2$s · records on disk: %3$d (buffer dropped: %4$d)</string>
-    <string name="module_assembly">Assembly this launch: OK %1$d / SKIP %2$d / FAIL %3$d (module version %4$s)</string>
+    <string name="module_assembly">Assembly this launch: OK %1$d / SKIP %2$d / FAIL %3$d (module code %4$s+git.%5$s)</string>
     <string name="module_safe_mode_line">Safe mode triggered %1$s: %2$s. %3$s</string>
     <string name="module_safe_mode_at">at %1$s</string>
     <string name="module_safe_mode_at_unknown">time not recorded</string>

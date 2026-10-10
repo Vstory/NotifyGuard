@@ -3,6 +3,10 @@ package io.github.vstory.notifyguard.ai
 import android.os.ParcelFileDescriptor
 import io.github.libxposed.api.XposedInterface
 import io.github.vstory.notifyguard.core.ModuleLogger
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -33,6 +37,9 @@ object DeltaHolder {
     /** 已生效的版本号。只在成功换入后前进——它是「不必重试」的唯一凭据。 */
     @Volatile private var loadedVersion = 0L
 
+    /** 已生效的微调权重数（0 = 纯 base）。回传给 App：状态页只报「微调 v…」时看不出它是不是空壳。 */
+    @Volatile private var loadedWeights = 0
+
     private val retries = AtomicInteger()
 
     /** 只登记接口；首次加载由紧接着的配置首读带出（`ConfigReader.start` 会 reload 一次）。 */
@@ -41,6 +48,8 @@ object DeltaHolder {
     }
 
     fun loadedVersion(): Long = loadedVersion
+
+    fun loadedWeights(): Int = loadedWeights
 
     fun onConfigVersion(version: Long) {
         if (version == loadedVersion) return
@@ -55,6 +64,7 @@ object DeltaHolder {
             // 「从未下发」与「已清空标注」都归这里：都是纯 base，不是失败，因此不重试
             ModelHolder.replace(base)
             loadedVersion = 0L
+            loadedWeights = 0
             retries.set(0)
             ModuleLogger.info("未启用微调（版本号 0）⇒ 按纯 base 打分")
             return
@@ -77,8 +87,12 @@ object DeltaHolder {
                 val delta = parsed.delta
                 ModelHolder.replace(if (delta.isEmpty) base else TunedScorer(base, delta))
                 loadedVersion = version
+                loadedWeights = delta.indices.size
                 retries.set(0)
-                ModuleLogger.info("已加载微调量 v$version：${delta.indices.size} 个权重（base fp=${base.fingerprintHex()}）")
+                ModuleLogger.info(
+                    "已加载微调量 v$version（${stamp(version)}，${delta.indices.size} 个权重，" +
+                        "摘要 ${digest(bytes)}，base fp=${base.fingerprintHex()}）"
+                )
             }
 
             is SpamDelta.Parse.Rejected -> {
@@ -88,6 +102,16 @@ object DeltaHolder {
             }
         }
     }
+
+    /** 版本号是 App 侧写入的毫秒时间戳：日志里必须同时给人话，否则只能对着 1791594… 数位数。 */
+    private fun stamp(version: Long): String = runCatching {
+        SimpleDateFormat("MM-dd HH:mm:ss", Locale.US).format(Date(version))
+    }.getOrDefault("?")
+
+    /** 内容摘要（SHA-256 前 4 字节）：版本号相同而文件被重写过时，靠它区分。 */
+    private fun digest(bytes: ByteArray): String = runCatching {
+        MessageDigest.getInstance("SHA-256").digest(bytes).take(4).joinToString("") { "%02x".format(it) }
+    }.getOrDefault("?")
 
     private fun retry(version: Long, base: SpamModel, what: String) {
         val n = retries.getAndIncrement()
@@ -102,6 +126,7 @@ object DeltaHolder {
     internal fun resetForTest() {
         iface = null
         loadedVersion = 0L
+        loadedWeights = 0
         retries.set(0)
         ModelHolder.replace(null)
     }
