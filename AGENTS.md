@@ -11,6 +11,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
   ```bash
   cd /workspace/Project/NotifyGuard
   python3 scripts/check_string_format_args.py --strict --call UiText.Res .   # 文案占位符，秒级
+  python3 scripts/check_log_events.py .                                     # 日志格式，秒级
   ./gradlew --offline :app:compileDebugKotlin                               # 编译，~40s
   ./gradlew --offline :app:testDebugUnitTest                                # 单测，~30s
   ```
@@ -26,6 +27,27 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **严禁强推、严禁 amend 或 rebase 已推送的提交**，任何仓库、任何理由都不例外。
 - 提交信息：**英文、一句话**，`<type>(<scope>): <summary>`，命令式、小写开头。scope 取实际改动面：`core` / `sync` / `judge` / `ai` / `ui` / `data` / `records` / `build` / `chore(ci)` / `docs` / `test` / `i18n` / `debug`。**不写正文**，更不写分步说明 —— 根因与取舍写进代码注释。
 - 同步维护知识库里的项目档（`300_Projects/io.github.vstory.notifyguard/`）：实现方案改动就同批更新对应的 `M*实施方案.md`。知识库有自己的提交规范（PKB 号 + `pkb_gate.py` 预检）且**推送前必须先问用户**，照那边的规矩来，别把本仓库的免询问授权带过去。
+
+## 框架日志格式
+
+模块端（框架日志）与 App 侧（logcat）共用一套格式，出口只有两个：`core/ModuleLogger` 与 `core/AppLogger`。
+
+```
+<域>.<事件> k=v k=v …                 状态 / 就绪 / 汇总 / 接管
+<域>.<事件> k=v err=<异常类>: <原文>    失败；自由文本只允许出现在 err= 里
+```
+
+- 域白名单：`boot` `hotreload` `assemble` `slot` `guard` `safemode` `systemui` `generation` `teardown`
+  `context` `judge` `ai` `record` `label` `status` `config` `channel` `model` `delta` `app`
+- 键名与枚举值一律英文小写下划线（`on_success=takeover`），值里不带空格；一行一条、不换行
+- 长值先截断：ClassLoader 一律走 `ClassLoader?.brief()`
+- 中文只允许来自 `ModuleLogger.err(t)` 的异常原文，其余一律英文
+- 级别：I = 状态变迁 / 就绪 / 汇总；E = 失败终态 / 异常 / 拒绝；D = 高频逐条细节（调用点自判
+  `BuildConfig.DEBUG`，否则字符串常量会留在 dex 里）；禁 WARN
+- 明细行（装配结果这类）逐行自成一条日志，不用一次调用写多行 —— 多行串的后续行不带版本前缀，无从归属
+- 事件名与字段是**排障标识**：会与记录页的 `reason`、配置 JSON 对照着看。改文案要连带改
+  `ModuleLogger` 的 KDoc、本节、以及知识库项目档里引用旧串的地方
+- 门禁：`python3 scripts/check_log_events.py .`（CI 的 Static check 档跑同一个脚本）
 
 ## 项目形状
 

@@ -48,7 +48,12 @@ object Generation {
             f.parentFile?.mkdirs()
             f.writeText(now.toString())
         }.onFailure {
-            ModuleLogger.error("代际号写入失败（${file().absolutePath}）⇒ 旧代不会自行释放（可能两代并存）: ${it.message}")
+            ModuleLogger.error(
+                "generation.write_failed",
+                it,
+                "file=${file().absolutePath}",
+                "risk=two_generations",
+            )
         }
         return now
     }

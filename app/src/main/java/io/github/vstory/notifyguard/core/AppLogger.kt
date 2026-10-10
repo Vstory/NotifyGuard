@@ -21,8 +21,11 @@ object AppLogger {
     /** 与模块端同一口径：logcat 里每一行都标出版本串（App 与模块端可能加载的不是同一次构建）。 */
     private val PREFIX = "[" + BuildConfig.VERSION_NAME + "] "
 
-    fun debugRaw(msg: String) = Log.d(TAG, PREFIX + msg)
+    fun debug(event: String, vararg fields: String) = Log.d(TAG, line(event, fields))
 
     /** 非 DEBUG 也要留的 App 侧信息行（启动横幅、写配置结果这类排障入口）。 */
-    fun info(msg: String) = Log.i(TAG, PREFIX + msg)
+    fun info(event: String, vararg fields: String) = Log.i(TAG, line(event, fields))
+
+    private fun line(event: String, fields: Array<out String>): String =
+        PREFIX + if (fields.isEmpty()) event else event + " " + fields.joinToString(" ")
 }

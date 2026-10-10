@@ -73,9 +73,12 @@ object LabelClient {
                 // 覆盖式：模块端那份是唯一真相，本地只是它的缓存
                 store.replaceAll(LabelCodec.decodeList(json))
                 if (BuildConfig.DEBUG) {
-                    AppLogger.debugRaw(
-                        "[DBG] 标注：$what 收到回执 ${store.all().size} 条 " +
-                            "往返=${System.currentTimeMillis() - sentAt}ms"
+                    AppLogger.debug(
+                        "app.reply",
+                        "ch=label",
+                        "action=$what",
+                        "items=${store.all().size}",
+                        "rtt_ms=${System.currentTimeMillis() - sentAt}",
                     )
                 }
                 finish(store.all())
@@ -98,12 +101,14 @@ object LabelClient {
         }
 
         handler.postDelayed({
-            if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 标注：$what 等 ${TIMEOUT_MS}ms 无回执 ⇒ 超时")
+            if (BuildConfig.DEBUG) {
+                AppLogger.debug("app.timeout", "ch=label", "action=$what", "waited_ms=${TIMEOUT_MS}")
+            }
             finish(null)
         }, TIMEOUT_MS)
         // 不能 setPackage：system_server 里的 receiver 不属于任何包，定向投递永远收不到
         sentAt = System.currentTimeMillis()
-        if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 标注：发出 $what")
+        if (BuildConfig.DEBUG) AppLogger.debug("app.send", "ch=label", "action=$what")
         ctx.sendBroadcast(
             Intent(action).apply { extra?.let { (k, v) -> putExtra(k, v) } }
         )

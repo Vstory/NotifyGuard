@@ -49,8 +49,12 @@ object ModuleTeardown {
         safe("微调加载 worker") { DeltaHolder.release() }
         safe("标志监听") { CrashGuard.release() }
         ModuleLogger.info(
-            "本代（代际 ${Generation.mine()}）已被新代取代：已注销四条通道、停标志监听、关线程池；" +
-                "判定转纯放行（此后行为只由新代负责）"
+            "teardown.done",
+            "gen=${Generation.mine()}",
+            "channels=unregistered",
+            "watch=stopped",
+            "pool=closed",
+            "judge=passthrough",
         )
     }
 
@@ -61,7 +65,7 @@ object ModuleTeardown {
 
     private inline fun safe(what: String, block: () -> Unit) {
         runCatching(block).onFailure {
-            ModuleLogger.error("释放 $what 失败（可能滞留）: ${it.javaClass.simpleName}: ${it.message}")
+            ModuleLogger.error("teardown.release_failed", it, "what=$what", "risk=leak")
         }
     }
 }

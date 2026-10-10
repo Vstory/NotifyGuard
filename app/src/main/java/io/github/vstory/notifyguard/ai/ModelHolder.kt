@@ -34,11 +34,13 @@ object ModelHolder {
             loaded = true
             val model = SpamModel.bundled()
             if (model == null) {
-                ModuleLogger.error("内置模型不可用（classpath: ${SpamModel.RESOURCE}）⇒ AI 段一律放行")
+                ModuleLogger.error("model.unavailable", "resource=${SpamModel.RESOURCE}", "action=pass")
             } else {
                 ModuleLogger.info(
-                    "内置模型就绪：buckets=${model.buckets} gram=${model.ngramMin}-${model.ngramMax} " +
-                        "fp=${model.fingerprintHex()}"
+                    "model.ready",
+                    "buckets=${model.buckets}",
+                    "gram=${model.ngramMin}-${model.ngramMax}",
+                    "fp=${model.fingerprintHex()}",
                 )
             }
             base = model
