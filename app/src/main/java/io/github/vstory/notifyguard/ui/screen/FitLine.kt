@@ -43,11 +43,6 @@ internal fun fitText(state: DeltaFitter.State?): UiText = when (state) {
             listOf(stampOf(state), state.weights, fitTime(state.fittedAt)),
         )
 
-        state.delivery == DeltaFitter.Delivery.RELOADED -> UiText.Res(
-            R.string.fit_reloaded,
-            listOf(stampOf(state), state.weights, fitTime(state.fittedAt)),
-        )
-
         state.weights < 0 -> UiText.Res(R.string.fit_sent_no_file, listOf(DeltaStamp.timeOf(state.version)))
 
         state.fittedAt > 0 -> UiText.Res(
@@ -81,7 +76,7 @@ internal fun fitProgressText(readiness: SpamTuner.Readiness?): UiText? = when {
 }
 
 /**
- * 用户点了「重发微调」之后的回执：短按与长按的结局不同，而**结局本身就是用户想知道的**
+ * 用户点了「重发微调」之后的回执：**结局本身就是用户想知道的**
  * （「点了没反应」与「内容一致所以没重发」在界面上必须分得开）。
  *
  * 进屏时的自动拟合不走这里 —— 否则每次进屏都弹一条同样的提示。
@@ -89,9 +84,6 @@ internal fun fitProgressText(readiness: SpamTuner.Readiness?): UiText? = when {
 internal fun fitNotice(fit: DeltaFitter.State): UiText? = when {
     fit is DeltaFitter.State.Sent && fit.delivery == DeltaFitter.Delivery.SKIPPED ->
         UiText.Res(R.string.notice_fit_skipped)
-
-    fit is DeltaFitter.State.Sent && fit.delivery == DeltaFitter.Delivery.RELOADED ->
-        UiText.Res(R.string.notice_fit_reloaded)
 
     fit is DeltaFitter.State.Sent -> UiText.Res(R.string.notice_fit_sent)
 

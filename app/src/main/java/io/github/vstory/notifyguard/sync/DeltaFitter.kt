@@ -25,13 +25,10 @@ import java.util.concurrent.Executors
 object DeltaFitter {
 
     /**
-     * 一次拟合的三种结局。
-     *
-     * [RELOADED] 与 [SKIPPED] 的差别只在**要不要让模块端重读**：内容没变时默认没必要（跳过），
-     * 但用户怀疑模块端没生效时可以长按按钮要求重载 —— 那种情况仍然不重写文件、只推进版本号，
-     * 因为模块端认的是版本号变化，重写同一份字节纯属多一次 IO。
+     * 一次拟合的两种结局：[SENT] 真推给了模块端；[SKIPPED] 这次算出来的与模块端手上那份**内容相同**，
+     * 再发一次写的是同样的字节、只会让它把同一份文件重读一遍。
      */
-    enum class Delivery { SENT, SKIPPED, RELOADED }
+    enum class Delivery { SENT, SKIPPED }
 
     sealed interface State {
         /** 尚未下发（版本号为 0）。 */
@@ -106,18 +103,16 @@ object DeltaFitter {
      * @param force 无视「输入摘要没变」也要重拟合一次（界面上的「重发微调」按钮）：
      *   摘要说的是「标注与 base 都没变」，而用户此刻要的是「不管变没变，按现在这份数据再算一遍」。
      *   它**不绕过内容比对** —— 重算出来与模块端持有的一致时仍然不下发（那种下发只有版本号在动）。
-     * @param reload 内容一致时也让模块端重读一次（长按「重发微调」）。它隐含 [force]：不重算就无从谈重载。
      */
     fun ensureFitted(
         ctx: Context,
         labels: List<LabelRecord>,
         force: Boolean = false,
-        reload: Boolean = false,
         onDone: (State) -> Unit,
     ) {
         val appContext = ctx.applicationContext
         worker.execute {
-            val state = runCatching { fitIfNeeded(appContext, labels, force || reload, reload) }
+            val state = runCatching { fitIfNeeded(appContext, labels, force) }
                 .getOrElse { State.Unavailable(Reason.FitError("${it.javaClass.simpleName}: ${it.message}")) }
             main.post { onDone(state) }
         }
@@ -167,7 +162,7 @@ object DeltaFitter {
     private fun samplesOf(labels: List<LabelRecord>): List<SpamTuner.Sample> =
         labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
 
-    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean, reload: Boolean): State {
+    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -191,17 +186,8 @@ object DeltaFitter {
         val curVersion = cfg.deltaVersion
         val existing = DeltaWriter.read(model)
         if (curVersion > 0L && existing?.parsed is SpamDelta.Parse.Ok && existing.digest == digest) {
-            if (!reload) {
-                rememberFit(prefs, sig, fittedAt)
-                return State.Sent(curVersion, weights, digest, fittedAt, Delivery.SKIPPED)
-            }
-            // 强制重载：只推进版本号，不重写文件 —— 模块端认版本号变化才会重读，重写同一份字节没有意义
-            val bumped = bumpedVersion(curVersion)
-            if (!ConfigWriter.save(cfg.copy(deltaVersion = bumped))) {
-                return State.Unavailable(Reason.VersionWriteFailed)
-            }
             rememberFit(prefs, sig, fittedAt)
-            return State.Sent(bumped, weights, digest, fittedAt, Delivery.RELOADED)
+            return State.Sent(curVersion, weights, digest, fittedAt, Delivery.SKIPPED)
         }
 
         // 顺序是正确性的一部分：文件先落地，版本号后写（见 DeltaWriter 类注释）
