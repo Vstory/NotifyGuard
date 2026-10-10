@@ -149,13 +149,31 @@ object DeltaFitter {
      */
     fun baseModel(): SpamModel? = bundledBase()
 
+    /**
+     * 只算门槛进度：不拟合、不比对、不写文件，界面据此**常显**「离能拟合还差几条」。
+     *
+     * 走同一个 worker —— 首次算进度要解析内置 base（262 KB 级），不在主线程做。回调里 null = base 不可用。
+     */
+    fun progress(labels: List<LabelRecord>, onDone: (SpamTuner.Readiness?) -> Unit) {
+        worker.execute {
+            val readiness = runCatching {
+                val model = bundledBase() ?: return@runCatching null
+                SpamTuner.readiness(model, samplesOf(labels))
+            }.getOrNull()
+            onDone(readiness)
+        }
+    }
+
+    private fun samplesOf(labels: List<LabelRecord>): List<SpamTuner.Sample> =
+        labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
+
     private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean, reload: Boolean): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!force && prefs.getString(KEY_SIG, null) == sig) return currentState(ctx, model)
 
-        val samples = labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
+        val samples = samplesOf(labels)
         val delta = when (val fit = SpamTuner.fit(model, samples)) {
             is SpamTuner.Fit.NotReady -> return State.NotEnough(fit.readiness)
             is SpamTuner.Fit.Ok -> fit.delta

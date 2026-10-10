@@ -310,6 +310,26 @@ class SettingsViewModelTest {
         assertEquals(524, reloaded.args[1])
     }
 
+    /** 进度行要说「还差几条」；达标后换成「已达标」而不是消失 —— 那时 fitText 里已经没有门槛数了。 */
+    @Test
+    fun progressLineReportsTheShortfallAndSwitchesToMet() {
+        val short = fitProgressText(SpamTuner.Readiness(8, 4, 4)) as UiText.Res
+        assertEquals(R.string.learning_fit_progress_short, short.id)
+        assertEquals(2, short.args[0])
+        assertEquals(8, short.args[1])
+        assertEquals(SpamTuner.MIN_LABELS, short.args[2])
+
+        val met = fitProgressText(SpamTuner.Readiness(22, 12, 10)) as UiText.Res
+        assertEquals(R.string.learning_fit_progress_ready, met.id)
+        assertEquals(22, met.args[0])
+    }
+
+    /** 还没拉过标注、或内置 base 不可用时不显示 —— 而不是显示一行假的「0 条」。 */
+    @Test
+    fun progressLineIsAbsentWithoutData() {
+        assertNull(fitProgressText(null))
+    }
+
     private companion object {
         val TIME_RE = Regex("\\d{2}-\\d{2} \\d{2}:\\d{2}")
     }

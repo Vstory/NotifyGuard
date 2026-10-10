@@ -11,6 +11,7 @@ import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.ai.SpamAttribution
 import io.github.vstory.notifyguard.ai.SpamDelta
+import io.github.vstory.notifyguard.ai.SpamTuner
 import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.LabelRecord
@@ -51,6 +52,8 @@ class LearningViewModel : ViewModel() {
         val labelError: UiText? = null,
         /** 拟合状态；null = 还没拉过。 */
         val fit: DeltaFitter.State? = null,
+        /** 门槛进度（可训练样本数与两类各自的量）；null = 还没拉过或内置 base 不可用。 */
+        val fitProgress: SpamTuner.Readiness? = null,
         val labelTotal: Int = 0,
         val pending: List<Row> = emptyList(),
         val aiRows: List<Row> = emptyList(),
@@ -279,6 +282,7 @@ class LearningViewModel : ViewModel() {
                 notify(UiText.Res(R.string.notice_label_failed, listOf(UiText.Res(R.string.learning_fit_resend))))
                 return@fetch
             }
+            DeltaFitter.progress(list) { state = state.copy(fitProgress = it) }
             DeltaFitter.ensureFitted(app, list, force = true, reload = reload) { onFit(it) }
         }
     }
@@ -291,6 +295,8 @@ class LearningViewModel : ViewModel() {
         } else {
             DeltaFitter.ensureFitted(ctx, list) { onFit(it) }
         }
+        // 进度单独算：拟合成功后就拿不到 Fit.NotReady 的门槛数了，而那正是用户最想看见「还差几条」的时候
+        if (list != null) DeltaFitter.progress(list) { state = state.copy(fitProgress = it) }
     }
 
     private fun onFit(fit: DeltaFitter.State) {
