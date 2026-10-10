@@ -281,9 +281,11 @@ class RecordsViewModel : ViewModel() {
         /**
          * 每档在屏上列出的上限。筛选**先作用于整个窗口**再截到这里，所以命中数可以大于它。
          *
-         * 聚合后一组的信息量远大于一条，20 组足够覆盖「刚才发生了什么」。
+         * 100 是被「标注」需求顶上去的：骚扰源多半是高频通知（设备状态、步数、社区推送），几组就能
+         * 把一条广告挤出前 20 组，而点不到它就标不了、训练就收不到这条样本。再往上收益递减 ——
+         * 窗口本身只有 500 组，列表又是 LazyColumn（行数不构成渲染成本，只影响滚动手感）。
          */
-        const val LIST_LIMIT = 20
+        const val LIST_LIMIT = 100
 
         private val TIMEOUT_HINT = UiText.Res(R.string.records_fetch_timeout)
 
