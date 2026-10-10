@@ -7,6 +7,7 @@
     -->
     <string name="scroll_to_top">Back to top</string>
     <string name="app_name">NotifyGuard</string>
+    <string name="module_description">Blocks spam notifications inside the system framework: keywords, whitelist and on-device AI scoring, with all data kept local</string>
 
     <string name="nav_home">Home</string>
     <string name="nav_rules">Rules</string>
