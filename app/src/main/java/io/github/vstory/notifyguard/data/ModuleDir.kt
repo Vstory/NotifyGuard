@@ -20,6 +20,9 @@ object ModuleDir {
     const val FILE_LOGS = "logs.json"
     const val FILE_LABELS = "labels.json"
     const val FILE_SAFE_MODE = "safe_mode"
+
+    /** 判定次数的累计账本（见 `judge/Tally`）：与记录分开存，清空记录不碰它。 */
+    const val FILE_TALLY = "tally.json"
     private const val FILE_INSTALL_TIME = "install_time"
 
     /** 单测注入点。 */
@@ -33,6 +36,8 @@ object ModuleDir {
     fun labels(): File = File(dir, FILE_LABELS)
 
     fun safeMode(): File = File(dir, FILE_SAFE_MODE)
+
+    fun tally(): File = File(dir, FILE_TALLY)
 
     /** 备好目录；不可用返回 null（记录降级，判定不受影响）。 */
     fun ensure(ctx: Context): File? = prepare(installTime(ctx))

@@ -14,13 +14,17 @@ import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.LogRecord
 import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.LogFetcher
+import io.github.vstory.notifyguard.sync.StatusClient
 import io.github.vstory.notifyguard.ui.UiText
 
 /**
  * 首页的状态与统计（M4g）。
  *
- * 数字的口径是**当前记录窗口**而不是历史累计（`M4g实施方案.md` §三）：数据源是模块端 `logs.json`
- * 的快照（上限 [LogStore.MAX_RECORDS] 组、按内容聚合），清空记录后统计随之归零 —— 界面必须写明。
+ * 两套数字口径并存，界面必须分开写：
+ * - [Stats] 是**当前记录窗口**（模块端 `logs.json` 快照，上限 [LogStore.MAX_RECORDS] 组、按内容聚合），
+ *   清空记录后归零 —— 组数、事件数与排行用它；
+ * - [Totals] 是模块端的**累计账本**（`judge/Tally`，经状态通道回传），清空记录、重启系统框架都不归零 ——
+ *   「一共拦了多少」用它。读不到时界面回退到窗口口径并明说。
  *
  * 与记录屏共用同一份缓存列表，所以两屏的「组数 / 事件数」不会各算一套而在某天对不上。
  *
@@ -35,7 +39,17 @@ class HomeViewModel : ViewModel() {
         /** 读回的生效配置；null = 未连接或读不出 —— 此时不提观察模式（未知不等于开着）。 */
         val cfg: Config? = null,
         val stats: Stats = Stats.EMPTY,
+        /** 模块端累计账本；null = 模块端还没回传（未连接 / 刚装完没重启系统框架）。 */
+        val totals: Totals? = null,
         val fetching: Boolean = false,
+    )
+
+    /** 模块端累计账本的一行快照（次数按条算：每次判定各计一次）。 */
+    data class Totals(
+        val blocked: Long,
+        val would: Long,
+        val pass: Long,
+        val since: Long,
     )
 
     /** 排行里的一行。 */
@@ -125,6 +139,11 @@ class HomeViewModel : ViewModel() {
         LogFetcher.fetch(app) {
             state = state.copy(fetching = false)
             repaint(app)
+        }
+        StatusClient.fetch(app) { report ->
+            state = state.copy(
+                totals = report?.let { Totals(it.blockedTotal, it.wouldTotal, it.passTotal, it.tallySince) },
+            )
         }
     }
 

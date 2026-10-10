@@ -13,6 +13,7 @@ import io.github.vstory.notifyguard.core.EntryHook
 import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.core.ModuleTeardown
 import io.github.vstory.notifyguard.core.ModuleStatus
+import io.github.vstory.notifyguard.judge.Tally
 import java.util.concurrent.Executors
 
 /**
@@ -137,6 +138,10 @@ object StatusChannel {
             deltaDigest = DeltaHolder.loadedDigest(),
             recordsPersisted = LogSink.persistedCount(),
             recordsDropped = LogSink.droppedCount(),
+            blockedTotal = Tally.blockedTotal(),
+            wouldTotal = Tally.wouldTotal(),
+            passTotal = Tally.passTotal(),
+            tallySince = Tally.sinceAt(),
         )
     }
 }
