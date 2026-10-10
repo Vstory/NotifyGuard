@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.ai
 import android.os.ParcelFileDescriptor
 import io.github.libxposed.api.XposedInterface
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.ModuleTeardown
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -52,7 +53,14 @@ object DeltaHolder {
 
     fun loadedDigest(): String = loadedDigest
 
+    /** 过期代退场：关线程池（旧代的重试与新代无关，不需要接力）。 */
+    fun release() {
+        scheduler.shutdown()
+    }
+
     fun onConfigVersion(version: Long) {
+        // 换代后旧代的加载只会白读文件、白换模型：先确认自己还是当前代
+        if (ModuleTeardown.expired()) return
         if (version == loadedVersion) return
         val base = ModelHolder.base ?: return
         scheduler.execute { load(version, base) }

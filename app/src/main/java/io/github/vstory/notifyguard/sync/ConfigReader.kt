@@ -97,6 +97,11 @@ object ConfigReader {
         }
     }
 
+    /** 过期代退场：关后台线程池（旧代的退避重试在新代里会重开，不需要接力）。 */
+    fun release() {
+        scheduler.shutdown()
+    }
+
     private fun scheduleRetry() {
         if (listenerBound) return
         val n = retries.getAndIncrement()

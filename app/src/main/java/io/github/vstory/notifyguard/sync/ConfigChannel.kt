@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.os.Binder
 import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.ModuleTeardown
 
 /**
  * 模块端配置通道（system_server 内）：收 App 的「配置变了」广播，就地重读镜像文件。
@@ -21,11 +22,27 @@ object ConfigChannel {
 
     @Volatile private var registered = false
 
+    // 换代时要能注销：receiver 注册在系统里，留着它会继续应答，让「当前状态」变得不确定
+    @Volatile private var ctx: Context? = null
+    @Volatile private var receiver: BroadcastReceiver? = null
+
+    /** 过期代退场时注销：不注销就会与新代同时应答同一条广播。 */
+    fun release() {
+        val c = ctx ?: return
+        val r = receiver ?: return
+        ctx = null
+        receiver = null
+        registered = false
+        runCatching { c.unregisterReceiver(r) }
+    }
+
     fun register(c: Context) {
         if (registered) return
         registered = true
-        val receiver = object : BroadcastReceiver() {
+        ctx = c
+        val r = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                if (ModuleTeardown.expired()) return
                 if (intent?.action != ConfigContract.ACTION_CONFIG_CHANGED) return
                 // 与记录/标注通道同一条纪律：必须在 onReceive 的当前线程同步取调用 uid
                 if (!ChannelAccess.isFromApp(c)) {
@@ -40,7 +57,8 @@ object ConfigChannel {
                 LogSink.onWorker { ConfigReader.verifyFromFile(force = true, trigger = "broadcast") }
             }
         }
-        ChannelAccess.registerExported(c, receiver, IntentFilter(ConfigContract.ACTION_CONFIG_CHANGED))
+        receiver = r
+        ChannelAccess.registerExported(c, r, IntentFilter(ConfigContract.ACTION_CONFIG_CHANGED))
             .onFailure {
                 registered = false
                 ModuleLogger.error("注册配置通道失败（${it.javaClass.simpleName}: ${it.message}）")

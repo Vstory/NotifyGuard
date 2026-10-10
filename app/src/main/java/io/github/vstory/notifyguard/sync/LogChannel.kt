@@ -7,6 +7,7 @@ import android.content.IntentFilter
 import android.os.Binder
 import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.ModuleTeardown
 
 /**
  * 模块端记录通道（system_server 内）：应答 App 的拉取/清空请求。
@@ -20,11 +21,28 @@ object LogChannel {
 
     @Volatile private var registered = false
 
+    // 换代时要能注销：receiver 注册在系统里，留着它会继续应答，让「当前状态」变得不确定
+    @Volatile private var ctx: Context? = null
+    @Volatile private var receiver: BroadcastReceiver? = null
+
+    /** 过期代退场时注销：不注销就会与新代同时应答同一条广播。 */
+    fun release() {
+        val c = ctx ?: return
+        val r = receiver ?: return
+        ctx = null
+        receiver = null
+        registered = false
+        runCatching { c.unregisterReceiver(r) }
+    }
+
     fun register(c: Context) {
         if (registered) return
         registered = true
-        val receiver = object : BroadcastReceiver() {
+        ctx = c
+        val r = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
+                // 换代后旧代仍注册着：先确认自己还是当前代，过期就拆掉自己并放弃应答
+                if (ModuleTeardown.expired()) return
                 val action = intent?.action ?: return
                 // 必须在 onReceive 里同步取：getCallingUid 读的是本线程的 IPC 上下文，换线程就丢了
                 if (!ChannelAccess.isFromApp(c)) {
@@ -51,7 +69,8 @@ object LogChannel {
             addAction(LogContract.ACTION_GET_LOGS)
             addAction(LogContract.ACTION_CLEAR_LOGS)
         }
-        ChannelAccess.registerExported(c, receiver, filter).onFailure {
+        receiver = r
+        ChannelAccess.registerExported(c, r, filter).onFailure {
             registered = false
             ModuleLogger.error("注册记录通道失败（${it.javaClass.simpleName}: ${it.message}）")
         }

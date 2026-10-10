@@ -154,6 +154,13 @@ object CrashGuard {
         return was
     }
 
+    /** 过期代退场：停标志监听 + 关线程池（旧代码不该再对熔断标志的变化做反应）。 */
+    fun release() {
+        runCatching { watcher?.stopWatching() }
+        watcher = null
+        worker.shutdown()
+    }
+
     fun reset() {
         errors.set(0)
         stormTripped = false
@@ -267,6 +274,8 @@ object CrashGuard {
             watcher = object : FileObserver(d, CREATE or DELETE or MOVED_TO or MOVED_FROM) {
                 override fun onEvent(event: Int, path: String?) {
                     if (path != ModuleDir.FILE_SAFE_MODE) return
+                    // 换代后旧代的监听只会与新代重复动作，醒来先确认自己还是当前代
+                    if (ModuleTeardown.expired()) return
                     worker.execute {
                         val now = syncFromDisk()
                         ModuleLogger.info("safe_mode 标志变化 ⇒ 熔断=${now}")

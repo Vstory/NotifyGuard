@@ -258,6 +258,9 @@ object EntryHook {
     // ===== hooker =====
 
     private fun onFunnel(iface: XposedInterface, nms: Class<*>, chain: XposedInterface.Chain): Any? {
+        // 换代的安全带：旧钩子若还没卸掉（或 unhook 失败），过期代也只放行 ——
+        // 让它继续拿旧配置做决定，等于让「当前生效的是什么」变得不可知
+        if (ModuleTeardown.expired()) return chain.proceed()
         // 漏斗必然先于扩展槽被触发（ROM 是在它内部调扩展方法的），这里是取 system_server Context 的时机
         runCatching { ServiceContext.bindFrom(chain.thisObject) }
         if (judgingStopped) return chain.proceed()
@@ -282,6 +285,8 @@ object EntryHook {
     }
 
     private fun onExtSlot(chain: XposedInterface.Chain): Any? {
+        // 同 [onFunnel]：过期代把判定交回 ROM，自己不拦不记录
+        if (ModuleTeardown.expired()) return chain.proceed()
         tick(extHits, "扩展槽命中")
 
         // 不变式：ROM 自己的判定永远优先（隐藏应用 / 企业定制 / 通知中心黑名单…）

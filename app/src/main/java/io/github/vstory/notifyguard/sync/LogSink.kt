@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.sync
 import android.content.Context
 import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.ModuleTeardown
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.data.ModuleDir
 import io.github.vstory.notifyguard.judge.LogRecord
@@ -152,7 +153,19 @@ object LogSink {
 
     private fun schedule() {
         if (scheduled != null || pending.isEmpty()) return
-        scheduled = worker.schedule({ flush() }, flushDelayMs, TimeUnit.MILLISECONDS)
+        scheduled = worker.schedule(
+            {
+                // 换代后旧代的周期任务只会白转，醒来先确认自己还是当前代（顺带把线程池关掉）
+                if (!ModuleTeardown.expired()) flush()
+            },
+            flushDelayMs,
+            TimeUnit.MILLISECONDS,
+        )
+    }
+
+    /** 过期代退场：关线程池。旧线程是 GC root，不关就永远钉着旧 ClassLoader 与那份模型。 */
+    fun release() {
+        worker.shutdown()
     }
 
     private fun flush() {
