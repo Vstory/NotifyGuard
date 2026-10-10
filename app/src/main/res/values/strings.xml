@@ -92,6 +92,7 @@
     <string name="records_empty">(No records yet. Whether the verdict chain is running is visible in the framework log; module-side records live in /data/misc/notifyguard/logs.json)</string>
     <string name="records_count_badge">×%1$d</string>
     <string name="records_no_text">(no text)</string>
+    <string name="records_label_blocked">Protected type (%1$s) with that protection still on: the chain passes it at the protection step, so a label would not feed training. Turn that protection off in Settings to label it.</string>
     <string name="records_marked_spam">Marked spam</string>
     <string name="records_marked_ham">Marked ham</string>
     <string name="reason_short_bad_args">Incomplete notification data</string>

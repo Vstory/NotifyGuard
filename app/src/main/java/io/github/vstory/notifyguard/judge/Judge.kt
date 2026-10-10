@@ -35,7 +35,7 @@ object Judge {
         if (s.isGroupSummary) return pass("group_summary")
         if (s.hasNoText()) return pass("empty_text")
 
-        ProtectGuard.protectedType(s, cfg.protect)?.let { return pass("protect_$it") }
+        ProtectGuard.protectedType(s, cfg.protect)?.let { return pass(ProtectGuard.REASON_PREFIX + it) }
 
         val raw = s.judgeText()
         val lowered = raw.lowercase()

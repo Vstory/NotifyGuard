@@ -11,10 +11,13 @@ import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.LabelRecord
 import io.github.vstory.notifyguard.judge.LogRecord
+import io.github.vstory.notifyguard.judge.ProtectSwitches
+import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.DeltaFitter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
 import io.github.vstory.notifyguard.ui.UiText
+import io.github.vstory.notifyguard.ui.LabelGate
 import io.github.vstory.notifyguard.ui.ReasonExplanation
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -98,6 +101,11 @@ class RecordsViewModel : ViewModel() {
         val meta: List<UiText>,
         /** `null` = 未标注。 */
         val marked: Boolean?,
+        /**
+         * 非空 = 这条命中保护类型且该保护仍开着 ⇒ 禁止标注，值是保护类型的人话（提示用）。
+         * 保护出口的通知不进规则与 AI，标了只会给微调喂噪音。
+         */
+        val labelBlocked: UiText? = null,
     )
 
     /**
@@ -178,6 +186,13 @@ class RecordsViewModel : ViewModel() {
     fun mark(ctx: Context, key: String, spam: Boolean) {
         val app = ctx.applicationContext ?: ctx
         val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
+        // 界面已把两个按钮置灰，这里再拦一道：只靠置灰挡时，将来多一个入口（或无障碍触发）就绕过去了
+        // 未连接时读不到开关 ⇒ 不拦（「未知不等于开着」同口径）
+        val blocked = protectedLabel(r, ConfigWriter.load()?.protect)
+        if (blocked != null) {
+            notify(UiText.Res(R.string.records_label_blocked, listOf(blocked)))
+            return
+        }
         val what = if (spam) UiText.Res(R.string.label_action_mark_spam) else UiText.Res(R.string.label_action_mark_ham)
         submit(app, what) { done ->
             LabelClient.set(
@@ -249,16 +264,18 @@ class RecordsViewModel : ViewModel() {
         val marks = LabelRecord.marksOf(all, LabelStore.get(ctx).all())
         val hit = filteredOf(all, state.filter)
         records = hit.take(LIST_LIMIT)
+        // 保护开关读一次就够：它有上限 100 行的列表，逐行读就是每行一次跨进程调用
+        val protect = ConfigWriter.load()?.protect
         state = state.copy(
             groups = store.size(),
             rawCount = store.rawCount(),
             labelCount = LabelStore.get(ctx).size(),
             matched = hit.size,
-            rows = records.map { row(it, marks[LabelRecord.keyOf(it)]) },
+            rows = records.map { row(it, marks[LabelRecord.keyOf(it)], protect) },
         )
     }
 
-    private fun row(r: LogRecord, marked: Boolean?): RecordRow = RecordRow(
+    private fun row(r: LogRecord, marked: Boolean?, protect: ProtectSwitches?): RecordRow = RecordRow(
         key = LabelRecord.keyOf(r),
         // 一条记录是一组通知：时间取最近一次，首见时间对用户没有意义
         time = TIME.format(Date(r.lastTs)),
@@ -270,7 +287,12 @@ class RecordsViewModel : ViewModel() {
         // 规则 id 与槽位的人话由共用件给出（学习屏同一份），界面只管画
         meta = ReasonExplanation.meta(r),
         marked = marked,
+        labelBlocked = protectedLabel(r, protect),
     )
+
+    /** 命中保护类型且该保护仍开着 → 不可标注（返回类型的人话标签）；null = 可以标。 */
+    private fun protectedLabel(r: LogRecord, protect: ProtectSwitches?): UiText? =
+        LabelGate.blockedLabel(r, protect)
 
     private fun notify(text: UiText) {
         state = state.copy(notice = Notice(++noticeSeq, text))
