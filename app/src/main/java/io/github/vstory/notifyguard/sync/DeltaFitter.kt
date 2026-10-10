@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.sync
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import io.github.vstory.notifyguard.ai.DeltaStamp
@@ -35,8 +36,20 @@ object DeltaFitter {
          */
         data class Unavailable(val reason: Reason) : State
 
-        /** [digest] 是下发文件的内容摘要；读不到文件时是 [DeltaStamp.UNKNOWN_DIGEST]。 */
-        data class Sent(val version: Long, val weights: Int, val digest: String = "") : State
+        /**
+         * 已下发（[skipped] 为真时是「算出来与模块端那份一致，因而没有下发」）。
+         *
+         * [version] 本身是**下发时刻**、[fittedAt] 是**拟合完成时刻** —— 两者分开记正是因为有了跳过：
+         * 重算（重发按钮、改标注）只让拟合时间前进，下发时间只在真的推给模块端时才动。
+         * [digest] 是下发文件的内容摘要；读不到文件时是 [DeltaStamp.UNKNOWN_DIGEST]。
+         */
+        data class Sent(
+            val version: Long,
+            val weights: Int,
+            val digest: String = "",
+            val fittedAt: Long = 0L,
+            val skipped: Boolean = false,
+        ) : State
     }
 
     /** 拟合链路各步的失败原因（`Reason` 里带详情的两项是异常信息，本身不翻译）。 */
@@ -59,6 +72,9 @@ object DeltaFitter {
     private const val PREFS = "notifyguard_fit"
     private const val KEY_SIG = "last_signature"
 
+    /** 拟合完成时刻。与下发时刻（版本号本体）分开存：跳过下发时只有它会前进。 */
+    private const val KEY_FITTED_AT = "last_fitted_at"
+
     /** 显示用：文件读不到时的权重数占位（用负数，与「0 个权重」区分开）。 */
     private const val UNKNOWN_WEIGHTS = -1
 
@@ -78,9 +94,9 @@ object DeltaFitter {
      * 回调在主线程，可直接更新 UI。**不在这里判 `spamEnabled`**：微调量与「AI 段是否启用」是两件事 ——
      * 用户关掉 AI 再打开，不该顺带丢掉已拟合的微调。
      *
-     * @param force 无视「输入摘要没变」也要重拟合重发（界面上的「重发微调」按钮）：
-     *   摘要说的是「标注与 base 都没变」，而用户此刻要的是「不管变没变，按现在这份数据再发一次」。
-     *   版本号会前进，模块端据此重新加载。
+     * @param force 无视「输入摘要没变」也要重拟合一次（界面上的「重发微调」按钮）：
+     *   摘要说的是「标注与 base 都没变」，而用户此刻要的是「不管变没变，按现在这份数据再算一遍」。
+     *   它**不绕过内容比对** —— 重算出来与模块端持有的一致时仍然不下发（那种下发只有版本号在动）。
      */
     fun ensureFitted(
         ctx: Context,
@@ -102,7 +118,7 @@ object DeltaFitter {
         worker.execute {
             val state = runCatching {
                 val model = bundledBase() ?: return@runCatching State.Unavailable(Reason.ModelUnavailable)
-                currentState(model)
+                currentState(appContext, model)
             }.getOrElse { State.Unavailable(Reason.StateError("${it.javaClass.simpleName}: ${it.message}")) }
             main.post { onDone(state) }
         }
@@ -126,7 +142,7 @@ object DeltaFitter {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!force && prefs.getString(KEY_SIG, null) == sig) return currentState(model)
+        if (!force && prefs.getString(KEY_SIG, null) == sig) return currentState(ctx, model)
 
         val samples = labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
         val delta = when (val fit = SpamTuner.fit(model, samples)) {
@@ -134,19 +150,39 @@ object DeltaFitter {
             is SpamTuner.Fit.Ok -> fit.delta
         }
         if (!ConfigWriter.isConnected()) return State.Unavailable(Reason.ModuleDisconnected)
+        val fittedAt = System.currentTimeMillis()
+        val digest = DeltaStamp.digest(delta.encode())
+        val weights = delta.indices.size
+
+        // 下发前先问一句「模块端手上那份是不是就是这一份」：读回文件比对内容摘要。
+        // 拟合是确定性的（同标注必得同 delta），所以摘要相同 ⇔ 这份微调已在模块端，再下发只是推进版本号、
+        // 让模块端把同一份文件重读一遍。判据取**读回的文件内容**而非状态回传：状态说的是「上次加载成功」，
+        // 文件才是模块端下次加载要用的那份；换过 base 时读回会因指纹不符而不是 Ok ⇒ 照旧下发（那正是该重发的情形）。
+        val curVersion = ConfigWriter.load()?.deltaVersion ?: 0L
+        val existing = DeltaWriter.read(model)
+        if (curVersion > 0L && existing?.parsed is SpamDelta.Parse.Ok && existing.digest == digest) {
+            rememberFit(prefs, sig, fittedAt)
+            return State.Sent(curVersion, weights, digest, fittedAt, skipped = true)
+        }
+
         // 顺序是正确性的一部分：文件先落地，版本号后写（见 DeltaWriter 类注释）
-        val digest = DeltaWriter.write(delta) ?: return State.Unavailable(Reason.DeltaWriteFailed)
+        val written = DeltaWriter.write(delta) ?: return State.Unavailable(Reason.DeltaWriteFailed)
         val cfg = ConfigWriter.load() ?: return State.Unavailable(Reason.ConfigReadFailed)
         // 版本号与时间戳同源，同毫秒连发两轮时 +1 —— 否则模块端把第二轮当成「版本号没变」而不加载
         val now = System.currentTimeMillis()
         val version = if (cfg.deltaVersion == now) now + 1 else now
         if (!ConfigWriter.save(cfg.copy(deltaVersion = version))) return State.Unavailable(Reason.VersionWriteFailed)
 
-        prefs.edit().putString(KEY_SIG, sig).apply()
-        return State.Sent(version, delta.indices.size, digest)
+        rememberFit(prefs, sig, fittedAt)
+        return State.Sent(version, weights, written, fittedAt)
     }
 
-    private fun currentState(model: SpamModel): State {
+    /** 跳过下发时也要记：不记就每次进屏都重拟合一遍（结果一样，纯浪费）。 */
+    private fun rememberFit(prefs: SharedPreferences, sig: String, fittedAt: Long) {
+        prefs.edit().putString(KEY_SIG, sig).putLong(KEY_FITTED_AT, fittedAt).apply()
+    }
+
+    private fun currentState(ctx: Context, model: SpamModel): State {
         val version = ConfigWriter.load()?.deltaVersion ?: 0L
         if (version == 0L) return State.None
         val read = DeltaWriter.read(model)
@@ -154,7 +190,8 @@ object DeltaFitter {
             is SpamDelta.Parse.Ok -> parsed.delta.indices.size
             else -> UNKNOWN_WEIGHTS
         }
-        return State.Sent(version, weights, read?.digest ?: DeltaStamp.UNKNOWN_DIGEST)
+        val fittedAt = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_FITTED_AT, 0L)
+        return State.Sent(version, weights, read?.digest ?: DeltaStamp.UNKNOWN_DIGEST, fittedAt)
     }
 
     private fun bundledBase(): SpamModel? {

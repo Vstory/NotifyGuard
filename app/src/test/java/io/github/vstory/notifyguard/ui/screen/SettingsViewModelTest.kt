@@ -251,16 +251,46 @@ class SettingsViewModelTest {
     @Test
     fun fitTextSaysWhenTheDeltaFileIsUnreadable() {
         val sent = fitText(
-            DeltaFitter.State.Sent(version = 1_700_000_000_000L, weights = 128, digest = "3f9a1c2b")
+            DeltaFitter.State.Sent(
+                version = 1_700_000_000_000L,
+                weights = 128,
+                digest = "3f9a1c2b",
+                fittedAt = 1_699_999_000_000L,
+            )
         ) as UiText.Res
         assertEquals(R.string.fit_sent, sent.id)
         assertEquals(DeltaStamp.of(1_700_000_000_000L, "3f9a1c2b"), sent.args[0])
         assertEquals(128, sent.args[1])
+        // 拟合完成时间与下发时间是两个：跳过下发时只有前者会前进
+        assertEquals(DeltaStamp.timeOf(1_699_999_000_000L), sent.args[2])
+
+        val noFitTime = fitText(
+            DeltaFitter.State.Sent(version = 1_700_000_000_000L, weights = 128, digest = "3f9a1c2b")
+        ) as UiText.Res
+        assertEquals("没有拟合时间的老记录不该拿下发时间冒充", R.string.fit_sent_no_fit_time, noFitTime.id)
 
         val broken = fitText(DeltaFitter.State.Sent(version = 1_700_000_000_000L, weights = -1)) as UiText.Res
         assertEquals(R.string.fit_sent_no_file, broken.id)
         // 文件读不到就没有摘要可报，只报时刻（不带一个空的 `+`）
         assertEquals(DeltaStamp.timeOf(1_700_000_000_000L), broken.args[0])
+    }
+
+    /** 内容与模块端一致 ⇒ 跳过下发，文案必须区别于「已下发」（否则用户以为又推了一次）。 */
+    @Test
+    fun fitTextSaysWhenTheDeltaWasSkipped() {
+        val skipped = fitText(
+            DeltaFitter.State.Sent(
+                version = 1_700_000_000_000L,
+                weights = 524,
+                digest = "e1ae973d",
+                fittedAt = 1_699_999_000_000L,
+                skipped = true,
+            )
+        ) as UiText.Res
+        assertEquals(R.string.fit_skipped, skipped.id)
+        assertEquals(DeltaStamp.of(1_700_000_000_000L, "e1ae973d"), skipped.args[0])
+        assertEquals(524, skipped.args[1])
+        assertEquals(DeltaStamp.timeOf(1_699_999_000_000L), skipped.args[2])
     }
 
     private companion object {

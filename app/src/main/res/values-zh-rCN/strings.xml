@@ -258,7 +258,9 @@
     <string name="fit_none">微调：未下发（标注满 %1$d 条且两类各 ≥ %2$d 条后自动拟合）</string>
     <string name="fit_not_enough">微调：未下发（可训练样本 %1$d/%2$d，垃圾 %3$d/%4$d、正常 %5$d/%6$d）</string>
     <string name="fit_unavailable_line">微调：未下发（%1$s）</string>
-    <string name="fit_sent">微调：已下发 %1$s（%2$d 个权重）</string>
+    <string name="fit_sent">微调：已下发 %1$s（%2$d 个权重，拟合完成 %3$s）</string>
+    <string name="fit_sent_no_fit_time">微调：已下发 %1$s（%2$d 个权重）</string>
+    <string name="fit_skipped">微调：未下发 —— 模块端已持有同一份（%1$s，%2$d 个权重，拟合完成 %3$s）</string>
     <string name="fit_sent_no_file">微调：已下发 %1$s（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）</string>
     <string name="fit_reason_model">内置模型不可用</string>
     <string name="fit_reason_module">模块未连接</string>

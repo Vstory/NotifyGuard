@@ -36,10 +36,22 @@ internal fun fitText(state: DeltaFitter.State?): UiText = when (state) {
     is DeltaFitter.State.Unavailable ->
         UiText.Res(R.string.fit_unavailable_line, listOf(fitReason(state.reason)))
 
-    is DeltaFitter.State.Sent -> if (state.weights >= 0) {
-        UiText.Res(R.string.fit_sent, listOf(stampOf(state), state.weights))
-    } else {
-        UiText.Res(R.string.fit_sent_no_file, listOf(DeltaStamp.timeOf(state.version)))
+    is DeltaFitter.State.Sent -> when {
+        // 跳过下发要说出来：显示成「已下发」会让用户以为又推了一次（时间也是对不上的）
+        state.skipped -> UiText.Res(
+            R.string.fit_skipped,
+            listOf(stampOf(state), state.weights, fitTime(state.fittedAt)),
+        )
+
+        state.weights < 0 -> UiText.Res(R.string.fit_sent_no_file, listOf(DeltaStamp.timeOf(state.version)))
+
+        state.fittedAt > 0 -> UiText.Res(
+            R.string.fit_sent,
+            listOf(stampOf(state), state.weights, fitTime(state.fittedAt)),
+        )
+
+        // 老记录（本版之前下发的）没有拟合时间：宁可少报一项，也不拿下发时间冒充它
+        else -> UiText.Res(R.string.fit_sent_no_fit_time, listOf(stampOf(state), state.weights))
     }
 }
 
@@ -47,6 +59,8 @@ internal fun fitText(state: DeltaFitter.State?): UiText = when (state) {
 private fun stampOf(state: DeltaFitter.State.Sent): String =
     if (state.digest.isEmpty()) DeltaStamp.timeOf(state.version)
     else DeltaStamp.of(state.version, state.digest)
+
+private fun fitTime(at: Long): String = DeltaStamp.timeOf(at)
 
 internal fun fitReason(reason: DeltaFitter.Reason): UiText = when (reason) {
     DeltaFitter.Reason.ModelUnavailable -> UiText.Res(R.string.fit_reason_model)
