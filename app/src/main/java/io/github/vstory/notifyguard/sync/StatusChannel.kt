@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
+import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.ai.DeltaHolder
 import io.github.vstory.notifyguard.ai.ModelHolder
 import io.github.vstory.notifyguard.core.CrashGuard
