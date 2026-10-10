@@ -15,12 +15,14 @@
 
     <string name="home_title">首页</string>
     <string name="home_refresh">刷新统计</string>
-    <string name="home_stats_group">拦截统计（当前记录窗口）</string>
-    <string name="home_stats_note">只统计当前记录窗口：模块端保留最近 %1$d 组（文本与判定都相同的通知并为一组），因此清空记录后这些数字会归零。权威副本在模块端。</string>
-    <string name="home_stat_blocked">已拦截：%1$d</string>
-    <string name="home_stat_would">建议拦截（观察模式）：%1$d</string>
-    <string name="home_stat_pass">放行：%1$d</string>
-    <string name="home_stat_scope">组数：%1$d · 事件：%2$d</string>
+    <string name="home_stats_group">拦截统计</string>
+    <string name="home_stat_blocked">已拦截（累计）：%1$d</string>
+    <string name="home_stat_would">建议拦截（观察模式，累计）：%1$d</string>
+    <string name="home_stat_pass">放行（累计）：%1$d</string>
+    <string name="home_stat_scope">当前窗口：组数 %1$d · 事件 %2$d</string>
+    <string name="home_stats_note_total">上面三个数是模块端的累计账本（按条计）：清空记录、重启系统框架都不会归零。下面的组数与事件只统计当前记录窗口 —— 模块端只保留最近 %1$d 组。</string>
+    <string name="home_stats_note_window">模块端还没回传累计账本（未连接，或装完还没重启系统框架）：下面三个数是当前记录窗口的，清空记录即归零。</string>
+    <string name="home_top_scope">排行按当前记录窗口的次数排。</string>
     <string name="home_stats_tap_hint">点任一行可跳到记录屏、只看该判定档。</string>
     <string name="home_top_group">命中排行（按应用）</string>
     <string name="home_top_empty">此窗口内还没有拦截。观察模式下不会真拦 —— 要生效请到设置屏：先确认「启用拦截判定」是打开的，再关掉观察模式；否则请查框架日志确认判定链在跑。</string>

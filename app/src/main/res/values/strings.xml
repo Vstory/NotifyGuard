@@ -16,12 +16,14 @@
 
     <string name="home_title">Home</string>
     <string name="home_refresh">Refresh statistics</string>
-    <string name="home_stats_group">Blocked (current window)</string>
-    <string name="home_stats_note">Only the current record window is counted: the module keeps the latest %1$d groups (notifications with identical text and verdict merge into one), so clearing records resets these numbers. The module side holds the authoritative copy.</string>
-    <string name="home_stat_blocked">Blocked: %1$d</string>
-    <string name="home_stat_would">Would have been blocked (observe mode): %1$d</string>
-    <string name="home_stat_pass">Passed: %1$d</string>
-    <string name="home_stat_scope">Groups: %1$d · events: %2$d</string>
+    <string name="home_stats_group">Block stats</string>
+    <string name="home_stat_blocked">Blocked (total): %1$d</string>
+    <string name="home_stat_would">Would block (observe mode, total): %1$d</string>
+    <string name="home_stat_pass">Passed (total): %1$d</string>
+    <string name="home_stat_scope">Current window: %1$d groups · %2$d events</string>
+    <string name="home_stats_note_total">The three numbers above are the module-side running totals (counted per notification): clearing records or restarting the system framework does not reset them. The group and event counts below cover only the current record window — the module keeps the latest %1$d groups.</string>
+    <string name="home_stats_note_window">The module has not reported its running totals yet (not connected, or installed without restarting the system framework): the three numbers below are from the current record window and reset when records are cleared.</string>
+    <string name="home_top_scope">Ranked by counts in the current record window.</string>
     <string name="home_stats_tap_hint">Tap a row to open Records filtered to just that verdict.</string>
     <string name="home_top_group">Top apps (blocked)</string>
     <string name="home_top_empty">Nothing has been blocked in this window. Nothing is ever blocked while observe mode is on — in Settings, make sure verdicts are enabled and then turn observe mode off; otherwise check the framework log to confirm the verdict chain is running.</string>
