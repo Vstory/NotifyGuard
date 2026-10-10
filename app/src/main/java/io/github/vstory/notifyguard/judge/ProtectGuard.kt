@@ -16,6 +16,12 @@ object ProtectGuard {
         "otp", "verification code", "verification", "one-time password", "one time password",
     )
 
+    /** 保护出口的原因码前缀：判定侧拼串（[Judge]）与 App 侧解析都引用这里，避免各写一份。 */
+    const val REASON_PREFIX = "protect_"
+
+    /** 判定侧的类型名（与设置页的资源键不同源：前台服务在判定侧是 `fgs`）。 */
+    private val TYPES = setOf("call", "alarm", "navigation", "media", "fgs", "conversation")
+
     fun protectedType(s: NotifySnapshot, p: ProtectSwitches): String? = when {
         p.call && s.category == Notification.CATEGORY_CALL -> "call"
         p.alarm && s.category == Notification.CATEGORY_ALARM -> "alarm"
@@ -27,4 +33,29 @@ object ProtectGuard {
     }
 
     fun hasHardWord(loweredText: String): Boolean = HARD_WORDS.any { loweredText.contains(it) }
+
+    /** 原因码 → 保护类型名；不是保护出口、或类型认不出（新版模块端加了类型）都返回 null。 */
+    fun typeOfReason(reason: String): String? {
+        if (!reason.startsWith(REASON_PREFIX)) return null
+        return reason.removePrefix(REASON_PREFIX).takeIf { it in TYPES }
+    }
+
+    /** 该类型在当前开关下是否仍受保护。 */
+    fun isEnabled(type: String, p: ProtectSwitches): Boolean = when (type) {
+        "call" -> p.call
+        "alarm" -> p.alarm
+        "navigation" -> p.navigation
+        "media" -> p.media
+        "fgs" -> p.foregroundService
+        "conversation" -> p.conversation
+        else -> false
+    }
+
+    /**
+     * 该条能否标注：命中保护类型**且该保护仍开着**就不能 —— 这种通知在保护这一步就放行了，
+     * 不进规则也不进 AI，标了等于给微调喂噪音。用户在设置里关掉对应保护后即可标注。
+     * 返回保护类型名；null = 可以标。
+     */
+    fun labelBlockedType(reason: String, p: ProtectSwitches): String? =
+        typeOfReason(reason)?.takeIf { isEnabled(it, p) }
 }

@@ -22,6 +22,7 @@ import io.github.vstory.notifyguard.sync.DeltaWriter
 import io.github.vstory.notifyguard.sync.LabelClient
 import io.github.vstory.notifyguard.sync.LogFetcher
 import io.github.vstory.notifyguard.ui.ReasonExplanation
+import io.github.vstory.notifyguard.ui.LabelGate
 import io.github.vstory.notifyguard.ui.UiText
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -168,6 +169,14 @@ class LearningViewModel : ViewModel() {
      */
     fun mark(ctx: Context, key: String, spam: Boolean) {
         val app = ctx.applicationContext ?: ctx
+        // 记录屏把按钮置灰了，这里再拦一道：学习屏这几块卡的行范围一旦放宽（待办从「被拦」改成「全部」），
+        // 保护条目就会顺着同一个入口漏进来
+        val blocked = records.firstOrNull { LabelRecord.keyOf(it) == key }
+            ?.let { LabelGate.blockedLabel(it, ConfigWriter.load()?.protect) }
+        if (blocked != null) {
+            notify(UiText.Res(R.string.records_label_blocked, listOf(blocked)))
+            return
+        }
         val label = labelFor(
             records,
             labels,
