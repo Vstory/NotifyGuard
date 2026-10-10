@@ -63,10 +63,10 @@ object CrashGuard {
 
     fun noteError(where: String, t: Throwable) {
         val n = errors.incrementAndGet()
-        ModuleLogger.error("hook error[$where] #$n: ${t.javaClass.simpleName}: ${t.message}", t)
+        ModuleLogger.error("guard.error", t, "where=$where", "n=$n")
         if (n >= ERROR_STORM && !stormTripped) {
             stormTripped = true
-            ModuleLogger.error("异常风暴（$n 次）⇒ 就地停用判定（hook 保留直通）")
+            ModuleLogger.error("guard.storm", "n=$n", "judge=disabled", "hooks=passthrough")
             runCatching { onStorm?.invoke() }
         }
     }
@@ -80,13 +80,20 @@ object CrashGuard {
     fun attach(
         iface: XposedInterface,
         cl: ClassLoader,
-        ok: (String) -> Unit,
-        skip: (String) -> Unit,
+        ok: (String, List<String>) -> Unit,
+        skip: (String, List<String>) -> Unit,
     ) {
         syncFromDisk()
-        if (tripped) ModuleLogger.error("safe_mode 标志存在 ⇒ 本代不装拦截（删掉 ${ModuleDir.safeMode().path} 即免重启恢复）")
+        if (tripped) {
+            ModuleLogger.error(
+                "safemode.active",
+                "path=${ModuleDir.safeMode().path}",
+                "interceptor=off",
+                "recover=delete_file",
+            )
+        }
         val ams = runCatching { cl.loadClass(AMS_CLASS) }.getOrNull()
-        if (ams == null) skip("$AMS_CLASS 加载失败 ⇒ 崩溃环路检测与熔断期间的状态通道均不可用")
+        if (ams == null) skip("ams", listOf("reason=class_load_failed", "effect=no_crash_loop_detect,no_status_channel"))
         installAmsWatch(iface, ams, ok, skip)
         installContextProbe(iface, ams, ok, skip)
         watchFlag(ok, skip)
@@ -100,10 +107,15 @@ object CrashGuard {
             deaths.addLast(now)
             while (deaths.isNotEmpty() && now - deaths.first() > deathWindowMs) deaths.removeFirst()
             val n = deaths.size
-            ModuleLogger.info("SystemUI 死亡（${deathWindowMs / 1000}s 窗口内第 $n 次）")
+            ModuleLogger.info("systemui.death", "n=$n", "window_s=${deathWindowMs / 1000}")
             if (n <= MAX_RESTARTS || tripped) return
             tripped = true
-            ModuleLogger.error("!!! 崩溃环路：SystemUI 在 ${deathWindowMs / 1000}s 内死亡 $n 次 ⇒ 写 safe_mode 并停用判定")
+            ModuleLogger.error(
+                "systemui.crash_loop",
+                "n=$n",
+                "window_s=${deathWindowMs / 1000}",
+                "action=write_safemode,disable_judge",
+            )
             // 停判定是内存操作，必须当场做；写标志是磁盘 IO，挪到 worker
             runCatching { onTrip?.invoke() }
         }
@@ -176,8 +188,8 @@ object CrashGuard {
     private fun installAmsWatch(
         iface: XposedInterface,
         ams: Class<*>?,
-        ok: (String) -> Unit,
-        skip: (String) -> Unit,
+        ok: (String, List<String>) -> Unit,
+        skip: (String, List<String>) -> Unit,
     ) {
         if (ams == null) return
         // 不硬编码签名：方法名随 ROM 版本变，这里只要求「第一个参数是 ProcessRecord」
@@ -186,7 +198,7 @@ object CrashGuard {
                 m.parameterTypes[0].name.endsWith("ProcessRecord")
         }
         if (targets.isEmpty()) {
-            skip("AMS 上未找到 app-death 方法 ⇒ 崩溃环路检测不可用（safe_mode 标志仍生效）")
+            skip("ams_death", listOf("reason=method_not_found", "effect=no_crash_loop_detect", "safemode_flag=ok"))
             return
         }
         var hooked = 0
@@ -204,9 +216,11 @@ object CrashGuard {
                     }),
                 )
                 hooked++
-            }.onFailure { skip("AMS#${m.name}(${m.parameterCount} 参数) hook 失败: ${it.message}") }
+            }.onFailure {
+                skip("ams_death", listOf("method=${m.name}", "params=${m.parameterCount}", ModuleLogger.err(it)))
+            }
         }
-        if (hooked > 0) ok("AMS app-death 监听（$hooked 个重载）⇒ SystemUI 崩溃环路熔断")
+        if (hooked > 0) ok("ams_death", listOf("overloads=$hooked"))
     }
 
     /**
@@ -220,13 +234,13 @@ object CrashGuard {
     private fun installContextProbe(
         iface: XposedInterface,
         ams: Class<*>?,
-        ok: (String) -> Unit,
-        skip: (String) -> Unit,
+        ok: (String, List<String>) -> Unit,
+        skip: (String, List<String>) -> Unit,
     ) {
         if (ams == null) return
         val targets = ams.declaredMethods.filter { it.name == AMS_READY_METHOD }
         if (targets.isEmpty()) {
-            skip("AMS 上未找到 $AMS_READY_METHOD ⇒ 熔断期间 App 联系不上模块（恢复需重启系统框架）")
+            skip("ams_ready", listOf("reason=method_not_found", "effect=no_status_channel_during_safemode"))
             return
         }
         var hooked = 0
@@ -242,9 +256,11 @@ object CrashGuard {
                     }),
                 )
                 hooked++
-            }.onFailure { skip("AMS#${m.name}(${m.parameterCount} 参数) hook 失败: ${it.message}") }
+            }.onFailure {
+                skip("ams_ready", listOf("method=${m.name}", "params=${m.parameterCount}", ModuleLogger.err(it)))
+            }
         }
-        if (hooked > 0) ok("AMS $AMS_READY_METHOD 钩子（熔断期间也能注册状态通道）")
+        if (hooked > 0) ok("ams_ready", listOf("overloads=$hooked"))
     }
 
     private fun inspectDeath(args: List<Any?>) {
@@ -266,7 +282,7 @@ object CrashGuard {
 
     // ===== 标志文件 =====
 
-    private fun watchFlag(ok: (String) -> Unit, skip: (String) -> Unit) {
+    private fun watchFlag(ok: (String, List<String>) -> Unit, skip: (String, List<String>) -> Unit) {
         if (!watchEnabled || watcher != null) return
         val d = ModuleDir.dir
         runCatching {
@@ -278,15 +294,15 @@ object CrashGuard {
                     if (ModuleTeardown.expired()) return
                     worker.execute {
                         val now = syncFromDisk()
-                        ModuleLogger.info("safe_mode 标志变化 ⇒ 熔断=${now}")
+                        ModuleLogger.info("safemode.changed", "tripped=$now")
                         if (!now) runCatching { onCleared?.invoke() }
                     }
                 }
             }.also { it.startWatching() }
         }.onSuccess {
-            ok("safe_mode 标志监听（删标志即免重启恢复）")
+            ok("safemode_watch", listOf("recover=delete_file"))
         }.onFailure {
-            skip("safe_mode 标志监听不可用（恢复需重启 system_server）: ${it.message}")
+            skip("safemode_watch", listOf("restart_required=true", ModuleLogger.err(it)))
         }
     }
 
@@ -296,7 +312,13 @@ object CrashGuard {
             if (!d.exists()) d.mkdirs()
             ModuleDir.safeMode().writeText("tripped_at=${clock()}\nreason=$reason\n")
         }.onFailure {
-            ModuleLogger.error("写 ${ModuleDir.FILE_SAFE_MODE} 失败 ⇒ 熔断只在本代内存生效（重启后会重新装拦截）", it)
+            ModuleLogger.error(
+                "safemode.write_failed",
+                it,
+                "file=${ModuleDir.FILE_SAFE_MODE}",
+                "scope=memory_only",
+                "restart=reinstalls_hooks",
+            )
         }
     }
 

@@ -5,6 +5,7 @@ import io.github.libxposed.api.XposedModuleInterface
 import io.github.vstory.notifyguard.core.EntryHook
 import io.github.vstory.notifyguard.core.Generation
 import io.github.vstory.notifyguard.core.ModuleLogger
+import io.github.vstory.notifyguard.core.brief
 import io.github.vstory.notifyguard.core.ModuleStatus
 
 /**
@@ -31,17 +32,19 @@ class MainHook : XposedModule() {
         // 版本横幅：注入进程跑的是「注入那一刻」的那份代码，App 更新后 system_server 里仍是旧的 ——
         // 排障的第一件事就是确定这一点，所以版本必须由被注入的这份代码自己报出来
         ModuleLogger.info(
-            "NotifyGuard 模块 ${BuildConfig.VERSION_NAME}" +
-                "（${if (BuildConfig.DEBUG) "debug" else "release"}）已注入：" +
-                "api=$apiVersion framework=$frameworkName/$frameworkVersion " +
-                "isSystemServer=${param.isSystemServer} process=${param.processName}"
+            "boot.injected",
+            "variant=${if (BuildConfig.DEBUG) "debug" else "release"}",
+            "api=$apiVersion",
+            "framework=$frameworkName/$frameworkVersion",
+            "system_server=${param.isSystemServer}",
+            "process=${param.processName}",
         )
     }
 
     override fun onSystemServerStarting(param: XposedModuleInterface.SystemServerStartingParam) {
         systemServerStartingSeen = true
         classLoader = param.classLoader
-        ModuleLogger.info("onSystemServerStarting: classLoader=${param.classLoader}")
+        ModuleLogger.info("boot.starting", "classloader=${param.classLoader.brief()}")
         // 冷启动登记代际：进程重启后旧代已随进程消失，这一步只是把代际号对齐，
         // 好让日志里的「代际」在冷启动与热重载之间可比
         Generation.publish()
@@ -65,7 +68,7 @@ class MainHook : XposedModule() {
      *  - 旧代退场前仍会应答广播（那几十秒里两代并存），日志上的「代际」是分辨这件事的唯一线索。
      */
     override fun onHotReloading(param: XposedModuleInterface.HotReloadingParam): Boolean {
-        ModuleLogger.info("同意热重载：新代装配成功后接管，旧代随后自行释放资源")
+        ModuleLogger.info("hotreload.accepted", "on_success=takeover", "on_failure=keep_old")
         return true
     }
 
@@ -78,38 +81,52 @@ class MainHook : XposedModule() {
             ?: param.oldHookHandles.firstNotNullOfOrNull { it.executable?.declaringClass?.classLoader }
             ?: javaClass.classLoader
         installed = false
-        ModuleLogger.info("onHotReloaded: 新代装配开始（旧句柄 ${param.oldHookHandles.size} 个，classLoader=$cl）")
+        ModuleLogger.info(
+            "hotreload.start",
+            "stale_handles=${param.oldHookHandles.size}",
+            "classloader=${cl.brief()}",
+        )
 
         // 顺序即安全边界：**先装新、装上了才踢旧**。反过来（先 unhook 再装）一旦新代装失败，
         // 模块就彻底停摆（旧钩子已卸、新钩子没上）；这个顺序最坏也只是「仍在旧代码上跑」。
         val report = installAll(cl)
         if (report == null || report.okCount == 0) {
             installed = false
-            ModuleLogger.error("新代装配失败 ⇒ 保留旧代继续服务（本次改动不生效，重启 system_server 才能换）")
+            ModuleLogger.error("hotreload.assemble_failed", "kept=old", "restart_required=true")
             return
         }
         param.oldHookHandles.forEach {
-            runCatching { it.unhook() }.onFailure { t -> ModuleLogger.error("unhook 旧句柄失败：${t.message}") }
+            runCatching { it.unhook() }.onFailure { t -> ModuleLogger.error("hotreload.unhook_failed", ModuleLogger.err(t)) }
         }
         val gen = Generation.publish()
-        ModuleLogger.info("换代完成：代际=$gen；旧代待下一次活动（通知入队 / 广播 / 周期落盘）时释放自己")
-        ModuleLogger.info("新代待接线：下次通知入队时会重新取 Context 并注册记录 / 标注 / 状态 / 配置四条通道")
+        ModuleLogger.info("hotreload.done", "gen=$gen", "old_release=on_next_activity")
+        ModuleLogger.info(
+            "hotreload.pending",
+            "attach=on_next_enqueue",
+            "channels=record,label,status,config",
+        )
     }
 
     private fun installAll(cl: ClassLoader?): EntryHook.InstallReport? {
         if (installed) {
-            ModuleLogger.info("install skipped: 本代已装过（防叠加）")
+            ModuleLogger.info("boot.skip", "reason=already_installed")
             return null
         }
         if (cl == null) {
-            ModuleLogger.info("install skipped: classLoader 为空（注入未生效？）")
+            ModuleLogger.info("boot.skip", "reason=null_classloader")
             return null
         }
         installed = true
         val report = EntryHook.install(this, cl)
         ModuleStatus.recordInstall(report)
-        ModuleLogger.info("installHooks: ${report.okCount} ok / ${report.skipCount} skip / ${report.failCount} fail${report.detail()}")
-        ModuleLogger.info("slot: ${EntryHook.statsLine()}")
+        ModuleLogger.info(
+            "boot.hooks",
+            "ok=${report.okCount}",
+            "skip=${report.skipCount}",
+            "fail=${report.failCount}",
+        )
+        report.detailLines().forEach { ModuleLogger.lines(it) }
+        ModuleLogger.info("slot.stats", *EntryHook.statsFields())
         return report
     }
 }

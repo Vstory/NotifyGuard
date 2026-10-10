@@ -110,6 +110,11 @@ jobs:
           for c in ${STR_RES_CALLS:-}; do CALL_ARGS+=(--call "$c"); done
           python3 "$SCRIPT" ${STR_STRICT:+--strict} "${CALL_ARGS[@]}" .
 
+      # 框架日志格式门禁：事件名 `<域>.<事件>`、字段 `键=值`、字面量无中文、禁 debugRaw/[DBG]/WARN。
+      # 规则同源于 core/ModuleLogger.kt 的 KDoc 与 AGENTS.md「框架日志格式」，本地自查跑同一个脚本。
+      - name: Static check (log events)
+        run: python3 scripts/check_log_events.py .
+
       - name: Set up JDK
         uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:

@@ -46,12 +46,17 @@ object ConfigChannel {
                 if (intent?.action != ConfigContract.ACTION_CONFIG_CHANGED) return
                 // 与记录/标注通道同一条纪律：必须在 onReceive 的当前线程同步取调用 uid
                 if (!ChannelAccess.isFromApp(c)) {
-                    ModuleLogger.error("配置通道拒绝了非本模块的调用（uid=${Binder.getCallingUid()}）")
+                    ModuleLogger.error("channel.denied", "ch=config", "uid=${Binder.getCallingUid()}")
                     return
                 }
                 val savedAt = intent.getLongExtra(ConfigContract.EXTRA_SAVED_AT, 0L)
                 if (BuildConfig.DEBUG) {
-                    ModuleLogger.debugRaw("[DBG] 配置通道：收到变更广播（savedAt=$savedAt）⇒ 重读镜像")
+                    ModuleLogger.debug(
+                        "channel.request",
+                        "ch=config",
+                        "action=CHANGED",
+                        "saved_at=$savedAt",
+                    )
                 }
                 // 读文件是 IO，扔给记录 worker（同一线程上串行，不占 system_server 主线程）
                 LogSink.onWorker { ConfigReader.verifyFromFile(force = true, trigger = "broadcast") }
@@ -61,7 +66,7 @@ object ConfigChannel {
         ChannelAccess.registerExported(c, r, IntentFilter(ConfigContract.ACTION_CONFIG_CHANGED))
             .onFailure {
                 registered = false
-                ModuleLogger.error("注册配置通道失败（${it.javaClass.simpleName}: ${it.message}）")
+                ModuleLogger.error("channel.register_failed", it, "ch=config")
             }
     }
 }

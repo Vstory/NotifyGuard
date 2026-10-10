@@ -50,7 +50,12 @@ object StatusClient {
                 if (finished) return
                 val json = intent?.getStringExtra(StatusContract.EXTRA_STATUS) ?: return
                 if (BuildConfig.DEBUG) {
-                    AppLogger.debugRaw("[DBG] 状态：$what 收到回执 往返=${System.currentTimeMillis() - sentAt}ms")
+                    AppLogger.debug(
+                        "app.reply",
+                        "ch=status",
+                        "action=$what",
+                        "rtt_ms=${System.currentTimeMillis() - sentAt}",
+                    )
                 }
                 finish(StatusCodec.decode(json))
             }
@@ -73,13 +78,13 @@ object StatusClient {
 
         handler.postDelayed({
             if (BuildConfig.DEBUG) {
-                AppLogger.debugRaw("[DBG] 状态：$what 等 ${TIMEOUT_MS}ms 无回执 ⇒ 超时（界面按「未响应」渲染）")
+                AppLogger.debug("app.timeout", "ch=status", "action=$what", "waited_ms=${TIMEOUT_MS}")
             }
             finish(null)
         }, TIMEOUT_MS)
         // 不能 setPackage：system_server 里的 receiver 不属于任何包，定向投递永远收不到
         sentAt = System.currentTimeMillis()
-        if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 状态：发出 $what")
+        if (BuildConfig.DEBUG) AppLogger.debug("app.send", "ch=status", "action=$what")
         ctx.sendBroadcast(Intent(action))
     }
 }

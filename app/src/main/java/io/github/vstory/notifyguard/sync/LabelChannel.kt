@@ -45,12 +45,21 @@ object LabelChannel {
                 if (ModuleTeardown.expired()) return
                 val action = intent?.action ?: return
                 if (!ChannelAccess.isFromApp(c)) {
-                    ModuleLogger.error("标注通道拒绝了非本模块的调用（uid=${Binder.getCallingUid()}，action=$action）")
+                    ModuleLogger.error(
+                        "channel.denied",
+                        "ch=label",
+                        "uid=${Binder.getCallingUid()}",
+                        "action=$action",
+                    )
                     return
                 }
                 // 指令名取自 action 末段：App 侧也打同一段名字，两端日志能直接对上
                 if (BuildConfig.DEBUG) {
-                    ModuleLogger.debugRaw("[DBG] 标注通道：收到 ${action.substringAfterLast('.')}")
+                    ModuleLogger.debug(
+                        "channel.request",
+                        "ch=label",
+                        "action=${action.substringAfterLast('.')}",
+                    )
                 }
                 when (action) {
                     LabelContract.ACTION_GET_LABELS -> LabelSink.onWorker { replyAll(c) }
@@ -58,7 +67,7 @@ object LabelChannel {
                     LabelContract.ACTION_SET_LABEL -> {
                         val label = LabelCodec.decodeOne(intent.getStringExtra(LabelContract.EXTRA_LABEL))
                         if (label == null) {
-                            ModuleLogger.error("标注载荷解析失败（action=$action）⇒ 丢弃该次写入")
+                            ModuleLogger.error("label.parse_failed", "action=$action", "dropped=true")
                             return
                         }
                         LabelSink.onWorker { if (LabelSink.mutate { it.upsert(label) }) replyAll(c) }
@@ -83,7 +92,7 @@ object LabelChannel {
         receiver = r
         ChannelAccess.registerExported(c, r, filter).onFailure {
             registered = false
-            ModuleLogger.error("注册标注通道失败（${it.javaClass.simpleName}: ${it.message}）")
+            ModuleLogger.error("channel.register_failed", it, "ch=label")
         }
     }
 

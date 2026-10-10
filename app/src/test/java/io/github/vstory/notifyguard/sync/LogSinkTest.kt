@@ -57,7 +57,7 @@ class LogSinkTest {
         (1..5).forEach { LogSink.submit(rec(it.toLong())) }
         assertTrue(waitUntil { store.size() == 3 })
         assertEquals(listOf(5L, 4L, 3L), store.recent(10).map { it.ts })
-        assertTrue(LogSink.statsLine().contains("丢弃=2"))
+        assertTrue(LogSink.statsFields().contains("dropped=2"))
     }
 
     /**
@@ -96,7 +96,7 @@ class LogSinkTest {
 
         LogSink.submit(rec(1))
         LogSink.awaitIdle()
-        assertTrue(LogSink.statsLine().contains("已落盘=0"))
+        assertTrue(LogSink.statsFields().contains("persisted=0"))
     }
 
     /** 目录还没解析出来时刷出什么都不做，记录留在队列里等下一次。 */
@@ -105,7 +105,7 @@ class LogSinkTest {
         LogSink.flushThreshold = 1
         LogSink.submit(rec(1))
         LogSink.awaitIdle()
-        assertTrue(LogSink.statsLine().contains("已落盘=0"))
+        assertTrue(LogSink.statsFields().contains("persisted=0"))
     }
 
     @Test

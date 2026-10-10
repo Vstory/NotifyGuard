@@ -25,11 +25,7 @@ object ModuleStatus {
         okCount = report.okCount
         skipCount = report.skipCount
         failCount = report.failCount
-        assemblyText = report.detail().lineSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .take(MAX_ASSEMBLY_LINES)
-            .joinToString("\n")
+        assemblyText = report.detailLines().take(MAX_ASSEMBLY_LINES).joinToString("\n")
         assemblyAt = System.currentTimeMillis()
     }
 

@@ -31,7 +31,7 @@ object ServiceContext {
         }
         val c = fromGetter(service) ?: fromField(service)
         if (c == null) {
-            ModuleLogger.error("未能从系统服务实例取到 Context ⇒ 记录回流停用（判定不受影响）")
+            ModuleLogger.error("context.unavailable", "sink=disabled", "judge=unaffected")
             return
         }
         ctx = c
