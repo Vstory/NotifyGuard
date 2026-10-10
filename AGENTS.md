@@ -6,14 +6,18 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 
 ## 工作规程
 
-- **构建交给 CI，本地不跑 Gradle 构建/打包**（`assemble*` / `bundle*` 一律不出现在本地命令里）。编译、单测、产物校验由 `.github/workflows/build-ci.yml` 在 push 后跑。
-- 本地自查只跑**纯脚本**，且必须带 CI 的同款参数（少一个参数就是假通过 —— CI 报红时本地却是绿的）：
+- **本地能跑编译与单测，且必须跑**（实测：编译 ~40 秒、单测 ~30 秒）。这台机器已备 JDK 21、wrapper 发行版、`local.properties` 指向的 SDK（`/workspace/.tools/android-sdk`）与 4.6G 依赖缓存，所以三条命令都带 `--offline` 就是离线秒级/分钟级：
 
   ```bash
-  python3 scripts/check_string_format_args.py --strict --call UiText.Res .
+  cd /workspace/Project/NotifyGuard
+  python3 scripts/check_string_format_args.py --strict --call UiText.Res .   # 文案占位符，秒级
+  ./gradlew --offline :app:compileDebugKotlin                               # 编译，~40s
+  ./gradlew --offline :app:testDebugUnitTest                                # 单测，~30s
   ```
 
-  这是 CI 的第一个门禁，先过它能省一整轮 CI。参数与 `.github/workflows/build-ci.yml` 的 `env`（`STR_STRICT` / `STR_RES_CALLS`）同源，改那边就要改这里。
+  文案脚本的参数与 `.github/workflows/build-ci.yml` 的 `env`（`STR_STRICT` / `STR_RES_CALLS`）同源，改那边就要改这里；裸跑是假通过（核对 108 处 vs 带参 191 处）。
+- **打包与产物校验仍交 CI**：`assemble*` / `bundle*`、签名、APK 内断言（xposed 三件套 / scope / dex 入口）只在 CI 跑。本地只到「编得过 + 单测过」这一层。
+- 产物落在 `app/build/`、`build/`，已被 `.gitignore` 覆盖（`git status` 干净是判据）；`local.properties` 含签名口令，**别 cat 它**，也不要把它加进 git。
 - 看 CI：`python3 100_System/tools/github.py --repo Vstory/NotifyGuard --run latest`，失败看 `--run latest-failed --logs`。**轮询一次不超过 5 秒**，超时就报当前状态，不做多轮等待（CI 由用户自行监督）。
 - 改**同构的多处**（四条通道、各常驻资源的 `release()`、成对的文案）时，改完逐项 grep 数一遍每个文件都改到了：
   `grep -l "<新模式>" app/src/main/java/io/github/vstory/notifyguard/sync/{Log,Label,Status,Config}Channel.kt | wc -l` 应为 `4`。
