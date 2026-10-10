@@ -9,17 +9,12 @@ package io.github.vstory.notifyguard.sync
  * 缺字段一律取默认：字段只增不减，App 与模块的版本差只会让新增项缺失（[StatusCodec] 负责）。
  */
 data class StatusReport(
-    /** 模块自身的 versionName。用于识别「装的是哪一版」，与 App 版本可以不同。 */
-    val version: String = "",
     /**
-     * 模块端**正在跑的那份代码**的构建提交短号（注入时打进来的）。
-     *
-     * 与 [version] 是两件事：versionName 取自 apk，而注入进程跑的是「它启动那一刻」加载的代码 ——
-     * App 更新后 system_server 里仍是旧的。两者不一致就等于「模块端跑着旧代码」，
-     * 这正是「改了配置/代码没生效」的第一嫌疑。
+     * 模块端**正在运行的那份代码**的 versionName（含构建元数据段里的提交短号，如
+     * `1.7.0+ci-debug.b4efc10a`）。注入进程跑的是它启动那一刻加载的代码，与 App 当前版本可能不同 ——
+     * 两者不一致就等于「模块端跑着旧代码」，这正是「改了配置/代码没生效」的第一嫌疑。
      */
-    val moduleSha: String = "",
-    /** 本代装配汇总 + 明细（明细含每条 OK/SKIP/FAIL 的原因）。 */
+    val version: String = "",    /** 本代装配汇总 + 明细（明细含每条 OK/SKIP/FAIL 的原因）。 */
     val assembly: String = "",
     val assemblyAt: Long = 0L,
     val okCount: Int = 0,
@@ -47,6 +42,8 @@ data class StatusReport(
     val deltaVersion: Long = 0L,
     /** 已生效的微调权重数（0 = 纯 base）：版本号非 0 但权重为 0 说明那份 delta 是空的。 */
     val deltaWeights: Int = 0,
+    /** 已生效那份 delta 文件的内容摘要（见 `DeltaStamp`）：与模块端日志里那串逐字一致。 */
+    val deltaDigest: String = "",
     val recordsPersisted: Long = 0L,
     val recordsDropped: Long = 0L,
 )

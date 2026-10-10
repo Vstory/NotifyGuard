@@ -31,6 +31,7 @@
     <string name="learning_title">Learning</string>
     <string name="learning_refresh">Refresh learning data</string>
     <string name="learning_fit_group">Fine-tuning status</string>
+    <string name="learning_fit_resend">Resend</string>
     <string name="learning_fit_note">The sample counts below are the ones fine-tuning really uses — a label whose text yields no feature is not counted, so they can be lower than the label total.</string>
     <string name="learning_labels_line">Labels: %1$d (kept even after a record leaves the window)</string>
     <string name="learning_pending_group">To review: blocked, not labelled</string>
@@ -162,7 +163,7 @@
     <string name="module_detail_delta_on">fine-tuned %1$s (%2$d weights)</string>
     <string name="module_detail_delta_off">fine-tuning off</string>
     <string name="module_detail">%1$s · %2$s · records on disk: %3$d (buffer dropped: %4$d)</string>
-    <string name="module_assembly">Assembly this launch: OK %1$d / SKIP %2$d / FAIL %3$d (module code %4$s+git.%5$s)</string>
+    <string name="module_assembly">Assembly this launch: OK %1$d / SKIP %2$d / FAIL %3$d (module code %4$s)</string>
     <string name="module_safe_mode_line">Safe mode triggered %1$s: %2$s. %3$s</string>
     <string name="module_safe_mode_at">at %1$s</string>
     <string name="module_safe_mode_at_unknown">time not recorded</string>
@@ -258,8 +259,8 @@
     <string name="fit_none">Fine-tuning: not delivered (auto-fits once there are %1$d labels with at least %2$d per class)</string>
     <string name="fit_not_enough">Fine-tuning: not delivered (trainable samples %1$d/%2$d, spam %3$d/%4$d, ham %5$d/%6$d)</string>
     <string name="fit_unavailable_line">Fine-tuning: not delivered (%1$s)</string>
-    <string name="fit_sent">Fine-tuning: delivered v%1$s (%2$d weights)</string>
-    <string name="fit_sent_no_file">Fine-tuning: delivered v%1$s (the version number is written but the delta file cannot be read — the module side scores with the plain base model)</string>
+    <string name="fit_sent">Fine-tuning: delivered %1$s (%2$d weights)</string>
+    <string name="fit_sent_no_file">Fine-tuning: delivered %1$s (the version number is written but the delta file cannot be read — the module side scores with the plain base model)</string>
     <string name="fit_reason_model">built-in model unavailable</string>
     <string name="fit_reason_module">module not connected</string>
     <string name="fit_reason_write">writing the delta file failed</string>

@@ -61,6 +61,8 @@ class LearningViewModel : ViewModel() {
         /** 非空即弹某条记录的判定说明（与记录屏共用同一份说明件）。 */
         val explanation: ReasonExplanation? = null,
         val busy: Boolean = false,
+        /** 「重发微调」在途：按钮据此置灰，避免连点堆多轮拟合。 */
+        val fitBusy: Boolean = false,
         val notice: Notice? = null,
     )
 
@@ -255,6 +257,25 @@ class LearningViewModel : ViewModel() {
         if (list != null) DeltaFitter.ensureFitted(ctx, list) { onFit(it) }
     }
 
+    /**
+     * 「重发微调」：不看输入摘要变没变，按**权威源**的标注重新拟合、重新下发（样本门槛照旧）。
+     *
+     * 不拿界面手上那份列表去拟合：它可能比标注库旧，而重发的全部意义就是「用现在这份数据再算一遍」。
+     * 取不到标注时不下发 —— 拿一份空列表拟合等于把微调清空。
+     */
+    fun resendFit(ctx: Context) {
+        val app = ctx.applicationContext ?: ctx
+        state = state.copy(fitBusy = true)
+        LabelClient.fetch(app) { list ->
+            state = state.copy(fitBusy = false)
+            if (list == null) {
+                notify(UiText.Res(R.string.notice_label_failed, listOf(UiText.Res(R.string.learning_fit_resend))))
+                return@fetch
+            }
+            DeltaFitter.ensureFitted(app, list, force = true) { onFit(it) }
+        }
+    }
+
     private fun onLabels(ctx: Context, list: List<LabelRecord>?) {
         state = state.copy(labelError = if (list == null) TIMEOUT_HINT else null)
         repaint(ctx)
@@ -283,7 +304,7 @@ class LearningViewModel : ViewModel() {
      */
     private fun attribute(row: Row, text: String): Detail.Ready? {
         val model = DeltaFitter.baseModel() ?: return null
-        val delta = (DeltaWriter.read(model) as? SpamDelta.Parse.Ok)?.delta
+        val delta = (DeltaWriter.read(model)?.parsed as? SpamDelta.Parse.Ok)?.delta
         // 稀疏表：归因只碰文本里出现过的桶，摊成 2^18 长的稠密数组是白分配 1 MB
         val extra: HashMap<Int, Float>? = delta?.let { d ->
             HashMap<Int, Float>(d.indices.size).also { m ->

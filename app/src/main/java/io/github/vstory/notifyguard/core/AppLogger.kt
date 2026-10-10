@@ -18,8 +18,8 @@ object AppLogger {
 
     const val TAG = "NotifyGuard"
 
-    /** 与模块端同一口径：logcat 里每一行都标出构建提交短号（App 与模块端可能不是同一次构建）。 */
-    private val PREFIX = "[" + BuildConfig.GIT_SHA + "] "
+    /** 与模块端同一口径：logcat 里每一行都标出版本串（App 与模块端可能加载的不是同一次构建）。 */
+    private val PREFIX = "[" + BuildConfig.VERSION_NAME + "] "
 
     fun debugRaw(msg: String) = Log.d(TAG, PREFIX + msg)
 

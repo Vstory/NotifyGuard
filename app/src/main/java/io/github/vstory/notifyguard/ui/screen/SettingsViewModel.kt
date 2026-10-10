@@ -10,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ai.DeltaStamp
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.ProtectSwitches
 import io.github.vstory.notifyguard.sync.ConfigWriter
@@ -242,10 +243,10 @@ class SettingsViewModel : ViewModel() {
                 if (it.modelReady) R.string.module_detail_ai_ready else R.string.module_detail_ai_unavailable
             )
             val delta = if (it.deltaVersion > 0) {
-                // 版本号本体是下发时刻的毫秒时间戳：界面给人话，日志里两份都在
+                // 与模块端日志同一个标识（ISO 时刻 + 内容摘要）：对不上就说明模块端加载的不是这一份
                 UiText.Res(
                     R.string.module_detail_delta_on,
-                    listOf(timeText(it.deltaVersion), it.deltaWeights),
+                    listOf(DeltaStamp.of(it.deltaVersion, it.deltaDigest), it.deltaWeights),
                 )
             } else {
                 UiText.Res(R.string.module_detail_delta_off)
@@ -254,10 +255,7 @@ class SettingsViewModel : ViewModel() {
         }
 
         fun assemblySummary(s: StatusReport?): UiText? = s?.let {
-            UiText.Res(
-                R.string.module_assembly,
-                listOf(it.okCount, it.skipCount, it.failCount, it.version, it.moduleSha),
-            )
+            UiText.Res(R.string.module_assembly, listOf(it.okCount, it.skipCount, it.failCount, it.version))
         }
 
         fun safeModeLine(s: StatusReport?): UiText? {

@@ -7,8 +7,9 @@ import io.github.vstory.notifyguard.BuildConfig
 /**
  * 框架日志封装：必须走 [XposedInterface.log]，LSPosed 日志页不读 logcat。
  *
- * **每行都带构建提交短号**（`[<sha>]`）：模块代码活在被注入的进程里，App 更新后 system_server
- * 里跑的仍是注入那一刻的那份代码，日志里没有短号就只能靠猜。带脏标记时说明那份包不是干净提交构建的。
+ * **每行都带版本串**（`[1.7.0+ci-debug.b4efc10a]`）：模块代码活在被注入的进程里，App 更新后
+ * system_server 里跑的仍是注入那一刻的那份代码，日志里不带版本就只能靠猜。
+ * 串就是 versionName 本身（构建期已把提交短号并进去），不在这里二次拼装。
  *
  * DEBUG 判定**不放在本类内**：调用点须自带 `if (BuildConfig.DEBUG)`，否则字符串常量会留在 dex
  * 里（编译期裁剪失效），这正是 [debugRaw] 只做写、不判级别的原因。
@@ -17,8 +18,7 @@ object ModuleLogger {
 
     const val TAG = "NotifyGuard"
 
-    /** 编译期常量拼接，不进运行时开销。 */
-    private val PREFIX = "[" + BuildConfig.GIT_SHA + "] "
+    private val PREFIX = "[" + BuildConfig.VERSION_NAME + "] "
 
     private var iface: XposedInterface? = null
 

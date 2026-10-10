@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.sync
 
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import io.github.vstory.notifyguard.ai.DeltaStamp
 import io.github.vstory.notifyguard.ai.SpamDelta
 import io.github.vstory.notifyguard.ai.SpamModel
 import java.io.FileOutputStream
@@ -19,8 +20,11 @@ object DeltaWriter {
 
     private const val TAG = "NotifyGuard"
 
+    /** 读回结果 + 该文件的内容摘要（摘要口径与模块端日志同源，见 [DeltaStamp]）。 */
+    data class Read(val parsed: SpamDelta.Parse, val digest: String)
+
     /** 读回已下发的 delta 并校验它与当前 base 是否配套；`null` = 拿不到文件（未连接 / 还没写过）。 */
-    fun read(base: SpamModel): SpamDelta.Parse? {
+    fun read(base: SpamModel): Read? {
         val svc = ConfigWriter.currentService() ?: return null
         val bytes = runCatching {
             ParcelFileDescriptor.AutoCloseInputStream(svc.openRemoteFile(SpamDelta.REMOTE_FILE))
@@ -29,11 +33,12 @@ object DeltaWriter {
             Log.w(TAG, "read delta failed", it)
             return null
         }
-        return SpamDelta.parse(bytes, base.buckets, base.fingerprintU32)
+        return Read(SpamDelta.parse(bytes, base.buckets, base.fingerprintU32), DeltaStamp.digest(bytes))
     }
 
-    fun write(delta: SpamDelta): Boolean {
-        val svc = ConfigWriter.currentService() ?: return false
+    /** 返回写入内容的摘要（模块端日志里那串的另一半），失败返回 `null`。 */
+    fun write(delta: SpamDelta): String? {
+        val svc = ConfigWriter.currentService() ?: return null
         val bytes = delta.encode()
         return runCatching {
             ParcelFileDescriptor.AutoCloseOutputStream(svc.openRemoteFile(SpamDelta.REMOTE_FILE)).use { out ->
@@ -43,10 +48,10 @@ object DeltaWriter {
                 out.write(bytes)
                 out.flush()
             }
-            true
+            DeltaStamp.digest(bytes)
         }.getOrElse {
             Log.e(TAG, "write delta failed", it)
-            false
+            null
         }
     }
 }

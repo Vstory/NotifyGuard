@@ -93,7 +93,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             item { StatusCard(state.serviceText, state.connected, state.cfgLoaded) }
-            item { FitCard(state) }
+            item { FitCard(state, onResend = { viewModel.resendFit(ctx) }) }
             item {
                 PendingCard(
                     state = state,
@@ -132,13 +132,24 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
  * 迟早会拼出两种说法。
  */
 @Composable
-private fun FitCard(state: LearningViewModel.UiState) {
+private fun FitCard(state: LearningViewModel.UiState, onResend: () -> Unit) {
     GroupCard(stringResource(R.string.learning_fit_group)) {
         Note(stringResource(R.string.learning_fit_note))
-        Text(
-            text = fitLine(state.fit),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = fitLine(state.fit),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            // 重发不看「标注变没变」：用户点的就是「按现在这份数据再发一次」
+            TextButton(onClick = onResend, enabled = !state.fitBusy) {
+                Text(stringResource(R.string.learning_fit_resend))
+            }
+        }
         Note(stringResource(R.string.learning_labels_line, state.labelTotal))
         state.fetchError?.let {
             Text(
