@@ -118,6 +118,29 @@ class ConfigReaderTest {
         assertFalse(ConfigReader.config().observe)
     }
 
+    /**
+     * 广播触发的那条路（`force = true`）必须**不受节流**限制。
+     *
+     * 节流是为「记录落盘/拉取时顺手核对」设的；广播是 App 说「我刚写完」——
+     * 被上一次核对挡掉的话，用户改完设置仍要等一个周期，热重载就退化成「迟早会生效」。
+     */
+    @Test
+    fun forcedCheckIgnoresThrottle() {
+        var body = JSON_STRICT
+        ConfigReader.readRemoteFile = { _, _ -> body }
+        ConfigReader.start(FakeIface(failsBefore = 0, prefs = FakePrefs(JSON_STRICT)))
+        assertTrue(waitUntil { !ConfigReader.config().observe })
+
+        // 普通核对一次：占住节流窗口（此时文件内容与已生效的相同，不会换配置）
+        ConfigReader.verifyFromFile()
+        body = JSON_ENABLED
+        ConfigReader.verifyFromFile()
+        assertFalse("节流窗口内的普通核对不该生效", ConfigReader.config().enabled)
+
+        ConfigReader.verifyFromFile(force = true)
+        assertTrue("广播路径必须绕过节流", ConfigReader.config().enabled)
+    }
+
     private fun waitUntil(cond: () -> Boolean): Boolean {
         repeat(100) {
             if (cond()) return true

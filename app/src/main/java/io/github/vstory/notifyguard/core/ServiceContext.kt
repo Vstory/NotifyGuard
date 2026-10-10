@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.core
 
 import android.content.Context
+import io.github.vstory.notifyguard.sync.ConfigChannel
 import io.github.vstory.notifyguard.sync.LabelSink
 import io.github.vstory.notifyguard.sync.LogSink
 import io.github.vstory.notifyguard.sync.StatusChannel
@@ -37,6 +38,8 @@ object ServiceContext {
         LogSink.bindContext(c)
         LabelSink.bindContext(c)
         StatusChannel.register(c)
+        // 配置通道跟着 Context 一起上：它是 prefs push 断线后唯一能把配置推进来的路
+        ConfigChannel.register(c)
     }
 
     private fun fromGetter(service: Any): Context? = runCatching {

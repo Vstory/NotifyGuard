@@ -7,6 +7,7 @@ import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.judge.Config
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
@@ -21,6 +22,10 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * 注意 `edit()` 在模块端抛 UnsupportedOperationException（框架下发的是只读实现），写方只有 App 端
  * 的 [ConfigWriter]。
+ *
+ * 配置落地的四条来源都写在日志里（`配置生效（<来源>）`）：`startup`（注入首读）、`push`（框架推送）、
+ * `file/broadcast`（App 保存后广播触发重读镜像，模块更新后 push 断线时的主力）、`file/check`
+ * （记录落盘与拉取时顺手核对）。
  */
 object ConfigReader {
 
@@ -51,6 +56,7 @@ object ConfigReader {
     /** 已生效的配置原文：与镜像文件逐字比对，相同就不重复解析。 */
     @Volatile private var appliedJson: String? = null
     @Volatile private var lastCheckMs = 0L
+    private val mirrorReadFailedOnce = AtomicBoolean(false)
 
     private val scheduler = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "NotifyGuard-config").apply { isDaemon = true }
@@ -108,21 +114,34 @@ object ConfigReader {
     /**
      * 从镜像文件核对配置。**必须在后台线程调用**（有文件 IO）。
      *
-     * 为什么不能只信 push：push 是框架侧的内存回调，注册成功后仍可能被静默换掉——daemon 侧一旦重建
-     * 本模块的注入服务对象（模块 apk 更新、节点缓存失效都会走到 `new LSPInjectedModuleService`），
-     * 长命的 system_server 仍握着旧对象，此后 App 每次写入都推给空回调集合，不报错也不打日志。
-     * 而模块端也自愈不了：框架按 group 缓存 prefs 实例，重新 `getRemotePreferences` 拿到的还是那份
-     * 只在 push 时更新的内存快照，再读永远是旧值。唯一真实的通道是 App 顺手写的这个文件。
+     * 为什么不能只信 push：[ConfigContract] 记了源码级原因 —— 注入进程里的 prefs 是构造时那份
+     * 内存快照（core 按 group 缓存），而 push 按「当前加载的模块服务实例」投递；模块 apk 一重载，
+     * 老进程注册的回调就留在旧实例上了。唯一不经过 daemon 的数据通道是 App 写的这个文件
+     * （写入点是 [ConfigWriter]，触发点是 [ConfigChannel] 的广播或记录落盘/拉取时顺手核对）。
+     *
+     * @param force 跳过节流（广播说「刚写完」，此时不该被上一次核对挡住）
+     * @param trigger 日志里的触发来源，排障时靠它区分「谁把配置推进来的」
      */
-    internal fun verifyFromFile() {
+    internal fun verifyFromFile(force: Boolean = false, trigger: String = "check") {
         val iface = ifaceRef ?: return
         val now = System.currentTimeMillis()
-        if (now - lastCheckMs < checkIntervalMs) return
+        if (!force && now - lastCheckMs < checkIntervalMs) return
         lastCheckMs = now
-        // 文件不存在（App 还是老版本）不是异常：本方法只是兜底，绕开即可
-        val json = readRemoteFile(iface, REMOTE_FILE) ?: return
+        val json = readRemoteFile(iface, REMOTE_FILE)
+        if (json == null) {
+            // 文件读不到只剩两种可能：App 还是没写镜像的老版本，或旧注入服务的文件通道也失效了。
+            // 后者是「配置怎么改都不生效」的现场，必须留一行说明，否则排障只能靠重启试
+            if (mirrorReadFailedOnce.compareAndSet(false, true)) {
+                ModuleLogger.error(
+                    "镜像文件读不到（$REMOTE_FILE，trigger=$trigger）⇒ 配置只能靠 push 更新；" +
+                        "若 push 也断了（日志里不再出现 `配置生效（push）`）需重启 system_server，" +
+                        "或升级 App（新版本会写这份镜像）"
+                )
+            }
+            return
+        }
         if (json == appliedJson) return
-        reload(json, "file")
+        reload(json, "file/$trigger")
     }
 
     /** 单测复用同一个 object 单例，跨用例必须清干净（热重载在生产里等价于重建本 object）。 */
@@ -133,6 +152,7 @@ object ConfigReader {
         ifaceRef = null
         appliedJson = null
         lastCheckMs = 0L
+        mirrorReadFailedOnce.set(false)
     }
 
     private fun reload(json: String?, from: String) {
