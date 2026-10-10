@@ -147,6 +147,7 @@ private fun FitCard(
 ) {
     GroupCard(stringResource(R.string.learning_fit_group)) {
         Note(stringResource(R.string.learning_fit_note))
+        fitProgressText(state.fitProgress)?.let { Note(it.text()) }
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

@@ -1,0 +1,5 @@
+sdk.dir=/workspace/.tools/android-sdk
+storeFile=/workspace/tokens/Signing/Vstory.jks
+storePassword=8^$2$bjcA5kStmQaAm@AL6j94oh
+keyAlias=Vstory
+keyPassword=KtYAfh84A2s%@CGe8FNnDZ!T2#*

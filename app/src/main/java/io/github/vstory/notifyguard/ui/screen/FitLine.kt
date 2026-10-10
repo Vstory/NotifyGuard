@@ -60,6 +60,26 @@ internal fun fitText(state: DeltaFitter.State?): UiText = when (state) {
     }
 }
 
+/**
+ * 门槛进度行：null 表示不显示（还没拉过标注、或内置 base 不可用）。
+ *
+ * 它**独立于** [fitText] 的分支 —— 那几支讲的是下发情况，而「离能拟合还差几条」是另一件事，
+ * 且恰恰在已下发的状态下最需要看见（此时 fitText 里没有门槛数，用户会以为信息没了）。
+ */
+internal fun fitProgressText(readiness: SpamTuner.Readiness?): UiText? = when {
+    readiness == null -> null
+
+    readiness.ready -> UiText.Res(
+        R.string.learning_fit_progress_ready,
+        listOf(readiness.usable, SpamTuner.MIN_LABELS),
+    )
+
+    else -> UiText.Res(
+        R.string.learning_fit_progress_short,
+        listOf(readiness.shortfall, readiness.usable, SpamTuner.MIN_LABELS),
+    )
+}
+
 /** 摘要是「这份文件」的标识，取不到就不硬凑一个尾巴（`2026-…Z+` 会让串看起来坏了）。 */
 private fun stampOf(state: DeltaFitter.State.Sent): String =
     if (state.digest.isEmpty()) DeltaStamp.timeOf(state.version)

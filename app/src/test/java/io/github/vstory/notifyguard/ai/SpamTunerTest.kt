@@ -127,6 +127,30 @@ class SpamTunerTest {
         )
     }
 
+    /** 缺口取三类里最大的那个：某一类只有 1 条时，总数再多也不算达标。 */
+    @Test
+    fun shortfallTakesTheWidestOfTheThreeGaps() {
+        assertEquals(0, SpamTuner.Readiness(20, 5, 15).shortfall)
+        assertEquals(1, SpamTuner.Readiness(20, 1, 19).shortfall)
+        assertEquals(5, SpamTuner.Readiness(5, 5, 0).shortfall)
+    }
+
+    /**
+     * 界面用的进度与拟合的门槛判定必须同源：进度说「够了」，fit 就得真拟合得出来。
+     * 两处各算一遍过滤，迟早出现「界面说够了、拟合却空手而归」。
+     */
+    @Test
+    fun progressAgreesWithFitAboutCrossingTheThreshold() {
+        val thin = samples(4, 5)
+        assertEquals(9, SpamTuner.readiness(base, thin).usable)
+        assertTrue(!SpamTuner.readiness(base, thin).ready)
+        assertTrue(SpamTuner.fit(base, thin) is SpamTuner.Fit.NotReady)
+
+        val enough = samples(5, 5)
+        assertTrue(SpamTuner.readiness(base, enough).ready)
+        assertTrue(SpamTuner.fit(base, enough) is SpamTuner.Fit.Ok)
+    }
+
     /** 同一份标注 + 同一版 base，重复拟合必须落到同一串字节（重复触发才敢不设防）。 */
     @Test
     fun refittingTheSameInputsIsIdempotent() {
