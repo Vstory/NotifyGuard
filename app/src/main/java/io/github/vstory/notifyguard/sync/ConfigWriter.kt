@@ -1,9 +1,11 @@
 package io.github.vstory.notifyguard.sync
 
+import android.content.Intent
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import io.github.libxposed.service.XposedService
 import io.github.libxposed.service.XposedServiceHelper
+import io.github.vstory.notifyguard.core.AppContextHolder
 import io.github.vstory.notifyguard.judge.Config
 import java.io.FileOutputStream
 import java.util.concurrent.CopyOnWriteArrayList
@@ -66,10 +68,10 @@ object ConfigWriter {
     fun save(config: Config): Boolean {
         val s = service ?: return false
         val json = ConfigCodec.encode(config)
-        // 先落镜像文件、再写 remote prefs：文件是模块端 push 失效时的兜底源（见 ConfigReader.verifyFromFile），
+        // 先落镜像文件、再写 remote prefs：文件是模块端 push 失效时的数据源（见 ConfigReader.verifyFromFile），
         // 而 prefs 的写入本身是「有配置了」的信号。反序的话 push 送不到就什么都没有。
         if (!writeMirror(s, json)) Log.e(TAG, "write config mirror failed")
-        return runCatching {
+        val saved = runCatching {
             s.getRemotePreferences(ConfigReader.GROUP).edit()
                 .putString(ConfigReader.KEY, json)
                 .commit()
@@ -77,6 +79,37 @@ object ConfigWriter {
             Log.e(TAG, "write config failed", it)
             false
         }
+        // 广播不看 prefs 的写入结果：模块端读的是镜像，而镜像此刻已经落好了
+        broadcastChanged()
+        return saved
+    }
+
+    /**
+     * 每次保存、以及每次连上框架服务时，都喊一声「配置变了」。
+     *
+     * 模块端据此重读镜像 —— prefs 的 push 在模块更新后必断（源码级原因见 [ConfigContract]），
+     * 所以这条广播不是锦上添花，是热重载的主力：没有它，用户改完设置要等下一次拉取记录
+     * 或一个落盘周期，而 push 断线时连「重启 system_server」都只能算临时恢复。
+     */
+    private fun broadcastChanged() {
+        val c = AppContextHolder.get() ?: return
+        val intent = Intent(ConfigContract.ACTION_CONFIG_CHANGED)
+            .putExtra(ConfigContract.EXTRA_SAVED_AT, System.currentTimeMillis())
+        runCatching { c.sendBroadcast(intent) }
+            .onFailure { Log.e(TAG, "broadcast config changed failed", it) }
+    }
+
+    /**
+     * 连上服务就把 prefs 里那份配置写进镜像并广播一次。
+     *
+     * 覆盖两个盲区：① 老版本 App 从没写过镜像（模块端只能一直报「镜像读不到」）；
+     * ② App 重启过、而模块端那个进程还在跑旧配置（注入进程的生命周期与 App 无关）。
+     */
+    private fun syncOnConnect(s: XposedService) {
+        val json = runCatching {
+            s.getRemotePreferences(ConfigReader.GROUP).getString(ConfigReader.KEY, null)
+        }.getOrNull() ?: return
+        if (writeMirror(s, json)) broadcastChanged()
     }
 
     /** 写失败不阻塞 prefs 那条主路径：镜像只是兜底。 */
@@ -106,6 +139,7 @@ object ConfigWriter {
                 override fun onServiceBind(s: XposedService) {
                     service = s
                     Log.i(TAG, "xposed service connected: ${s.frameworkName}/${s.frameworkVersion}")
+                    syncOnConnect(s)
                     notifyService(s)
                 }
 
