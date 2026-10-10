@@ -37,7 +37,7 @@ object DeltaFitter {
         data class Unavailable(val reason: Reason) : State
 
         /**
-         * 已下发（[skipped] 为真时是「算出来与模块端那份一致，因而没有下发」）。
+         * 已下发（[delivery] 说明这次是真推了、还是因为内容一致而没推）。
          *
          * [version] 本身是**下发时刻**、[fittedAt] 是**拟合完成时刻** —— 两者分开记正是因为有了跳过：
          * 重算（重发按钮、改标注）只让拟合时间前进，下发时间只在真的推给模块端时才动。
@@ -48,7 +48,7 @@ object DeltaFitter {
             val weights: Int,
             val digest: String = "",
             val fittedAt: Long = 0L,
-            val skipped: Boolean = false,
+            val delivery: Delivery = Delivery.SENT,
         ) : State
     }
 
@@ -97,16 +97,18 @@ object DeltaFitter {
      * @param force 无视「输入摘要没变」也要重拟合一次（界面上的「重发微调」按钮）：
      *   摘要说的是「标注与 base 都没变」，而用户此刻要的是「不管变没变，按现在这份数据再算一遍」。
      *   它**不绕过内容比对** —— 重算出来与模块端持有的一致时仍然不下发（那种下发只有版本号在动）。
+     * @param reload 内容一致时也让模块端重读一次（长按「重发微调」）。它隐含 [force]：不重算就无从谈重载。
      */
     fun ensureFitted(
         ctx: Context,
         labels: List<LabelRecord>,
         force: Boolean = false,
+        reload: Boolean = false,
         onDone: (State) -> Unit,
     ) {
         val appContext = ctx.applicationContext
         worker.execute {
-            val state = runCatching { fitIfNeeded(appContext, labels, force) }
+            val state = runCatching { fitIfNeeded(appContext, labels, force || reload, reload) }
                 .getOrElse { State.Unavailable(Reason.FitError("${it.javaClass.simpleName}: ${it.message}")) }
             main.post { onDone(state) }
         }
@@ -138,7 +140,7 @@ object DeltaFitter {
      */
     fun baseModel(): SpamModel? = bundledBase()
 
-    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean): State {
+    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean, reload: Boolean): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -158,23 +160,38 @@ object DeltaFitter {
         // 拟合是确定性的（同标注必得同 delta），所以摘要相同 ⇔ 这份微调已在模块端，再下发只是推进版本号、
         // 让模块端把同一份文件重读一遍。判据取**读回的文件内容**而非状态回传：状态说的是「上次加载成功」，
         // 文件才是模块端下次加载要用的那份；换过 base 时读回会因指纹不符而不是 Ok ⇒ 照旧下发（那正是该重发的情形）。
-        val curVersion = ConfigWriter.load()?.deltaVersion ?: 0L
+        val cfg = ConfigWriter.load() ?: return State.Unavailable(Reason.ConfigReadFailed)
+        val curVersion = cfg.deltaVersion
         val existing = DeltaWriter.read(model)
         if (curVersion > 0L && existing?.parsed is SpamDelta.Parse.Ok && existing.digest == digest) {
+            if (!reload) {
+                rememberFit(prefs, sig, fittedAt)
+                return State.Sent(curVersion, weights, digest, fittedAt, Delivery.SKIPPED)
+            }
+            // 强制重载：只推进版本号，不重写文件 —— 模块端认版本号变化才会重读，重写同一份字节没有意义
+            val bumped = bumpedVersion(curVersion)
+            if (!ConfigWriter.save(cfg.copy(deltaVersion = bumped))) {
+                return State.Unavailable(Reason.VersionWriteFailed)
+            }
             rememberFit(prefs, sig, fittedAt)
-            return State.Sent(curVersion, weights, digest, fittedAt, skipped = true)
+            return State.Sent(bumped, weights, digest, fittedAt, Delivery.RELOADED)
         }
 
         // 顺序是正确性的一部分：文件先落地，版本号后写（见 DeltaWriter 类注释）
         val written = DeltaWriter.write(delta) ?: return State.Unavailable(Reason.DeltaWriteFailed)
-        val cfg = ConfigWriter.load() ?: return State.Unavailable(Reason.ConfigReadFailed)
-        // 版本号与时间戳同源，同毫秒连发两轮时 +1 —— 否则模块端把第二轮当成「版本号没变」而不加载
-        val now = System.currentTimeMillis()
-        val version = if (cfg.deltaVersion == now) now + 1 else now
+        val version = bumpedVersion(cfg.deltaVersion)
         if (!ConfigWriter.save(cfg.copy(deltaVersion = version))) return State.Unavailable(Reason.VersionWriteFailed)
 
         rememberFit(prefs, sig, fittedAt)
         return State.Sent(version, weights, written, fittedAt)
+    }
+
+    /**
+     * 版本号与时间戳同源，同毫秒连发两轮时 +1 —— 否则模块端会把第二轮当成「版本号没变」而不加载。
+     */
+    private fun bumpedVersion(current: Long): Long {
+        val now = System.currentTimeMillis()
+        return if (current == now) now + 1 else now
     }
 
     /** 跳过下发时也要记：不记就每次进屏都重拟合一遍（结果一样，纯浪费）。 */
