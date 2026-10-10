@@ -75,7 +75,7 @@ class MainHook : XposedModule() {
         // 新代的静态全空，宿主 classLoader 只能从旧钩子推：钩子落在宿主类上，其 declaringClass 的 loader
         // 就是宿主 loader（boot loader 加载时会得到 null，故逐级 fallback 到本模块的 loader）
         val cl = classLoader
-            ?: param.oldHookHandles.firstNotNullOfOrNull { it.executable.declaringClass?.classLoader }
+            ?: param.oldHookHandles.firstNotNullOfOrNull { it.executable?.declaringClass?.classLoader }
             ?: javaClass.classLoader
         installed = false
         ModuleLogger.info("onHotReloaded: 新代装配开始（旧句柄 ${param.oldHookHandles.size} 个，classLoader=$cl）")
