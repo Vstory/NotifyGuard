@@ -85,7 +85,6 @@ object StatusChannel {
         return StatusReport(
             version = ModuleStatus.version(),
             moduleSha = BuildConfig.GIT_SHA,
-            moduleSha = BuildConfig.GIT_SHA,
             assembly = ModuleStatus.assemblyText(),
             assemblyAt = ModuleStatus.assemblyAt(),
             okCount = ModuleStatus.okCount(),

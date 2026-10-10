@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.core
 
 import android.util.Log
+import io.github.vstory.notifyguard.BuildConfig
 
 /**
  * App 进程侧的调试日志（走 logcat）。

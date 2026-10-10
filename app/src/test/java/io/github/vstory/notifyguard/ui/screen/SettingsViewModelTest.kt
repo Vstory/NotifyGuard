@@ -178,20 +178,31 @@ class SettingsViewModelTest {
     @Test
     fun detailLineReportsModelAndDeltaAvailability() {
         val line = SettingsViewModel.detailLine(
-            StatusReport(modelReady = true, deltaVersion = 12L, recordsPersisted = 30L, recordsDropped = 2L)
-        )
-        assertEquals(
-            UiText.Res(
-                R.string.module_detail,
-                listOf(
-                    UiText.Res(R.string.module_detail_ai_ready),
-                    UiText.Res(R.string.module_detail_delta_on, listOf(12L)),
-                    30L,
-                    2L,
-                ),
-            ),
-            line,
-        )
+            StatusReport(
+                modelReady = true,
+                deltaVersion = 12L,
+                deltaWeights = 3,
+                recordsPersisted = 30L,
+                recordsDropped = 2L,
+            )
+        ) as UiText.Res
+        assertEquals(R.string.module_detail, line.id)
+        val args = line.args
+        assertEquals(UiText.Res(R.string.module_detail_ai_ready), args[0])
+        // 微调那一行报的是「时间 + 权重数」：版本号本体是毫秒时间戳，直接摊给用户没法读
+        val delta = args[1] as UiText.Res
+        assertEquals(R.string.module_detail_delta_on, delta.id)
+        assertTimeArg(delta.args[0])
+        assertEquals(3, delta.args[1])
+        assertEquals(30L, args[2])
+        assertEquals(2L, args[3])
+    }
+
+    /** 没有微调时不能报权重数：那会让「微调未启用」看起来像启用着一份空 delta。 */
+    @Test
+    fun detailLineHidesDeltaWeightsWhenNotTuned() {
+        val line = SettingsViewModel.detailLine(StatusReport(deltaVersion = 0L, deltaWeights = 0)) as UiText.Res
+        assertEquals(UiText.Res(R.string.module_detail_delta_off), line.args[1])
     }
 
     @Test
