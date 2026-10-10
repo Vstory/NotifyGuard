@@ -263,7 +263,14 @@ class LearningViewModel : ViewModel() {
      * 不拿界面手上那份列表去拟合：它可能比标注库旧，而重发的全部意义就是「用现在这份数据再算一遍」。
      * 取不到标注时不下发 —— 拿一份空列表拟合等于把微调清空。
      */
-    fun resendFit(ctx: Context) {
+    fun resendFit(ctx: Context) = refit(ctx, reload = false)
+
+    /**
+     * 长按「重发微调」：连模块端重读一次都要 —— 用户怀疑上一版没生效时用（内容一致时只推进版本号）。
+     */
+    fun forceReloadFit(ctx: Context) = refit(ctx, reload = true)
+
+    private fun refit(ctx: Context, reload: Boolean) {
         val app = ctx.applicationContext ?: ctx
         state = state.copy(fitBusy = true)
         LabelClient.fetch(app) { list ->
@@ -272,7 +279,7 @@ class LearningViewModel : ViewModel() {
                 notify(UiText.Res(R.string.notice_label_failed, listOf(UiText.Res(R.string.learning_fit_resend))))
                 return@fetch
             }
-            DeltaFitter.ensureFitted(app, list, force = true) { onFit(it) }
+            DeltaFitter.ensureFitted(app, list, force = true, reload = reload) { onFit(it) }
         }
     }
 

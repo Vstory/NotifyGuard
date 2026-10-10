@@ -284,13 +284,30 @@ class SettingsViewModelTest {
                 weights = 524,
                 digest = "e1ae973d",
                 fittedAt = 1_699_999_000_000L,
-                skipped = true,
+                delivery = DeltaFitter.Delivery.SKIPPED,
             )
         ) as UiText.Res
         assertEquals(R.string.fit_skipped, skipped.id)
         assertEquals(DeltaStamp.of(1_700_000_000_000L, "e1ae973d"), skipped.args[0])
         assertEquals(524, skipped.args[1])
         assertEquals(DeltaStamp.timeOf(1_699_999_000_000L), skipped.args[2])
+    }
+
+    /** 长按重发：内容一致但推了版本号，文案要与「跳过」区分开（用户要的是模块端会重读）。 */
+    @Test
+    fun fitTextSaysWhenAnIdenticalDeltaWasPushedToForceReload() {
+        val reloaded = fitText(
+            DeltaFitter.State.Sent(
+                version = 1_700_000_000_000L,
+                weights = 524,
+                digest = "e1ae973d",
+                fittedAt = 1_699_999_000_000L,
+                delivery = DeltaFitter.Delivery.RELOADED,
+            )
+        ) as UiText.Res
+        assertEquals(R.string.fit_reloaded, reloaded.id)
+        assertEquals(DeltaStamp.of(1_700_000_000_000L, "e1ae973d"), reloaded.args[0])
+        assertEquals(524, reloaded.args[1])
     }
 
     private companion object {

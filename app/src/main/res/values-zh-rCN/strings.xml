@@ -31,6 +31,7 @@
     <string name="learning_refresh">刷新学习数据</string>
     <string name="learning_fit_group">微调状态</string>
     <string name="learning_fit_resend">重发微调</string>
+    <string name="learning_fit_resend_hint">长按「重发微调」＝ 强制模块端重载：内容一致时不重写文件，只推进版本号。</string>
     <string name="learning_fit_note">下面的样本数是拟合真正会用的那份：凑不出特征的标注不计入，所以可能少于标注总数。</string>
     <string name="learning_labels_line">标注 %1$d 条（记录被窗口裁掉后仍保留）</string>
     <string name="learning_pending_group">待处理：被拦但未标注</string>
@@ -260,6 +261,7 @@
     <string name="fit_unavailable_line">微调：未下发（%1$s）</string>
     <string name="fit_sent">微调：已下发 %1$s（%2$d 个权重，拟合完成 %3$s）</string>
     <string name="fit_sent_no_fit_time">微调：已下发 %1$s（%2$d 个权重）</string>
+    <string name="fit_reloaded">微调：已下发 %1$s（%2$d 个权重，内容一致 ⇒ 仅推进版本号让模块端重载）</string>
     <string name="fit_skipped">微调：未下发 —— 模块端已持有同一份（%1$s，%2$d 个权重，拟合完成 %3$s）</string>
     <string name="fit_sent_no_file">微调：已下发 %1$s（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）</string>
     <string name="fit_reason_model">内置模型不可用</string>

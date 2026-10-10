@@ -38,8 +38,13 @@ internal fun fitText(state: DeltaFitter.State?): UiText = when (state) {
 
     is DeltaFitter.State.Sent -> when {
         // 跳过下发要说出来：显示成「已下发」会让用户以为又推了一次（时间也是对不上的）
-        state.skipped -> UiText.Res(
+        state.delivery == DeltaFitter.Delivery.SKIPPED -> UiText.Res(
             R.string.fit_skipped,
+            listOf(stampOf(state), state.weights, fitTime(state.fittedAt)),
+        )
+
+        state.delivery == DeltaFitter.Delivery.RELOADED -> UiText.Res(
+            R.string.fit_reloaded,
             listOf(stampOf(state), state.weights, fitTime(state.fittedAt)),
         )
 
