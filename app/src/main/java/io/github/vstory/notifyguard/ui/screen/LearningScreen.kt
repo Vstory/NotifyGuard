@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.ui.screen
 
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -154,16 +155,14 @@ private fun FitCard(
     GroupCard(stringResource(R.string.learning_fit_group)) {
         Note(stringResource(R.string.learning_fit_note))
         fitProgressText(state.fitProgress)?.let { Note(it.text()) }
-        Row(
+        Text(
+            text = fitLine(state.fit),
+            style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = fitLine(state.fit),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
+        )
+        // 操作按钮独占一行：状态串里带时间戳与摘要（`2026-10-10T04:16:47Z+c63df84c`），
+        // 与按钮挤同一行时会在时间戳中间折行，看起来像串坏了
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             // 短按 = 重算（内容一致就不下发）；长按 = 连模块端重读都要（内容一致时只推进版本号）。
             // 别写成「TextButton + 外层 pointerInput」：按钮内部的 clickable 在 Main pass 里先消费事件，
             // 外层的 detectTapGestures 永远收不到长按（表现是长按毫无反应）。两种手势都由这个 Text 自己承载。
