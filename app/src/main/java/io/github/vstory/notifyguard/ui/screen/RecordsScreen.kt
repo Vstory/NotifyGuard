@@ -348,18 +348,22 @@ private fun RecordCard(
             // 这行原本直接贴模块端的技术串（`disabled · EXT_SLOT`），看不懂只能去翻代码。
             // 现在出人话、点开给解释；原始串挪进弹窗，排障时仍能与框架日志对上
             ReasonLine(row.meta, onExplain)
+            // 禁标要写出原因，否则两个按钮灰着、用户不知道该去哪儿解开（开关在设置屏的「保护类型」）
+            row.labelBlocked?.let { Note(stringResource(R.string.records_label_blocked, it.text())) }
             // 三个动作对已标注状态互斥收敛：已标垃圾时「标垃圾」置灰，免得按出一串同义指令。
-            // 在途（busy）时全部置灰：连点会并发发出多条指令，而先到的回执会盖掉后点那次的状态
+            // 在途（busy）时全部置灰：连点会并发发出多条指令，而先到的回执会盖掉后点那次的状态。
+            // 保护类型命中且开关开着时禁标（见 RecordsViewModel.labelBlocked）——「撤销」不在此列，
+            // 撤销是移除旧标注，不是新增样本
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(
                     onClick = { onMark(true) },
                     modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != true,
+                    enabled = !busy && row.marked != true && row.labelBlocked == null,
                 ) { Text(stringResource(R.string.action_mark_spam)) }
                 TextButton(
                     onClick = { onMark(false) },
                     modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != false,
+                    enabled = !busy && row.marked != false && row.labelBlocked == null,
                 ) { Text(stringResource(R.string.action_mark_ham)) }
                 TextButton(
                     onClick = onUndo,

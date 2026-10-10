@@ -91,6 +91,7 @@
     <string name="records_empty">（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）</string>
     <string name="records_count_badge">×%1$d</string>
     <string name="records_no_text">(无文本)</string>
+    <string name="records_label_blocked">命中保护类型（%1$s）且该保护当前开着：判定链在保护这一步就放行了，标注进不了训练。要标它，请先到设置 →「保护类型」里关掉它。</string>
     <string name="records_marked_spam">已标垃圾</string>
     <string name="records_marked_ham">已标正常</string>
     <string name="reason_short_bad_args">通知信息不全</string>

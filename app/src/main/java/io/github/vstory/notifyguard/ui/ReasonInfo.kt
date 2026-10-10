@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.ui
 import androidx.annotation.StringRes
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.judge.LogRecord
+import io.github.vstory.notifyguard.judge.ProtectGuard
 import java.util.Locale
 
 /**
@@ -51,7 +52,7 @@ data class ReasonInfo(
             "ai_error" to ReasonKind.AI_ERROR,
         )
 
-        private const val PREFIX_PROTECT = "protect_"
+        private const val PREFIX_PROTECT = ProtectGuard.REASON_PREFIX
         private const val PREFIX_RULE = "rule:"
         /** 带分数的两族：`ai_off` / `ai_error` 是完整串，只有带冒号的才是分数。 */
         private const val PREFIX_AI = "ai:"
@@ -69,6 +70,9 @@ data class ReasonInfo(
             "fgs" to R.string.protect_foreground_service,
             "conversation" to R.string.protect_conversation,
         )
+
+        /** 保护类型名 → 人话（禁标提示要用它，与列表底部的「保护类型：X」同一套文案）。 */
+        fun protectTypeLabel(type: String): UiText = protectLabel(type)
 
         /**
          * @param score 记录里的结构化分数。带分数的原因优先用它，串只在字段缺失时兜底 ——
