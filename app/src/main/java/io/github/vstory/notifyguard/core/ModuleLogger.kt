@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.core
 
 import android.util.Log
 import io.github.libxposed.api.XposedInterface
+import io.github.vstory.notifyguard.BuildConfig
 
 /**
  * 框架日志封装：必须走 [XposedInterface.log]，LSPosed 日志页不读 logcat。
