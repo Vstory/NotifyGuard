@@ -207,6 +207,28 @@ class SettingsViewModelTest {
         assertEquals(UiText.Res(R.string.module_detail_delta_off), line.args[1])
     }
 
+    /**
+     * 「点了按钮之后的回执」：短按与长按的结局必须分得开 —— 用户分不清「没反应」与
+     * 「内容一致所以没重发」时，会一直点下去。
+     */
+    @Test
+    fun fitNoticeTellsShortPressApartFromLongPress() {
+        assertEquals(
+            UiText.Res(R.string.notice_fit_skipped),
+            fitNotice(DeltaFitter.State.Sent(1L, 3, delivery = DeltaFitter.Delivery.SKIPPED)),
+        )
+        assertEquals(
+            UiText.Res(R.string.notice_fit_reloaded),
+            fitNotice(DeltaFitter.State.Sent(1L, 3, delivery = DeltaFitter.Delivery.RELOADED)),
+        )
+        assertEquals(UiText.Res(R.string.notice_fit_sent), fitNotice(DeltaFitter.State.Sent(1L, 3)))
+        assertEquals(
+            UiText.Res(R.string.notice_fit_not_enough, listOf(7, SpamTuner.MIN_LABELS)),
+            fitNotice(DeltaFitter.State.NotEnough(SpamTuner.Readiness(usable = 7, spam = 2, ham = 5))),
+        )
+        assertNull(fitNotice(DeltaFitter.State.None))
+    }
+
     @Test
     fun fitTextSeparatesNotPulledYetFromNotDelivered() {
         // null = 还没拉；None = 拉到了，但版本号为 0（还没够样本）

@@ -34,8 +34,8 @@
     <string name="learning_fit_group">Fine-tuning status</string>
     <string name="learning_fit_resend">Resend</string>
     <string name="learning_fit_resend_hint">Long-press Resend to force the module to reload: an identical delta is not rewritten, only its version is advanced.</string>
-    <string name="learning_fit_progress_ready">Threshold: met (%1$d usable samples, needs %2$d) - new labels re-fit automatically, or tap Resend to re-fit and push now</string>
-    <string name="learning_fit_progress_short">Threshold: %1$d more usable samples needed before fitting (%2$d of %3$d)</string>
+    <string name="learning_fit_progress_ready">Samples ready: %1$d trainable (needs %2$d) — tap Resend to re-fit with the current labels</string>
+    <string name="learning_fit_progress_short">Samples short: %1$d more trainable samples needed (%2$d of %3$d)</string>
     <string name="learning_fit_note">The sample counts below are the ones fine-tuning really uses — a label whose text yields no feature is not counted, so they can be lower than the label total.</string>
     <string name="learning_labels_line">Labels: %1$d (kept even after a record leaves the window)</string>
     <string name="learning_pending_group">To review: blocked, not labelled</string>
@@ -260,14 +260,19 @@
     <string name="notice_candidates_updated">Candidates updated</string>
 
     <!-- Fine-tuning state lines -->
-    <string name="fit_none">Fine-tuning: not delivered (auto-fits once there are %1$d labels with at least %2$d per class)</string>
-    <string name="fit_not_enough">Fine-tuning: not delivered (trainable samples %1$d/%2$d, spam %3$d/%4$d, ham %5$d/%6$d)</string>
-    <string name="fit_unavailable_line">Fine-tuning: not delivered (%1$s)</string>
+    <string name="fit_none">Fine-tuning: not fitted yet (auto-fits once there are %1$d labels with at least %2$d per class)</string>
+    <string name="fit_not_enough">Fine-tuning: not fitted yet, samples short (trainable %1$d/%2$d, spam %3$d/%4$d, ham %5$d/%6$d)</string>
+    <string name="fit_unavailable_line">Fine-tuning: could not run (%1$s)</string>
     <string name="fit_sent">Fine-tuning: delivered %1$s (%2$d weights, fitted %3$s)</string>
-    <string name="fit_sent_no_fit_time">Fine-tuning: delivered %1$s (%2$d weights)</string>
-    <string name="fit_reloaded">Fine-tuning: delivered %1$s (%2$d weights, fitted %3$s — identical delta, only the version was advanced to make the module reload)</string>
-    <string name="fit_skipped">Fine-tuning: not delivered — the module already has this exact delta (%1$s, %2$d weights, fitted %3$s)</string>
+    <string name="fit_sent_no_fit_time">Fine-tuning: delivered to the module %1$s (%2$d weights)</string>
+    <string name="fit_reloaded">Fine-tuning: the module will reload the same delta (identical content, version advanced: %1$s, %2$d weights, fitted %3$s)</string>
+    <string name="fit_skipped">Fine-tuning: in sync — the module already holds this exact delta (nothing re-sent: %1$s, %2$d weights, fitted %3$s)</string>
     <string name="fit_sent_no_file">Fine-tuning: delivered %1$s (the version number is written but the delta file cannot be read — the module side scores with the plain base model)</string>
+    <string name="notice_fit_sent">Fine-tuning delivered to the module</string>
+    <string name="notice_fit_skipped">Re-fitted: identical to what the module already holds, nothing re-sent</string>
+    <string name="notice_fit_reloaded">Version advanced: the module will reload this delta</string>
+    <string name="notice_fit_not_enough">Samples short, nothing was fitted (trainable %1$d/%2$d)</string>
+    <string name="notice_fit_failed">Fine-tuning failed: %1$s</string>
     <string name="fit_reason_model">built-in model unavailable</string>
     <string name="fit_reason_module">module not connected</string>
     <string name="fit_reason_write">writing the delta file failed</string>

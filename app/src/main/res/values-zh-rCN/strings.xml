@@ -33,8 +33,8 @@
     <string name="learning_fit_group">微调状态</string>
     <string name="learning_fit_resend">重发微调</string>
     <string name="learning_fit_resend_hint">长按「重发微调」＝ 强制模块端重载：内容一致时不重写文件，只推进版本号。</string>
-    <string name="learning_fit_progress_ready">门槛进度：已达标（可训练样本 %1$d 条，门槛 %2$d 条）—— 新增标注会自动重算，也可以点「重发微调」立即重算并下发</string>
-    <string name="learning_fit_progress_short">门槛进度：还差 %1$d 条可训练样本才能拟合（现有 %2$d 条，门槛 %3$d 条）</string>
+    <string name="learning_fit_progress_ready">样本已够：可训练样本 %1$d 条（门槛 %2$d 条）—— 点「重发微调」即按当前标注重算</string>
+    <string name="learning_fit_progress_short">样本还不够：还差 %1$d 条可训练样本（现有 %2$d 条，门槛 %3$d 条）</string>
     <string name="learning_fit_note">下面的样本数是拟合真正会用的那份：凑不出特征的标注不计入，所以可能少于标注总数。</string>
     <string name="learning_labels_line">标注 %1$d 条（记录被窗口裁掉后仍保留）</string>
     <string name="learning_pending_group">待处理：被拦但未标注</string>
@@ -259,14 +259,19 @@
     <string name="notice_candidates_updated">候选已更新</string>
 
     <!-- 微调状态行 -->
-    <string name="fit_none">微调：未下发（标注满 %1$d 条且两类各 ≥ %2$d 条后自动拟合）</string>
-    <string name="fit_not_enough">微调：未下发（可训练样本 %1$d/%2$d，垃圾 %3$d/%4$d、正常 %5$d/%6$d）</string>
-    <string name="fit_unavailable_line">微调：未下发（%1$s）</string>
-    <string name="fit_sent">微调：已下发 %1$s（%2$d 个权重，拟合完成 %3$s）</string>
-    <string name="fit_sent_no_fit_time">微调：已下发 %1$s（%2$d 个权重）</string>
-    <string name="fit_reloaded">微调：已下发 %1$s（%2$d 个权重，拟合完成 %3$s，内容一致 ⇒ 仅推进版本号让模块端重载）</string>
-    <string name="fit_skipped">微调：未下发 —— 模块端已持有同一份（%1$s，%2$d 个权重，拟合完成 %3$s）</string>
+    <string name="fit_none">微调：还没拟合过（标注满 %1$d 条且两类各 ≥ %2$d 条后自动拟合）</string>
+    <string name="fit_not_enough">微调：样本还不够，还没拟合（可训练样本 %1$d/%2$d，垃圾 %3$d/%4$d、正常 %5$d/%6$d）</string>
+    <string name="fit_unavailable_line">微调：没做成（%1$s）</string>
+    <string name="fit_sent">微调：已下发到模块端 %1$s（%2$d 个权重，拟合完成 %3$s）</string>
+    <string name="fit_sent_no_fit_time">微调：已下发到模块端 %1$s（%2$d 个权重）</string>
+    <string name="fit_reloaded">微调：已让模块端重读（内容一致，只推进了版本号：%1$s，%2$d 个权重，拟合完成 %3$s）</string>
+    <string name="fit_skipped">微调：已同步 —— 模块端手上的就是这一份（内容一致，没有重发：%1$s，%2$d 个权重，拟合完成 %3$s）</string>
     <string name="fit_sent_no_file">微调：已下发 %1$s（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）</string>
+    <string name="notice_fit_sent">微调已下发到模块端</string>
+    <string name="notice_fit_skipped">已按当前标注重算：与模块端手上的内容一致，没有重发</string>
+    <string name="notice_fit_reloaded">已推进版本号：模块端会重新读入这份微调</string>
+    <string name="notice_fit_not_enough">样本还不够，没有拟合（可训练样本 %1$d/%2$d）</string>
+    <string name="notice_fit_failed">微调没做成：%1$s</string>
     <string name="fit_reason_model">内置模型不可用</string>
     <string name="fit_reason_module">模块未连接</string>
     <string name="fit_reason_write">写入微调文件失败</string>
