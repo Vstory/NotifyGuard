@@ -32,6 +32,8 @@
     <string name="learning_fit_group">微调状态</string>
     <string name="learning_fit_resend">重发微调</string>
     <string name="learning_fit_resend_hint">长按「重发微调」＝ 强制模块端重载：内容一致时不重写文件，只推进版本号。</string>
+    <string name="learning_fit_progress_ready">门槛进度：已达标（可训练样本 %1$d 条，门槛 %2$d 条）</string>
+    <string name="learning_fit_progress_short">门槛进度：还差 %1$d 条可训练样本（现有 %2$d 条，门槛 %3$d 条）</string>
     <string name="learning_fit_note">下面的样本数是拟合真正会用的那份：凑不出特征的标注不计入，所以可能少于标注总数。</string>
     <string name="learning_labels_line">标注 %1$d 条（记录被窗口裁掉后仍保留）</string>
     <string name="learning_pending_group">待处理：被拦但未标注</string>

@@ -32,6 +32,13 @@ object SpamTuner {
     /** 可训练样本的盘点（门槛判定与 UI 提示共用同一口径）。 */
     data class Readiness(val usable: Int, val spam: Int, val ham: Int) {
         val ready: Boolean get() = usable >= MIN_LABELS && spam >= MIN_PER_CLASS && ham >= MIN_PER_CLASS
+
+        /**
+         * 离过门槛还差几条标注（0 = 已过）。取三类缺口里最大的那个 —— 这是「新标的每条都能用」的乐观估计：
+         * 界面要的是一个照着标就能达标的数字，而「新那条也可能凑不出特征」只有拟合时才揭晓。
+         */
+        val shortfall: Int
+            get() = maxOf(MIN_LABELS - usable, MIN_PER_CLASS - spam, MIN_PER_CLASS - ham, 0)
     }
 
     sealed interface Fit {
@@ -44,12 +51,12 @@ object SpamTuner {
      * 门槛按**过滤后**的样本判：标注了 12 条但 5 条是纯符号凑不出 gram 时，实际参与拟合的只有 7 条，
      * 按 12 条放行等于用 7 条样本去动全量权重。
      *
-     * `Readiness.usable` 与 [fit] 内部用的是同一份过滤结果，不存在「UI 说够了、拟合却空手而归」。
+     * `Readiness.usable` 与 [fit] 内部用的是同一份过滤结果（同一个 [readinessOf]），不存在
+     * 「界面说够了、拟合却空手而归」。
      */
     fun fit(base: SpamModel, samples: List<Sample>): Fit {
-        val prepared = samples.sortedBy { it.key }.mapNotNull { prepare(base, it) }
-        val spam = prepared.count { it.y == 1.0 }
-        val readiness = Readiness(prepared.size, spam, prepared.size - spam)
+        val prepared = preparedOf(base, samples)
+        val readiness = readinessOf(prepared)
         if (!readiness.ready) return Fit.NotReady(readiness)
 
         val delta = HashMap<Int, Double>()
@@ -80,6 +87,19 @@ object SpamTuner {
      * 冻结点：预先算好 base 给出的 `z0` 与 L2 归一化后的样本向量，之后每轮只碰 delta。
      * 样本过滤口径与判定侧对齐（过短文本判定链根本不进 AI 段，那种样本拟合出来是噪声）。
      */
+    /**
+     * 只算门槛进度、不拟合：界面要**随时**回答「还差几条」，而拟合成功之后就没有 `Fit.NotReady` 可拿了。
+     */
+    fun readiness(base: SpamModel, samples: List<Sample>): Readiness = readinessOf(preparedOf(base, samples))
+
+    private fun preparedOf(base: SpamModel, samples: List<Sample>): List<Prepared> =
+        samples.sortedBy { it.key }.mapNotNull { prepare(base, it) }
+
+    private fun readinessOf(prepared: List<Prepared>): Readiness {
+        val spam = prepared.count { it.y == 1.0 }
+        return Readiness(prepared.size, spam, prepared.size - spam)
+    }
+
     private fun prepare(base: SpamModel, sample: Sample): Prepared? {
         val text = sample.text
         if (text.lowercase().trim().length < Judge.MIN_AI_LEN) return null
