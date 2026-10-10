@@ -5,6 +5,7 @@
       and must keep the same keys: a key missing there silently falls back to English.
       Keep the region qualifier: bare "values-zh" is not the standard tag for Simplified Chinese.
     -->
+    <string name="scroll_to_top">Back to top</string>
     <string name="app_name">NotifyGuard</string>
 
     <string name="nav_home">Home</string>

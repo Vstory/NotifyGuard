@@ -42,6 +42,7 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
     val state = viewModel.state
     val ctx = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
+    val scrollState = rememberScrollState()
 
     // 订阅只在屏活着时有效。切 tab 回来会重新订阅并立刻渲染一次，不需要额外的进屏刷新
     DisposableEffect(Unit) {
@@ -60,14 +61,19 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.rules_title)) }) },
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.rules_title)) },
+                modifier = topBarScrollToTop(scrollState),
+            )
+        },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
