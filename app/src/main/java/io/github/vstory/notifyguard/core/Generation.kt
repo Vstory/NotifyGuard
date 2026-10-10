@@ -66,6 +66,11 @@ object Generation {
         return outdated
     }
 
+    /** 单测用：让下一次 [stale] 真去读文件 —— 否则一秒缓存会把刚写进文件的新号挡在外面。 */
+    internal fun invalidateCacheForTest() {
+        lastCheck = 0L
+    }
+
     internal fun resetForTest() {
         mine = 0L
         lastCheck = 0L

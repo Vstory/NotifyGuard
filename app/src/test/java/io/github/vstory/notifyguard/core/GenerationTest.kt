@@ -49,6 +49,7 @@ class GenerationTest {
     fun aNewerGenerationMakesTheOldOneStale() {
         Generation.publish()
         Generation.file().writeText((Generation.mine() + 1).toString())
+        Generation.invalidateCacheForTest()
         assertTrue(Generation.stale())
     }
 
@@ -57,8 +58,7 @@ class GenerationTest {
     fun unreadableStampKeepsServing() {
         Generation.publish()
         assertTrue(Generation.file().delete())
-        // 缓存窗口内先让上一次判定过期
-        Thread.sleep(1_100)
+        Generation.invalidateCacheForTest()
         assertFalse(Generation.stale())
     }
 
@@ -74,7 +74,7 @@ class GenerationTest {
     fun garbageStampKeepsServing() {
         Generation.publish()
         Generation.file().writeText("not-a-number")
-        Thread.sleep(1_100)
+        Generation.invalidateCacheForTest()
         assertFalse(Generation.stale())
     }
 
@@ -84,7 +84,7 @@ class GenerationTest {
         Generation.publish()
         Generation.file().writeText((Generation.mine() + 1).toString())
         assertFalse("缓存窗口内不应重新读文件", Generation.stale())
-        Thread.sleep(1_100)
+        Generation.invalidateCacheForTest()
         assertTrue(Generation.stale())
     }
     // [ModuleTeardown.expired] 不在这里测：它的释放动作是进程级的不可逆操作（关闭各常驻线程池），
