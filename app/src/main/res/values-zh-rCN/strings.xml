@@ -6,6 +6,7 @@
     -->
     <string name="scroll_to_top">回到顶部</string>
     <string name="app_name">NotifyGuard</string>
+    <string name="module_description">在系统框架内拦截垃圾通知：关键词 / 白名单 / 端侧 AI 打分，数据不出本机</string>
 
     <string name="nav_home">首页</string>
     <string name="nav_rules">规则</string>

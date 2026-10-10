@@ -84,6 +84,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 
 - **`versionName` 是版本唯一来源**，构建期把提交短号并进去：CI 出厂是 `1.7.0+ci-debug.b4efc10a`（渠道段由 CI 传的 `-PciVersionSuffix` 给），本地构建补成 `1.7.0+b4efc10a`（工作区**已跟踪**文件有改动时追加 `.dirty`）。一律是 semver 的构建元数据段：**一个 `+`、点分标识符**。不要再另立第二个来源（短号出现两次就会拼出两个 `+` 的串，任何工具都解析不了）。
 - 脏判定只看已跟踪文件（`--untracked-files=no`）：CI 打包前会把签名配置追加进未跟踪的 `local.properties`，按全量口径 CI 产物会带一个假 `.dirty`。
+- **模块名与模块描述取 manifest 的资源**：`android:label` / `android:description`（现代 API 不用 `xposeddescription` 元数据），描述必须是 `@string/` 引用、只写一句话功能总结、不重复模块名（名字已由 label 显示）。
 - **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入瞬间的横幅是全量信息行（api / 框架 / 是否 system_server / 进程名）。
 - 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debugRaw("[DBG] …")`，并用 `BuildConfig.DEBUG` 闸住。
 - 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。
@@ -116,7 +117,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **样本门槛保留**（总数 ≥ 10 且两类各 ≥ 2，判据 J8）：单类样本会把阈值拉爆，比不学更糟。界面上的「重发微调」按钮**不绕过门槛**（它回答的是「该不该再发一次」，门槛回答的是「这份数据配不配一次下发」）。
 - **拟合时间与下发时间是两个字段**：`version` 本体是下发时刻、`fittedAt` 是拟合完成时刻（App 私有 prefs）。有了跳过下发（下一条），只有前者在真的推送时才动。
 - **下发前必须比对内容**：读回 remote file（`DeltaWriter.read`）比摘要，一致就跳过 —— 拟合是确定性的，摘要相同 ⇔ 模块端已持有这份，再推只是推进版本号让模块端重读同一份文件。判据取**读回的文件**而非状态回传（状态说的是「上次加载成功」，文件才是模块端下次加载要用的那份）；换了 base 时读回会因指纹不符而失败 ⇒ 照旧下发。
-- **一次拟合有三种结局**（`DeltaFitter.Delivery`）：`SENT` 真下发、`SKIPPED` 内容一致未下发、`RELOADED` 内容一致但按用户要求推进版本号让模块端重读（**不重写文件** —— 模块端认的是版本号变化）。界面上的「重发微调」短按走重算（可能落到 SKIPPED），**长按**走 RELOADED。
+- **一次拟合有两种结局**（`DeltaFitter.Delivery`）：`SENT` 真下发、`SKIPPED` 内容一致未下发。界面上的「重发微调」只有短按一条路径：重算后与模块端手上那份比对，一致就跳过。
 - 熔断：连续异常或 SystemUI 在 30 秒内死亡 > 2 次 ⇒ 写 `safe_mode` 粘滞标志，转入只记录不拦截；标志被 `FileObserver` 盯着，删掉即免重启恢复。**熔断停的是判定，不是诊断** —— 状态通道在熔断期间照常应答。
 - 判据编号（J4 / J8 / J10 等）出自知识库 `200_Knowledge/dev-guide/how-to/AI标注与数据落盘设计.md`。注释里引用判据时保持编号与原文一致，别凭记忆改写。
 
@@ -133,7 +134,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 
 - 位置与被测包同构：`app/src/test/java/io/github/vstory/notifyguard/<包>/<Subject>Test.kt`。JVM 单测（JUnit 4 + 真 `org.json`），由 CI 跑 `:app:testDebugUnitTest`。
 - **只测能测的**：纯函数、编解码往返、状态机、筛选与文案映射。Compose 不测 —— 因此逻辑要主动抽成 ViewModel 的纯函数或 `FitLine` 那样的无 Compose 渲染函数（「事实 → 资源号 + 参数」这一段必须可测）。
-- **时间断言只判格式**（CI 跑在 UTC、本机在 +08:00，写死时刻会让其中一个环境必红）；只有时区已钉死（`DeltaStamp` 用 UTC）才可以断言精确值。
+- **时间断言要先钉死时区再断言精确值**：用例自己 `TimeZone.setDefault(...)`、`@After` 恢复（CI 跑在 UTC、本机在 +08:00，靠环境时区必有一方红）；钉住之后只判格式反而会漏掉「换时区后没跟随」这类 bug。
 - 测试钩子：`internal fun resetForTest()`、可替换的 `ConfigReader.readRemoteFile`、`FakeIface` / `FakePrefs`。新增全局状态时补上 `resetForTest` 并让 `@Before` 调用。
 - `SpamModelParityTest` 是**训练侧与推理侧一致性的唯一证据**（判据 J10）：改任何一侧的特征实现或重训 base，都要重生成 `parity.json` 并让这条过。
 - 断言失败时的消息写清「期望什么、实际是什么」，用中文，和项目其余文字一致。
