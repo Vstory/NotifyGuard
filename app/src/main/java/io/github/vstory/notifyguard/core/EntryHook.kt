@@ -37,9 +37,22 @@ object EntryHook {
 
     private const val HIT_LOG_EVERY = 20L
 
-    enum class Slot { NONE, FUNNEL, EXT_SLOT }
+    enum class Slot {
+        NONE,
+        FUNNEL,
+        EXT_SLOT,
+        ;
 
-    /** 装配结果汇总（ok / skip / fail + 明细），由 MainHook 一次性打 INFO。 */
+        /** 写进日志的取值：全模块统一小写。 */
+        val wire: String get() = name.lowercase()
+    }
+
+    /**
+     * 装配结果汇总（ok / skip / fail + 明细），由 MainHook 打一次 INFO。
+     *
+     * 明细**逐行自成一条日志**（每行已是 `boot.hook <结果> kind=… k=v` 的形式），不再拼成一个多行巨串：
+     * 多行串的后续行不带版本前缀，混进日志里无法归属到哪次装配。
+     */
     class InstallReport {
         var okCount = 0
             private set
@@ -48,24 +61,36 @@ object EntryHook {
         var failCount = 0
             private set
 
-        private val lines = StringBuilder()
+        private val lines = ArrayList<String>()
 
-        fun markOk(what: String) {
-            okCount++
-            lines.append("\n  [OK] ").append(what)
-        }
+        fun markOk(kind: String, vararg fields: String) = add("ok", kind, fields.toList())
 
-        fun markSkip(what: String) {
-            skipCount++
-            lines.append("\n  [SKIP] ").append(what)
-        }
+        fun markOk(kind: String, fields: List<String>) = add("ok", kind, fields)
 
-        fun markFail(what: String, t: Throwable) {
+        fun markSkip(kind: String, vararg fields: String) = add("skip", kind, fields.toList())
+
+        fun markSkip(kind: String, fields: List<String>) = add("skip", kind, fields)
+
+        fun markFail(kind: String, fields: String, t: Throwable) {
             failCount++
-            lines.append("\n  [FAIL] ").append(what).append(": ").append(t.message)
+            lines.add(head("fail", kind) + " " + fields + " " + ModuleLogger.err(t))
         }
 
-        fun detail(): String = lines.toString()
+        fun markFail(kind: String, fields: List<String>, t: Throwable) {
+            failCount++
+            lines.add(
+                head("fail", kind) + " " + fields.joinToString(" ") + " " + ModuleLogger.err(t)
+            )
+        }
+
+        fun detailLines(): List<String> = lines
+
+        private fun add(result: String, kind: String, fields: List<String>) {
+            if (result == "ok") okCount++ else skipCount++
+            lines.add(head(result, kind) + if (fields.isEmpty()) "" else " " + fields.joinToString(" "))
+        }
+
+        private fun head(result: String, kind: String) = "boot.hook $result kind=$kind"
     }
 
     /** 计数快照。整体取一份：逐项取值会在两次读之间被判定线程改掉，读出的数自相矛盾。 */
@@ -87,7 +112,7 @@ object EntryHook {
         CrashGuard.onTrip = { stopJudging("崩溃环路熔断") }
         // 恢复走 install 自身：它开头先 reset（unhook + 停 watcher）再装，天然幂等，不会叠加
         CrashGuard.onCleared = {
-            ModuleLogger.info("safe_mode 已清除 ⇒ 重装 hooks")
+            ModuleLogger.info("safemode.cleared", "reinstall=hooks")
             runCatching { install(iface, cl) }
         }
 
@@ -95,28 +120,28 @@ object EntryHook {
         // 先于 safe_mode 检查：标志存在时也要能看见用户把它删掉，否则恢复只剩重启一条路
         CrashGuard.attach(iface, cl, report::markOk, report::markSkip)
         if (CrashGuard.isSafeMode()) {
-            report.markSkip("safe_mode 标志存在 ⇒ 本代不装拦截")
+            report.markSkip("safemode", "reason=safemode_active")
             return report
         }
 
         // 先于 hook 装配：判定链要读配置，且框架只向「已取过该组」的进程推送变更
         DeltaHolder.start(iface)
         ConfigReader.start(iface)
-        report.markOk("配置通道 ${ConfigReader.GROUP}（observe=${ConfigReader.config().observe}）")
+        report.markOk("config", "group=${ConfigReader.GROUP}", "observe=${ConfigReader.config().observe}")
 
         // 同步加载一次（262 KB 解析，毫秒级）：判定链里绝不做 IO，装不上就整个 AI 段放行
         ModelHolder.loadBundled()
-        report.markOk("AI 模型 ${if (ModelHolder.current == null) "不可用 ⇒ 放行" else "已就绪"}")
+        report.markOk("model", if (ModelHolder.current == null) "state=unavailable action=pass" else "state=ready")
 
         val nms = runCatching { cl.loadClass(NMS_CLASS) }.getOrElse {
-            report.markSkip("$NMS_CLASS 加载失败: ${it.message}")
+            report.markSkip("nms", ModuleLogger.err(it))
             return report
         }
 
         installFunnel(iface, nms, report)
         installClinitTrigger(iface, nms, report)
 
-        ModuleLogger.info("装配完成：owner=${owner.get()}；扩展槽命中=${extHits.get()}")
+        ModuleLogger.info("assemble.done", "owner=${owner.get().wire}", "ext_hits=${extHits.get()}")
         return report
     }
 
@@ -128,7 +153,7 @@ object EntryHook {
         judgingStopped = true
         stopReason = reason
         owner.set(Slot.NONE)
-        ModuleLogger.error("判定已停用（$reason）：hook 保留直通，不再记录")
+        ModuleLogger.error("assemble.disabled", "reason=$reason", "hooks=passthrough")
     }
 
     fun reset() {
@@ -144,10 +169,15 @@ object EntryHook {
         CrashGuard.reset()
     }
 
-    fun statsLine(): String =
-        "owner=${owner.get()} 扩展槽命中=${extHits.get()} 漏斗判定=${funnelJudgeHits.get()} " +
-            "漏斗直通=${funnelPassHits.get()} ROM已拦=${romBlocked.get()} 异常=${CrashGuard.errorCount()} " +
-            LogSink.statsLine()
+    fun statsFields(): Array<String> = arrayOf(
+        "owner=${owner.get().wire}",
+        "ext_hits=${extHits.get()}",
+        "funnel_judged=${funnelJudgeHits.get()}",
+        "funnel_passed=${funnelPassHits.get()}",
+        "rom_blocked=${romBlocked.get()}",
+        "errors=${CrashGuard.errorCount()}",
+        *LogSink.statsFields(),
+    )
 
     // ===== 状态回传（M4e）=====
 
@@ -164,7 +194,7 @@ object EntryHook {
     private fun installFunnel(iface: XposedInterface, nms: Class<*>, report: InstallReport) {
         val target = findMethod(nms, FUNNEL_METHOD)
         if (target == null) {
-            report.markSkip("漏斗方法未找到（$FUNNEL_METHOD + 参数含 Notification）")
+            report.markSkip("funnel", "reason=method_not_found", "hint=$FUNNEL_METHOD+Notification_arg")
             return
         }
         try {
@@ -174,9 +204,9 @@ object EntryHook {
                 })
             )
             owner.set(Slot.FUNNEL)
-            report.markOk("漏斗 ${desc(target)}（兜底路径，当前判定权）")
+            report.markOk("funnel", desc(target), "role=fallback")
         } catch (t: Throwable) {
-            report.markFail("漏斗 ${desc(target)}", t)
+            report.markFail("funnel", desc(target), t)
         }
     }
 
@@ -199,9 +229,9 @@ object EntryHook {
                     }
                 })
             )
-            report.markOk("NMS 类初始化钩子（clinit 后解析扩展槽；类已初始化则不触发）")
+            report.markOk("nms_clinit", "reason=resolve_extension_after_clinit")
         } catch (t: Throwable) {
-            report.markSkip("NMS 类初始化钩子不可用（类已初始化属正常）: ${t.message}")
+            report.markSkip("nms_clinit", "reason=class_already_initialized", ModuleLogger.err(t))
         }
     }
 
@@ -210,14 +240,14 @@ object EntryHook {
         if (owner.get() == Slot.EXT_SLOT) return
         val ext = extInstance(nms, nmsInstance)
         if (ext == null) {
-            if (BuildConfig.DEBUG) ModuleLogger.debugRaw("[DBG] 扩展实例未取到（$from）")
+            if (BuildConfig.DEBUG) ModuleLogger.debug("slot.extension_missing", "at=$from")
             return
         }
         val cls = ext.javaClass
         val target = findMethod(cls, EXT_METHOD)
         if (target == null) {
             // 不硬编码实现类名（随 ColorOS 版本走），故类名只作日志参考
-            ModuleLogger.info("扩展类 ${cls.name} 无 $EXT_METHOD ⇒ 保持漏斗路径")
+            ModuleLogger.info("slot.extension_no_method", "cls=${cls.name}", "fallback=funnel")
             return
         }
         handles.add(
@@ -226,7 +256,12 @@ object EntryHook {
             })
         )
         owner.set(Slot.EXT_SLOT)
-        ModuleLogger.info("扩展槽接管判定权（解析时机=$from）：${cls.name}#${target.name}")
+        ModuleLogger.info(
+            "slot.takeover",
+            "at=$from",
+            "cls=${cls.name}",
+            "method=${target.name}",
+        )
     }
 
     private fun extInstance(nms: Class<*>, nmsInstance: Any?): Any? {
@@ -270,11 +305,11 @@ object EntryHook {
                 .onFailure { CrashGuard.noteError("install-ext-slot", it) }
         }
         if (owner.get() != Slot.FUNNEL) {
-            tick(funnelPassHits, "漏斗直通")
+            tick(funnelPassHits, "funnel_passed")
             return chain.proceed()
         }
 
-        tick(funnelJudgeHits, "漏斗判定")
+        tick(funnelJudgeHits, "funnel_judged")
         val blocked = runCatching { decideAndRecord(chain.args, Slot.FUNNEL) }
             .getOrElse { t ->
                 CrashGuard.noteError("funnel-judge", t)
@@ -287,7 +322,7 @@ object EntryHook {
     private fun onExtSlot(chain: XposedInterface.Chain): Any? {
         // 同 [onFunnel]：过期代把判定交回 ROM，自己不拦不记录
         if (ModuleTeardown.expired()) return chain.proceed()
-        tick(extHits, "扩展槽命中")
+        tick(extHits, "ext_hits")
 
         // 不变式：ROM 自己的判定永远优先（隐藏应用 / 企业定制 / 通知中心黑名单…）
         val romResult = chain.proceed()
@@ -312,22 +347,33 @@ object EntryHook {
         RecordSink.record(snapshot, decision)
         LogSink.submit(LogRecord.from(snapshot, decision, slot.name, System.currentTimeMillis()))
         if (decision.block) {
-            ModuleLogger.info("BLOCK[$slot] pkg=${snapshot?.pkg} reason=${decision.reason}")
+            ModuleLogger.info(
+                "record.blocked",
+                "slot=${slot.wire}",
+                "pkg=${snapshot?.pkg}",
+                "reason=${decision.reason}",
+            )
         } else if (decision.wouldBlock) {
             // 观察模式：判定已命中但未拦，这一行就是切到拦截模式前的证据
-            ModuleLogger.info("OBSERVE[$slot] pkg=${snapshot?.pkg} reason=${decision.reason}")
+            ModuleLogger.info(
+                "record.observed",
+                "slot=${slot.wire}",
+                "pkg=${snapshot?.pkg}",
+                "reason=${decision.reason}",
+            )
         }
         return decision.block
     }
 
     // ===== 工具 =====
 
-    private fun tick(counter: AtomicLong, name: String) {
+    private fun tick(counter: AtomicLong, kind: String) {
         val n = counter.incrementAndGet()
         if (n % HIT_LOG_EVERY == 0L) {
-            ModuleLogger.info("$name $n 次；${statsLine()}")
+            ModuleLogger.info("slot.stats", "kind=$kind", "n=$n", *statsFields())
         }
     }
 
-    private fun desc(m: Method): String = "${m.declaringClass.name}#${m.name}(${m.parameterCount} 参数)"
+    private fun desc(m: Method): String =
+        "cls=${m.declaringClass.name} method=${m.name} params=${m.parameterCount}"
 }

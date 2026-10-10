@@ -50,7 +50,7 @@ object Judge {
         if (!cfg.spamEnabled) return pass("ai_off")
         val scorer = ModelHolder.current ?: return pass("no_model")
         val score = runCatching { scorer.score(raw) }.getOrElse { t ->
-            ModuleLogger.error("AI 打分失败（放行）：${t.javaClass.simpleName}: ${t.message}")
+            ModuleLogger.error("ai.score_failed", t, "action=pass")
             return pass("ai_error")
         }
         // 分数写进 reason：观察模式下没有第二个地方能看到分数分布，标定阈值全靠它

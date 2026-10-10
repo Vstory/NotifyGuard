@@ -48,7 +48,7 @@ internal object ChannelAccess {
             .setPackage(BuildConfig.APPLICATION_ID)
             .putExtra(extraKey, json)
         runCatching { c.sendBroadcast(intent) }
-            .onFailure { ModuleLogger.error("回传失败（$action：${it.javaClass.simpleName}: ${it.message}）") }
+            .onFailure { ModuleLogger.error("channel.reply_failed", it, "action=$action") }
     }
 
     /** 动态 receiver 要显式 exported：App 是普通 uid，非 exported 的 receiver 收不到它的广播。 */

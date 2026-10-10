@@ -58,20 +58,30 @@ object StatusChannel {
                 val action = intent?.action ?: return
                 // 必须在 onReceive 里同步取：getCallingUid 读的是本线程的 IPC 上下文，换线程就丢了
                 if (!ChannelAccess.isFromApp(c)) {
-                    ModuleLogger.error("状态通道拒绝了非本模块的调用（uid=${Binder.getCallingUid()}，action=$action）")
+                    ModuleLogger.error(
+                        "channel.denied",
+                        "ch=status",
+                        "uid=${Binder.getCallingUid()}",
+                        "action=$action",
+                    )
                     return
                 }
                 // 指令名取自 action 末段：App 侧也打同一段名字，两端日志能直接对上
                 if (BuildConfig.DEBUG) {
-                    ModuleLogger.debugRaw("[DBG] 状态通道：收到 ${action.substringAfterLast('.')}")
+                    ModuleLogger.debug(
+                        "channel.request",
+                        "ch=status",
+                        "action=${action.substringAfterLast('.')}",
+                    )
                 }
                 when (action) {
                     StatusContract.ACTION_GET_STATUS -> worker.execute { reply(c) }
                     StatusContract.ACTION_CLEAR_SAFE_MODE -> worker.execute {
                         val was = CrashGuard.clearSafeMode()
                         ModuleLogger.info(
-                            "App 请求清除 safe_mode 标志：清除前熔断=$was，" +
-                                "自动恢复可用=${CrashGuard.autoRecoverAvailable()}"
+                            "safemode.clear_requested",
+                            "tripped_before=$was",
+                            "auto_recover=${CrashGuard.autoRecoverAvailable()}",
                         )
                         // 回执给的是**清除后现读的**状态，不做「已清除」的口头承诺
                         reply(c)
@@ -86,7 +96,7 @@ object StatusChannel {
         receiver = r
         ChannelAccess.registerExported(c, r, filter).onFailure {
             registered = false
-            ModuleLogger.error("注册状态通道失败（${it.javaClass.simpleName}: ${it.message}）")
+            ModuleLogger.error("channel.register_failed", it, "ch=status")
         }
     }
 

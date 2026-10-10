@@ -74,7 +74,13 @@ object ConfigReader {
 
     private fun attach(iface: XposedInterface, from: String) {
         val prefs = runCatching { iface.getRemotePreferences(GROUP) }.getOrElse {
-            ModuleLogger.error("取 remote prefs 失败（$from）⇒ 本轮用默认配置（observe=true，不拦任何通知）", it)
+            ModuleLogger.error(
+                "config.prefs_failed",
+                it,
+                "from=$from",
+                "fallback=default",
+                "observe=true",
+            )
             scheduleRetry()
             return
         }
@@ -85,14 +91,14 @@ object ConfigReader {
             prefs.registerOnSharedPreferenceChangeListener { _, key ->
                 if (key == null || key == KEY) {
                     runCatching { reload(prefs.getString(KEY, null), "push") }
-                        .onFailure { ModuleLogger.error("配置热更新失败（保留旧配置）", it) }
+                        .onFailure { ModuleLogger.error("config.hot_update_failed", it, "kept=previous") }
                 }
             }
         }.onSuccess {
             listenerBound = true
             retries.set(0)
         }.onFailure {
-            ModuleLogger.error("注册配置监听失败（$from）⇒ 退避重试，期间改配置不生效", it)
+            ModuleLogger.error("config.listen_failed", it, "from=$from", "retry=backoff")
             scheduleRetry()
         }
     }
@@ -106,7 +112,12 @@ object ConfigReader {
         if (listenerBound) return
         val n = retries.getAndIncrement()
         if (n >= retryDelaysMs.size) {
-            ModuleLogger.error("配置通道连续 ${n} 次未连上 ⇒ 停止重试（此后改配置需重启 system_server）")
+            ModuleLogger.error(
+                "config.attach_failed",
+                "n=$n",
+                "retry=stopped",
+                "restart_required=true",
+            )
             return
         }
         scheduler.schedule(
@@ -138,9 +149,10 @@ object ConfigReader {
             // 后者是「配置怎么改都不生效」的现场，必须留一行说明，否则排障只能靠重启试
             if (mirrorReadFailedOnce.compareAndSet(false, true)) {
                 ModuleLogger.error(
-                    "镜像文件读不到（$REMOTE_FILE，trigger=$trigger）⇒ 配置只能靠 push 更新；" +
-                        "若 push 也断了（日志里不再出现 `配置生效（push）`）需重启 system_server，" +
-                        "或升级 App（新版本会写这份镜像）"
+                    "config.mirror_missing",
+                    "file=$REMOTE_FILE",
+                    "trigger=$trigger",
+                    "fallback=push_only",
                 )
             }
             return
@@ -163,12 +175,20 @@ object ConfigReader {
     private fun reload(json: String?, from: String) {
         // 空值必须留线索：否则配置通道断了也只是「规则 0 条」，看起来像没配过规则
         if (json == null) {
-            ModuleLogger.error("未收到配置（$from：远端组为空）⇒ 用默认配置（observe=true，不拦任何通知）")
+            ModuleLogger.error(
+                "config.empty",
+                "from=$from",
+                "reason=empty_group",
+                "fallback=default",
+                "observe=true",
+            )
         }
         val parsed = ConfigCodec.decode(json)
         if (parsed == null) {
             ModuleLogger.error(
-                "配置解析失败（$from）⇒ 保留上一份有效配置（规则 ${current.get().rules.size} 条）",
+                "config.parse_failed",
+                "from=$from",
+                "kept_rules=${current.get().rules.size}",
             )
             return
         }
@@ -176,12 +196,21 @@ object ConfigReader {
         current.set(parsed)
         appliedJson = json
         ModuleLogger.info(
-            "配置生效（$from）：enabled=${parsed.enabled} observe=${parsed.observe} " +
-                "规则=${parsed.rules.size}(有效 ${parsed.compiledRules.size}) 白名单=${parsed.whitelist.size} " +
-                "微调版本=${parsed.deltaVersion}",
+            "config.applied",
+            "from=$from",
+            "enabled=${parsed.enabled}",
+            "observe=${parsed.observe}",
+            "rules=${parsed.rules.size}",
+            "rules_effective=${parsed.compiledRules.size}",
+            "whitelist=${parsed.whitelist.size}",
+            "delta_version=${parsed.deltaVersion}",
         )
         if (parsed.droppedRules > 0) {
-            ModuleLogger.error("配置里有 ${parsed.droppedRules} 条规则被丢弃（类型未知 / 正则非法 / 关键词为空）")
+            ModuleLogger.error(
+                "config.rules_dropped",
+                "n=${parsed.droppedRules}",
+                "reasons=unknown_type,invalid_regex,empty_keyword",
+            )
         }
         // 版本号变了才去读 delta 文件（IO 在 DeltaHolder 的后台线程上，这里只是投递）
         DeltaHolder.onConfigVersion(parsed.deltaVersion)

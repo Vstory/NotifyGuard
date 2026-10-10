@@ -76,20 +76,20 @@ object DeltaHolder {
             loadedWeights = 0
             loadedDigest = ""
             retries.set(0)
-            ModuleLogger.info("未启用微调（版本号 0）⇒ 按纯 base 打分")
+            ModuleLogger.info("delta.disabled", "version=0", "scoring=base_only")
             return
         }
         val api = iface ?: return
         val pfd = runCatching { api.openRemoteFile(SpamDelta.REMOTE_FILE) }.getOrNull()
         if (pfd == null) {
-            retry(version, base, "微调量文件不可读（v$version）")
+            retry(version, base, "file_unreadable")
             return
         }
         val bytes = runCatching {
             ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
         }.getOrNull()
         if (bytes == null) {
-            retry(version, base, "微调量文件读取失败（v$version）")
+            retry(version, base, "file_read_failed")
             return
         }
         when (val parsed = SpamDelta.parse(bytes, base.buckets, base.fingerprintU32)) {
@@ -101,26 +101,45 @@ object DeltaHolder {
                 loadedDigest = DeltaStamp.digest(bytes)
                 retries.set(0)
                 ModuleLogger.info(
-                    "已加载微调量 ${DeltaStamp.of(version, loadedDigest)}" +
-                        "（${delta.indices.size} 个权重，base fp=${base.fingerprintHex()}）"
+                    "delta.loaded",
+                    "version=$version",
+                    "digest=$loadedDigest",
+                    "weights=${delta.indices.size}",
+                    "base_fp=${base.fingerprintHex()}",
                 )
             }
 
             is SpamDelta.Parse.Rejected -> {
                 // 预期内的降级（换过 base、文件半写）：按纯 base 打分，且**不登记版本号**才会重试
                 ModelHolder.replace(base)
-                retry(version, base, "微调量被拒（v$version）：${parsed.reason}")
+                retry(version, base, "parse_rejected", "detail=${parsed.reason}")
             }
         }
     }
 
-    private fun retry(version: Long, base: SpamModel, what: String) {
+    private fun retry(version: Long, base: SpamModel, reason: String, vararg fields: String) {
         val n = retries.getAndIncrement()
         if (n >= retryDelaysMs.size) {
-            ModuleLogger.error("$what ⇒ 已重试 ${n} 次，停止（此后改标注需重启 system_server 才生效）")
+            ModuleLogger.error(
+                "delta.load_failed",
+                "reason=$reason",
+                "version=$version",
+                *fields,
+                "attempts=$n",
+                "retry=stopped",
+                "restart_required=true",
+            )
             return
         }
-        ModuleLogger.error("$what ⇒ 第 ${n + 1} 次重试在 ${retryDelaysMs[n]} ms 后（本轮按纯 base 打分）")
+        ModuleLogger.error(
+            "delta.load_retry",
+            "reason=$reason",
+            "version=$version",
+            *fields,
+            "next_attempt=$n",
+            "delay_ms=${retryDelaysMs[n]}",
+            "scoring=base_only",
+        )
         scheduler.schedule({ load(version, base) }, retryDelaysMs[n], TimeUnit.MILLISECONDS)
     }
 

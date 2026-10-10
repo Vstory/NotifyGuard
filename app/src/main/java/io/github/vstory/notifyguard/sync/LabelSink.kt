@@ -41,12 +41,12 @@ object LabelSink {
         bound = true
         val dir = ModuleDir.ensure(c)
         if (dir == null) {
-            ModuleLogger.error("标注目录不可用（${ModuleDir.PATH}）⇒ 标注不可读写（判定不受影响）")
+            ModuleLogger.error("label.persist_unavailable", "path=${ModuleDir.PATH}", "judge=unaffected")
             return
         }
         worker.execute {
             store = LabelStore(ModuleDir.labels())
-            ModuleLogger.info("标注落盘就绪（${ModuleDir.labels().absolutePath}）")
+            ModuleLogger.info("label.persist_ready", "path=${ModuleDir.labels().absolutePath}")
         }
         LabelChannel.register(c)
     }
@@ -58,15 +58,17 @@ object LabelSink {
     internal fun mutate(op: (LabelStore) -> Boolean): Boolean {
         val s = storeOverride ?: store
         if (s == null) {
-            ModuleLogger.error("标注尚未就绪（目录不可用或 Context 未取到）⇒ 本次改动未落盘")
+            ModuleLogger.error("label.not_ready", "changed=discarded")
             return false
         }
         val ok = runCatching { op(s) }.getOrDefault(false)
         if (!ok) {
-            ModuleLogger.error(
-                if (s.isLoadFailed) "labels.json 解析失败 ⇒ 拒绝写入（继续写会用空快照覆盖用户已有标注）"
-                else "标注落盘失败 ⇒ 本次改动未生效"
-            )
+            if (s.isLoadFailed) {
+                // 写下去会用空快照覆盖用户已有标注，这里必须拒绝而不是降级
+                ModuleLogger.error("label.write_rejected", "reason=load_failed", "guard=keep_existing")
+            } else {
+                ModuleLogger.error("label.write_failed", "path=${ModuleDir.labels().absolutePath}")
+            }
         }
         return ok
     }

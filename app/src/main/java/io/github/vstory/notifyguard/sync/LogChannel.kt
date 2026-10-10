@@ -46,20 +46,32 @@ object LogChannel {
                 val action = intent?.action ?: return
                 // 必须在 onReceive 里同步取：getCallingUid 读的是本线程的 IPC 上下文，换线程就丢了
                 if (!ChannelAccess.isFromApp(c)) {
-                    ModuleLogger.error("记录通道拒绝了非本模块的调用（uid=${Binder.getCallingUid()}，action=$action）")
+                    ModuleLogger.error(
+                        "channel.denied",
+                        "ch=record",
+                        "uid=${Binder.getCallingUid()}",
+                        "action=$action",
+                    )
                     return
                 }
                 when (action) {
                     LogContract.ACTION_GET_LOGS -> {
                         if (BuildConfig.DEBUG) {
-                            ModuleLogger.debugRaw("[DBG] 记录通道：收到拉取请求（uid=${Binder.getCallingUid()}）")
+                            ModuleLogger.debug(
+                                "channel.request",
+                                "ch=record",
+                                "action=GET_LOGS",
+                                "uid=${Binder.getCallingUid()}",
+                            )
                         }
                         // 刷缓冲 + 编码 + 回传都是 IO，投给 worker；onReceive 立刻返回，不占 system_server 主线程
                         LogSink.onWorker { reply(c, LogSink.snapshotJson()) }
                     }
 
                     LogContract.ACTION_CLEAR_LOGS -> {
-                        if (BuildConfig.DEBUG) ModuleLogger.debugRaw("[DBG] 记录通道：收到清空请求")
+                        if (BuildConfig.DEBUG) {
+                            ModuleLogger.debug("channel.request", "ch=record", "action=CLEAR_LOGS")
+                        }
                         LogSink.clearAll()
                     }
                 }
@@ -72,7 +84,7 @@ object LogChannel {
         receiver = r
         ChannelAccess.registerExported(c, r, filter).onFailure {
             registered = false
-            ModuleLogger.error("注册记录通道失败（${it.javaClass.simpleName}: ${it.message}）")
+            ModuleLogger.error("channel.register_failed", it, "ch=record")
         }
     }
 

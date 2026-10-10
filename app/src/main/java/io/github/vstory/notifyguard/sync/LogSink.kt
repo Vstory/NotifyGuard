@@ -59,12 +59,12 @@ object LogSink {
         bound = true
         val dir = ModuleDir.ensure(c)
         if (dir == null) {
-            ModuleLogger.error("记录落盘目录不可用（${ModuleDir.PATH}）⇒ 记录不落盘（判定不受影响）")
+            ModuleLogger.error("record.persist_unavailable", "path=${ModuleDir.PATH}", "judge=unaffected")
             return
         }
         worker.execute {
             store = LogStore(ModuleDir.logs())
-            ModuleLogger.info("记录落盘就绪（目录=${dir.absolutePath}）")
+            ModuleLogger.info("record.persist_ready", "dir=${dir.absolutePath}")
         }
         LogChannel.register(c)
     }
@@ -100,19 +100,27 @@ object LogSink {
         val s = storeOverride ?: store
         if (s == null) {
             if (BuildConfig.DEBUG) {
-                ModuleLogger.debugRaw(
-                    "[DBG] 拉取#${snapshotSeq.incrementAndGet()} 未就绪（目录不可用/Context 未取到）：" +
-                        "缓冲=$before→$after 回传=[]"
+                ModuleLogger.debug(
+                    "record.pull",
+                    "n=${snapshotSeq.incrementAndGet()}",
+                    "ready=false",
+                    "buffered=$before..$after",
+                    "returned=0",
                 )
             }
             return "[]"
         }
         val recent = s.recent(LogStore.MAX_RECORDS)
         if (BuildConfig.DEBUG) {
-            ModuleLogger.debugRaw(
-                "[DBG] 拉取#${snapshotSeq.incrementAndGet()} 缓冲=$before→$after 文件=${s.size()} " +
-                    "回传=${recent.size} 最新=${recent.firstOrNull()?.lastTs} 最旧=${recent.lastOrNull()?.lastTs} " +
-                    "自检=${if (after == 0) "✓ 缓冲已全部落盘" else "✗ $after 条仍在缓冲（写盘未成功）"}"
+            ModuleLogger.debug(
+                "record.pull",
+                "n=${snapshotSeq.incrementAndGet()}",
+                "buffered=$before..$after",
+                "files=${s.size()}",
+                "returned=${recent.size}",
+                "newest=${recent.firstOrNull()?.lastTs}",
+                "oldest=${recent.lastOrNull()?.lastTs}",
+                "flush=${if (after == 0) "ok" else "pending:$after"}",
             )
         }
         return LogCodec.encodeList(recent)
@@ -127,7 +135,7 @@ object LogSink {
         worker.execute(block)
     }
 
-    fun statsLine(): String = "已落盘=${persisted.get()} 丢弃=${dropped.get()}"
+    fun statsFields(): Array<String> = arrayOf("persisted=${persisted.get()}", "dropped=${dropped.get()}")
 
     internal fun awaitIdle() {
         worker.submit { }.get(5, TimeUnit.SECONDS)
@@ -186,7 +194,12 @@ object LogSink {
             retryAfter = now + PERSIST_RETRY_MS
             if (!failureLogged) {
                 failureLogged = true
-                ModuleLogger.error("记录落盘失败（写 ${s.javaClass.simpleName} 未成功）：记录留在缓冲里，${PERSIST_RETRY_MS / 1000}s 后重试")
+                ModuleLogger.error(
+                    "record.persist_failed",
+                    "item=${s.javaClass.simpleName}",
+                    "kept=buffer",
+                    "retry_s=${PERSIST_RETRY_MS / 1000}",
+                )
             }
             schedule()
             return

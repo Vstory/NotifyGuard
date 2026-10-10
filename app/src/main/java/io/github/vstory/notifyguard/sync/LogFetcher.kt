@@ -48,8 +48,11 @@ object LogFetcher {
                 store.replaceAll(LogCodec.decodeList(json))
                 val recent = store.recent(LogStore.MAX_RECORDS)
                 if (BuildConfig.DEBUG) {
-                    AppLogger.debugRaw(
-                        "[DBG] 拉取：收到回执 ${recent.size} 条 往返=${System.currentTimeMillis() - sentAt}ms"
+                    AppLogger.debug(
+                        "app.reply",
+                        "ch=record",
+                        "items=${recent.size}",
+                        "rtt_ms=${System.currentTimeMillis() - sentAt}",
                     )
                 }
                 finish(recent)
@@ -73,15 +76,13 @@ object LogFetcher {
 
         handler.postDelayed({
             if (BuildConfig.DEBUG) {
-                AppLogger.debugRaw(
-                    "[DBG] 拉取：等 ${TIMEOUT_MS}ms 无回执 ⇒ 超时（模块未激活 / 装完没重启过系统框架）"
-                )
+                AppLogger.debug("app.timeout", "ch=record", "waited_ms=${TIMEOUT_MS}")
             }
             finish(null)
         }, TIMEOUT_MS)
         // 不能 setPackage：system_server 里的 receiver 不属于任何包，定向投递永远收不到
         sentAt = System.currentTimeMillis()
-        if (BuildConfig.DEBUG) AppLogger.debugRaw("[DBG] 拉取：发出 GET_LOGS")
+        if (BuildConfig.DEBUG) AppLogger.debug("app.send", "ch=record", "action=GET_LOGS")
         ctx.sendBroadcast(Intent(LogContract.ACTION_GET_LOGS))
     }
 

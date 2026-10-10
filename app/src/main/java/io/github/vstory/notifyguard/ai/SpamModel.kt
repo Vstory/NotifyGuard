@@ -96,7 +96,7 @@ class SpamModel private constructor(
             }.getOrNull() ?: return null
             val model = parse(bytes)
             if (model == null) {
-                ModuleLogger.error("内置模型解析失败（${bytes.size} 字节）：格式不符 ⇒ AI 段放行")
+                ModuleLogger.error("model.parse_failed", "bytes=${bytes.size}", "reason=format_mismatch", "action=pass")
             }
             return model
         }
