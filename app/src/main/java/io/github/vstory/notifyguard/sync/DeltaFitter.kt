@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.sync
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import io.github.vstory.notifyguard.ai.DeltaStamp
 import io.github.vstory.notifyguard.ai.SpamDelta
 import io.github.vstory.notifyguard.ai.SpamModel
 import io.github.vstory.notifyguard.ai.SpamTuner
@@ -34,7 +35,8 @@ object DeltaFitter {
          */
         data class Unavailable(val reason: Reason) : State
 
-        data class Sent(val version: Long, val weights: Int) : State
+        /** [digest] 是下发文件的内容摘要；读不到文件时是 [DeltaStamp.UNKNOWN_DIGEST]。 */
+        data class Sent(val version: Long, val weights: Int, val digest: String = "") : State
     }
 
     /** 拟合链路各步的失败原因（`Reason` 里带详情的两项是异常信息，本身不翻译）。 */
@@ -75,11 +77,20 @@ object DeltaFitter {
      *
      * 回调在主线程，可直接更新 UI。**不在这里判 `spamEnabled`**：微调量与「AI 段是否启用」是两件事 ——
      * 用户关掉 AI 再打开，不该顺带丢掉已拟合的微调。
+     *
+     * @param force 无视「输入摘要没变」也要重拟合重发（界面上的「重发微调」按钮）：
+     *   摘要说的是「标注与 base 都没变」，而用户此刻要的是「不管变没变，按现在这份数据再发一次」。
+     *   版本号会前进，模块端据此重新加载。
      */
-    fun ensureFitted(ctx: Context, labels: List<LabelRecord>, onDone: (State) -> Unit) {
+    fun ensureFitted(
+        ctx: Context,
+        labels: List<LabelRecord>,
+        force: Boolean = false,
+        onDone: (State) -> Unit,
+    ) {
         val appContext = ctx.applicationContext
         worker.execute {
-            val state = runCatching { fitIfNeeded(appContext, labels) }
+            val state = runCatching { fitIfNeeded(appContext, labels, force) }
                 .getOrElse { State.Unavailable(Reason.FitError("${it.javaClass.simpleName}: ${it.message}")) }
             main.post { onDone(state) }
         }
@@ -111,11 +122,11 @@ object DeltaFitter {
      */
     fun baseModel(): SpamModel? = bundledBase()
 
-    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>): State {
+    private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (prefs.getString(KEY_SIG, null) == sig) return currentState(model)
+        if (!force && prefs.getString(KEY_SIG, null) == sig) return currentState(model)
 
         val samples = labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
         val delta = when (val fit = SpamTuner.fit(model, samples)) {
@@ -124,7 +135,7 @@ object DeltaFitter {
         }
         if (!ConfigWriter.isConnected()) return State.Unavailable(Reason.ModuleDisconnected)
         // 顺序是正确性的一部分：文件先落地，版本号后写（见 DeltaWriter 类注释）
-        if (!DeltaWriter.write(delta)) return State.Unavailable(Reason.DeltaWriteFailed)
+        val digest = DeltaWriter.write(delta) ?: return State.Unavailable(Reason.DeltaWriteFailed)
         val cfg = ConfigWriter.load() ?: return State.Unavailable(Reason.ConfigReadFailed)
         // 版本号与时间戳同源，同毫秒连发两轮时 +1 —— 否则模块端把第二轮当成「版本号没变」而不加载
         val now = System.currentTimeMillis()
@@ -132,17 +143,18 @@ object DeltaFitter {
         if (!ConfigWriter.save(cfg.copy(deltaVersion = version))) return State.Unavailable(Reason.VersionWriteFailed)
 
         prefs.edit().putString(KEY_SIG, sig).apply()
-        return State.Sent(version, delta.indices.size)
+        return State.Sent(version, delta.indices.size, digest)
     }
 
     private fun currentState(model: SpamModel): State {
         val version = ConfigWriter.load()?.deltaVersion ?: 0L
         if (version == 0L) return State.None
-        val weights = when (val parsed = DeltaWriter.read(model)) {
+        val read = DeltaWriter.read(model)
+        val weights = when (val parsed = read?.parsed) {
             is SpamDelta.Parse.Ok -> parsed.delta.indices.size
             else -> UNKNOWN_WEIGHTS
         }
-        return State.Sent(version, weights)
+        return State.Sent(version, weights, read?.digest ?: DeltaStamp.UNKNOWN_DIGEST)
     }
 
     private fun bundledBase(): SpamModel? {

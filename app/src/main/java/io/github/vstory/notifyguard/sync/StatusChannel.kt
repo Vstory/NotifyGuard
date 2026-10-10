@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.Binder
-import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.ai.DeltaHolder
 import io.github.vstory.notifyguard.ai.ModelHolder
 import io.github.vstory.notifyguard.core.CrashGuard
@@ -84,7 +83,6 @@ object StatusChannel {
         val info = CrashGuard.safeModeInfo()
         return StatusReport(
             version = ModuleStatus.version(),
-            moduleSha = BuildConfig.GIT_SHA,
             assembly = ModuleStatus.assemblyText(),
             assemblyAt = ModuleStatus.assemblyAt(),
             okCount = ModuleStatus.okCount(),
@@ -105,6 +103,7 @@ object StatusChannel {
             modelReady = ModelHolder.base != null,
             deltaVersion = DeltaHolder.loadedVersion(),
             deltaWeights = DeltaHolder.loadedWeights(),
+            deltaDigest = DeltaHolder.loadedDigest(),
             recordsPersisted = LogSink.persistedCount(),
             recordsDropped = LogSink.droppedCount(),
         )

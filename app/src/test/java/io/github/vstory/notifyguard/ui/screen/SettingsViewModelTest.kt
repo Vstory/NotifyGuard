@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ai.DeltaStamp
 import io.github.vstory.notifyguard.ai.SpamTuner
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.sync.DeltaFitter
@@ -180,8 +181,9 @@ class SettingsViewModelTest {
         val line = SettingsViewModel.detailLine(
             StatusReport(
                 modelReady = true,
-                deltaVersion = 12L,
+                deltaVersion = 1_700_000_000_000L,
                 deltaWeights = 3,
+                deltaDigest = "3f9a1c2b",
                 recordsPersisted = 30L,
                 recordsDropped = 2L,
             )
@@ -189,10 +191,10 @@ class SettingsViewModelTest {
         assertEquals(R.string.module_detail, line.id)
         val args = line.args
         assertEquals(UiText.Res(R.string.module_detail_ai_ready), args[0])
-        // 微调那一行报的是「时间 + 权重数」：版本号本体是毫秒时间戳，直接摊给用户没法读
+        // 微调那一行报「时刻 + 内容摘要」：版本号本体是毫秒时间戳，摘要才是「这是哪一份文件」的判据
         val delta = args[1] as UiText.Res
         assertEquals(R.string.module_detail_delta_on, delta.id)
-        assertTimeArg(delta.args[0])
+        assertEquals(DeltaStamp.of(1_700_000_000_000L, "3f9a1c2b"), delta.args[0])
         assertEquals(3, delta.args[1])
         assertEquals(30L, args[2])
         assertEquals(2L, args[3])
@@ -248,14 +250,17 @@ class SettingsViewModelTest {
     /** 版本号写了但文件读不到时要单独说：否则用户以为微调已经在起作用。 */
     @Test
     fun fitTextSaysWhenTheDeltaFileIsUnreadable() {
-        val sent = fitText(DeltaFitter.State.Sent(version = 1_700_000_000_000L, weights = 128)) as UiText.Res
+        val sent = fitText(
+            DeltaFitter.State.Sent(version = 1_700_000_000_000L, weights = 128, digest = "3f9a1c2b")
+        ) as UiText.Res
         assertEquals(R.string.fit_sent, sent.id)
-        assertTimeArg(sent.args[0])
+        assertEquals(DeltaStamp.of(1_700_000_000_000L, "3f9a1c2b"), sent.args[0])
         assertEquals(128, sent.args[1])
 
         val broken = fitText(DeltaFitter.State.Sent(version = 1_700_000_000_000L, weights = -1)) as UiText.Res
         assertEquals(R.string.fit_sent_no_file, broken.id)
-        assertTimeArg(broken.args[0])
+        // 文件读不到就没有摘要可报，只报时刻（不带一个空的 `+`）
+        assertEquals(DeltaStamp.timeOf(1_700_000_000_000L), broken.args[0])
     }
 
     private companion object {

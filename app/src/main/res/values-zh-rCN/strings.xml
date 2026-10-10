@@ -30,6 +30,7 @@
     <string name="learning_title">学习</string>
     <string name="learning_refresh">刷新学习数据</string>
     <string name="learning_fit_group">微调状态</string>
+    <string name="learning_fit_resend">重发微调</string>
     <string name="learning_fit_note">下面的样本数是拟合真正会用的那份：凑不出特征的标注不计入，所以可能少于标注总数。</string>
     <string name="learning_labels_line">标注 %1$d 条（记录被窗口裁掉后仍保留）</string>
     <string name="learning_pending_group">待处理：被拦但未标注</string>
@@ -161,7 +162,7 @@
     <string name="module_detail_delta_on">微调 %1$s（%2$d 权重）</string>
     <string name="module_detail_delta_off">微调未启用</string>
     <string name="module_detail">%1$s · %2$s · 记录已落盘 %3$d 条（缓冲丢弃 %4$d）</string>
-    <string name="module_assembly">本代装配 OK %1$d / SKIP %2$d / FAIL %3$d（模块代码 %4$s+git.%5$s）</string>
+    <string name="module_assembly">本代装配 OK %1$d / SKIP %2$d / FAIL %3$d（模块代码 %4$s）</string>
     <string name="module_safe_mode_line">熔断触发：%1$s；%2$s。%3$s</string>
     <string name="module_safe_mode_at">时间 %1$s</string>
     <string name="module_safe_mode_at_unknown">时间未记录</string>
@@ -257,8 +258,8 @@
     <string name="fit_none">微调：未下发（标注满 %1$d 条且两类各 ≥ %2$d 条后自动拟合）</string>
     <string name="fit_not_enough">微调：未下发（可训练样本 %1$d/%2$d，垃圾 %3$d/%4$d、正常 %5$d/%6$d）</string>
     <string name="fit_unavailable_line">微调：未下发（%1$s）</string>
-    <string name="fit_sent">微调：已下发 v%1$s（%2$d 个权重）</string>
-    <string name="fit_sent_no_file">微调：已下发 v%1$s（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）</string>
+    <string name="fit_sent">微调：已下发 %1$s（%2$d 个权重）</string>
+    <string name="fit_sent_no_file">微调：已下发 %1$s（版本号已写，但微调文件读不到 —— 模块端会按纯 base 打分）</string>
     <string name="fit_reason_model">内置模型不可用</string>
     <string name="fit_reason_module">模块未连接</string>
     <string name="fit_reason_write">写入微调文件失败</string>

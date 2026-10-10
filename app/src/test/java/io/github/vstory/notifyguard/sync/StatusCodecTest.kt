@@ -9,8 +9,7 @@ import org.junit.Test
 class StatusCodecTest {
 
     private fun sample() = StatusReport(
-        version = "1.7.0",
-        moduleSha = "a5619f9",
+        version = "1.7.0+ci-debug.b4efc10a",
         assembly = "[OK] 漏斗\n[SKIP] 扩展槽",
         assemblyAt = 1_234L,
         okCount = 2,
@@ -31,6 +30,7 @@ class StatusCodecTest {
         modelReady = true,
         deltaVersion = 7L,
         deltaWeights = 524,
+        deltaDigest = "3f9a1c2b",
         recordsPersisted = 8L,
         recordsDropped = 9L,
     )

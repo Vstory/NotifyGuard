@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
         // App 侧版本横幅：App 进程与注入进程各自加载的是「各自启动那一刻」的代码，可能不是同一次构建，
         // 排障时要能分别看出两边各跑的是哪份代码（这行走 logcat；模块端那行走框架日志页）
         AppLogger.info(
-            "NotifyGuard App v${BuildConfig.VERSION_NAME}+git.${BuildConfig.GIT_SHA}" +
+            "NotifyGuard App ${BuildConfig.VERSION_NAME}" +
                 "（${if (BuildConfig.DEBUG) "debug" else "release"}）启动"
         )
         enableEdgeToEdge()

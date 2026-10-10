@@ -18,16 +18,22 @@ val hasSigning = !signStoreFile.isNullOrBlank()
 // 应用信息页完全同形、认不出是哪次提交。`+` 之后属 semver 的构建元数据段，不参与版本比较。
 val ciVersionSuffix = providers.gradleProperty("ciVersionSuffix").orNull?.trim()?.takeIf { it.isNotEmpty() }
 
-/** 构建期取提交短号（+ 工作区脏标记）；取不到写 `nogit`，绝不因此让构建失败。 */
-fun gitSha(): String = runCatching {
+/**
+ * 构建期取提交短号；**已跟踪**文件有改动时追加 `.dirty` 标识符。
+ *
+ * 脏判定刻意只看已跟踪文件：CI 会在打包前把签名配置追加进未跟踪的 `local.properties`，
+ * 按 `git status --porcelain` 的全量口径，CI 产物会带一个假的 `dirty`（干净提交却被标脏）。
+ * 反过来，一旦真脏就要标出来 —— 同短号不同代码，正是要靠它避免误判。
+ */
+val gitSha: String = runCatching {
     fun run(vararg args: String): String {
         val p = ProcessBuilder(*args).directory(rootDir).redirectErrorStream(true).start()
         val out = p.inputStream.bufferedReader().use { it.readText() }.trim()
         return if (p.waitFor() == 0) out else ""
     }
     val sha = run("git", "rev-parse", "--short=8", "HEAD")
-    if (sha.isEmpty()) return@runCatching "nogit"
-    sha + if (run("git", "status", "--porcelain").isNotEmpty()) "-dirty" else ""
+    if (sha.isEmpty()) "nogit"
+    else sha + if (run("git", "status", "--porcelain", "--untracked-files=no").isNotEmpty()) ".dirty" else ""
 }.getOrDefault("nogit")
 
 android {
@@ -46,11 +52,10 @@ android {
         // 刻意「后赋值覆盖」而非改写上面那行字面量：CI 工作流用 sed 取本文件**第一处** versionName，
         // 字面量必须保持可被解析
         ciVersionSuffix?.let { versionName = "${android.defaultConfig.versionName}+$it" }
-        // 提交短号注入 BuildConfig：模块端与 App 端的每条日志都带它 —— 排障时「这份代码是哪个提交」
-        // 必须能从日志读出来。CI 那个短号只进了 versionName（GITHUB_SHA 派生），日志里看不到，
-        // 本地构建更是没有；而注入点在构建期，本地与 CI 同源。
-        // `-dirty` = 构建时工作区有未提交改动（同 sha 不同代码，正是要防的误判）。
-        buildConfigField("String", "GIT_SHA", "\"${gitSha()}\"")
+        // 本地构建没有渠道段，补上 `<版本>+<短号>`：两条路的 versionName 都自带提交短号，
+        // 于是「跑的是哪个提交」只有一个来源 —— 应用信息页、两条日志前缀、状态回传读的都是它。
+        // 日志与状态若各自拼一遍，短号就会出现两次、还可能拼出不合 semver 的串（两个 `+`）。
+        if (ciVersionSuffix == null) versionName = "${android.defaultConfig.versionName}+$gitSha" 
     }
     // 未配签名时不建该配置，纯构建照常可跑
     signingConfigs {
