@@ -283,7 +283,10 @@ class LearningViewModel : ViewModel() {
                 return@fetch
             }
             DeltaFitter.progress(list) { state = state.copy(fitProgress = it) }
-            DeltaFitter.ensureFitted(app, list, force = true, reload = reload) { onFit(it) }
+            DeltaFitter.ensureFitted(app, list, force = true, reload = reload) { fit ->
+                onFit(fit)
+                fitNotice(fit)?.let { notify(it) }
+            }
         }
     }
 
