@@ -90,15 +90,24 @@ fun HomeScreen(
             }
 
             val stats = state.stats
+            val totals = state.totals
             GroupCard(stringResource(R.string.home_stats_group)) {
-                Note(stringResource(R.string.home_stats_note, LogStore.MAX_RECORDS))
-                StatLine(stringResource(R.string.home_stat_blocked, stats.blocked)) {
+                // 同一个位置静默换数据源，等于让用户拿两次不同的答案去对比：读不到累计就明说这是窗口口径
+                if (totals == null) {
+                    Note(stringResource(R.string.home_stats_note_window))
+                } else {
+                    Note(stringResource(R.string.home_stats_note_total, LogStore.MAX_RECORDS))
+                }
+                val blocked = totals?.blocked ?: stats.blocked.toLong()
+                val would = totals?.would ?: stats.would.toLong()
+                val pass = totals?.pass ?: stats.pass.toLong()
+                StatLine(stringResource(R.string.home_stat_blocked, blocked)) {
                     onOpenRecords(RecordsViewModel.Filter.Block)
                 }
-                StatLine(stringResource(R.string.home_stat_would, stats.would)) {
+                StatLine(stringResource(R.string.home_stat_would, would)) {
                     onOpenRecords(RecordsViewModel.Filter.Would)
                 }
-                StatLine(stringResource(R.string.home_stat_pass, stats.pass)) {
+                StatLine(stringResource(R.string.home_stat_pass, pass)) {
                     onOpenRecords(RecordsViewModel.Filter.Pass)
                 }
                 Note(stringResource(R.string.home_stat_scope, stats.groups, stats.events))
@@ -121,6 +130,8 @@ fun HomeScreen(
                     if (stats.otherApps > 0) {
                         Note(stringResource(R.string.home_top_other, stats.otherApps, stats.otherEvents))
                     }
+                    // 上面那三个数已经是累计口径了，排行还是窗口口径 —— 不写这句，两个口径会被当成一套
+                    Note(stringResource(R.string.home_top_scope))
                 }
             }
         }

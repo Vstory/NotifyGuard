@@ -46,4 +46,13 @@ data class StatusReport(
     val deltaDigest: String = "",
     val recordsPersisted: Long = 0L,
     val recordsDropped: Long = 0L,
+    /**
+     * 判定次数的累计（模块端唯一一份账本，见 `judge/Tally`）：清空记录、重启系统框架都不归零 ——
+     * 首页那三个数用它，记录窗口只用来算组数、事件数与排行。
+     */
+    val blockedTotal: Long = 0L,
+    val wouldTotal: Long = 0L,
+    val passTotal: Long = 0L,
+    /** 累计的起算时刻（第一条判定）；0 = 还没有过判定。 */
+    val tallySince: Long = 0L,
 )
