@@ -262,7 +262,7 @@
     <string name="fit_unavailable_line">Fine-tuning: not delivered (%1$s)</string>
     <string name="fit_sent">Fine-tuning: delivered %1$s (%2$d weights, fitted %3$s)</string>
     <string name="fit_sent_no_fit_time">Fine-tuning: delivered %1$s (%2$d weights)</string>
-    <string name="fit_reloaded">Fine-tuning: delivered %1$s (%2$d weights, identical delta — the version was advanced only to make the module reload)</string>
+    <string name="fit_reloaded">Fine-tuning: delivered %1$s (%2$d weights, fitted %3$s — identical delta, only the version was advanced to make the module reload)</string>
     <string name="fit_skipped">Fine-tuning: not delivered — the module already has this exact delta (%1$s, %2$d weights, fitted %3$s)</string>
     <string name="fit_sent_no_file">Fine-tuning: delivered %1$s (the version number is written but the delta file cannot be read — the module side scores with the plain base model)</string>
     <string name="fit_reason_model">built-in model unavailable</string>
