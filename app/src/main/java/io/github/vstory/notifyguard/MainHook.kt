@@ -24,8 +24,12 @@ class MainHook : XposedModule() {
 
     override fun onModuleLoaded(param: XposedModuleInterface.ModuleLoadedParam) {
         ModuleLogger.bind(this)
+        // 版本横幅：注入进程跑的是「注入那一刻」的那份代码，App 更新后 system_server 里仍是旧的 ——
+        // 排障的第一件事就是确定这一点，所以版本必须由被注入的这份代码自己报出来
         ModuleLogger.info(
-            "api102 module loaded: api=$apiVersion framework=$frameworkName/$frameworkVersion " +
+            "NotifyGuard 模块 v${BuildConfig.VERSION_NAME}+git.${BuildConfig.GIT_SHA}" +
+                "（${if (BuildConfig.DEBUG) "debug" else "release"}）已注入：" +
+                "api=$apiVersion framework=$frameworkName/$frameworkVersion " +
                 "isSystemServer=${param.isSystemServer} process=${param.processName}"
         )
     }

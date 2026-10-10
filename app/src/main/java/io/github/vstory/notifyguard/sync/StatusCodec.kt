@@ -12,6 +12,7 @@ object StatusCodec {
 
     fun encode(s: StatusReport): String = JSONObject().apply {
         put("version", s.version)
+        put("moduleSha", s.moduleSha)
         put("assembly", s.assembly)
         put("assemblyAt", s.assemblyAt)
         put("okCount", s.okCount)
@@ -31,6 +32,7 @@ object StatusCodec {
         put("romBlocked", s.romBlocked)
         put("modelReady", s.modelReady)
         put("deltaVersion", s.deltaVersion)
+        put("deltaWeights", s.deltaWeights)
         put("recordsPersisted", s.recordsPersisted)
         put("recordsDropped", s.recordsDropped)
     }.toString()
@@ -41,6 +43,7 @@ object StatusCodec {
         val d = StatusReport()
         return StatusReport(
             version = o.optString("version", d.version),
+            moduleSha = o.optString("moduleSha", d.moduleSha),
             assembly = o.optString("assembly", d.assembly),
             assemblyAt = o.optLong("assemblyAt", d.assemblyAt),
             okCount = o.optInt("okCount", d.okCount),
@@ -60,6 +63,7 @@ object StatusCodec {
             romBlocked = o.optLong("romBlocked", d.romBlocked),
             modelReady = o.optBoolean("modelReady", d.modelReady),
             deltaVersion = o.optLong("deltaVersion", d.deltaVersion),
+            deltaWeights = o.optInt("deltaWeights", d.deltaWeights),
             recordsPersisted = o.optLong("recordsPersisted", d.recordsPersisted),
             recordsDropped = o.optLong("recordsDropped", d.recordsDropped),
         )

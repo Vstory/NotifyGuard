@@ -11,6 +11,14 @@ package io.github.vstory.notifyguard.sync
 data class StatusReport(
     /** 模块自身的 versionName。用于识别「装的是哪一版」，与 App 版本可以不同。 */
     val version: String = "",
+    /**
+     * 模块端**正在跑的那份代码**的构建提交短号（注入时打进来的）。
+     *
+     * 与 [version] 是两件事：versionName 取自 apk，而注入进程跑的是「它启动那一刻」加载的代码 ——
+     * App 更新后 system_server 里仍是旧的。两者不一致就等于「模块端跑着旧代码」，
+     * 这正是「改了配置/代码没生效」的第一嫌疑。
+     */
+    val moduleSha: String = "",
     /** 本代装配汇总 + 明细（明细含每条 OK/SKIP/FAIL 的原因）。 */
     val assembly: String = "",
     val assemblyAt: Long = 0L,
@@ -35,8 +43,10 @@ data class StatusReport(
     val romBlocked: Long = 0L,
     /** AI 段：base 模型是否可打分（不可用即整段放行）。 */
     val modelReady: Boolean = false,
-    /** 已生效的端侧微调版本号；0 = 纯 base。 */
+    /** 已生效的端侧微调版本号；0 = 纯 base。取值是下发时刻的毫秒时间戳。 */
     val deltaVersion: Long = 0L,
+    /** 已生效的微调权重数（0 = 纯 base）：版本号非 0 但权重为 0 说明那份 delta 是空的。 */
+    val deltaWeights: Int = 0,
     val recordsPersisted: Long = 0L,
     val recordsDropped: Long = 0L,
 )

@@ -17,5 +17,11 @@ object AppLogger {
 
     const val TAG = "NotifyGuard"
 
-    fun debugRaw(msg: String) = Log.d(TAG, msg)
+    /** 与模块端同一口径：logcat 里每一行都标出构建提交短号（App 与模块端可能不是同一次构建）。 */
+    private val PREFIX = "[" + BuildConfig.GIT_SHA + "] "
+
+    fun debugRaw(msg: String) = Log.d(TAG, PREFIX + msg)
+
+    /** 非 DEBUG 也要留的 App 侧信息行（启动横幅、写配置结果这类排障入口）。 */
+    fun info(msg: String) = Log.i(TAG, PREFIX + msg)
 }
