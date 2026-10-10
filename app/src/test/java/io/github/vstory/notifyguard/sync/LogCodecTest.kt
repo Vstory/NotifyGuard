@@ -72,6 +72,20 @@ class LogCodecTest {
         assertEquals(1, back.count)
     }
 
+    /** 通知身份要跨进程原样带走：丢了它就退回文本聚合，刷新型通知会重新散成多组。 */
+    @Test
+    fun notificationIdentityRoundTrips() {
+        val back = LogCodec.fromJson(LogCodec.toJson(rec().copy(nkey = "null#305230424")))!!
+        assertEquals("null#305230424", back.nkey)
+    }
+
+    /** M2 及更早的文件没有这个键：缺省必须是 null（不带身份），不能变成空串。 */
+    @Test
+    fun missingIdentityStaysNull() {
+        val back = LogCodec.fromJson(JSONObject("{\"ts\":1,\"pkg\":\"a\",\"reason\":\"pass\"}"))!!
+        assertNull(back.nkey)
+    }
+
     private fun rec() = LogRecord(
         ts = 1_000L,
         pkg = "com.x",

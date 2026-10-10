@@ -142,6 +142,42 @@ class LogStoreTest {
         assertEquals("disabled", r.reason)
     }
 
+    /**
+     * 刷新型通知（同一 App 同一条通知被更新、正文里的数值一直在变）只留一条：显示最新内容，
+     * 次数与首见时间照旧累计 —— 否则每次刷新都开一个新组，记录页被同一个 App 刷屏。
+     */
+    @Test
+    fun refreshingNotificationCollapsesToItsLatestContent() {
+        val s = store()
+        s.addAll(listOf(accu(100, "-448 mA"), accu(101, "-608 mA"), accu(102, "-465 mA")))
+        assertEquals(1, s.size())
+        val r = s.recent(1).first()
+        assertEquals(100L, r.ts)
+        assertEquals(102L, r.lastTs)
+        assertEquals(3, r.count)
+        assertEquals("-465 mA 平均：-622 mA", r.text)
+    }
+
+    /** 身份不同（不同通知 id）的同类文本不该被并到一起。 */
+    @Test
+    fun distinctNotificationIdentitiesStayApart() {
+        val s = store()
+        s.addAll(listOf(accu(1, "-448 mA", nkey = "#1"), accu(2, "-448 mA", nkey = "#2")))
+        assertEquals(2, s.size())
+    }
+
+    private fun accu(ts: Long, current: String, nkey: String = "#305230424") = LogRecord(
+        ts = ts,
+        pkg = "com.digibites.accubattery",
+        title = "电池",
+        text = "$current 平均：-622 mA",
+        reason = "below_threshold:0.14",
+        would = false,
+        block = false,
+        slot = "EXT_SLOT",
+        nkey = nkey,
+    )
+
     /** M2 之前的文件没有 count/lastTs：载入时就地压实，用户不需要清空重来。 */
     @Test
     fun legacyFileIsCompactedOnLoad() {

@@ -23,6 +23,11 @@ data class LogRecord(
     val ruleId: String? = null,
     val score: Double? = null,
     val aiText: String? = null,
+    /**
+     * 通知身份（`tag#id`，包名已进聚合键）。空 = 这条记录不带身份：M2 之前落盘的老记录，
+     * 或 `id=0` 无 tag 这种被 App 当默认值用的取值（见 [notifKey]）。
+     */
+    val nkey: String? = null,
 ) {
 
     /**
@@ -30,9 +35,18 @@ data class LogRecord(
      *
      * [block]/[would] 必须一起比：同文本「拦过」与「放过」是两个事实，合并会把前者吞掉。
      * reason 不能进键——它带分数，纳入即等于放弃聚合。
+     *
+     * 带身份时**只看身份**：同一个 `tag#id` 在系统里就是同一条通知被更新覆盖，正文里的数值
+     * 每变一次就新开一组会让记录页被同一个 App 刷屏（电量、网速、步数这类刷新通知都如此）。
+     * 无身份时退回文本键，行为与 M2 一致。
      */
-    fun sameGroup(o: LogRecord): Boolean =
-        pkg == o.pkg && title == o.title && text == o.text && block == o.block && would == o.would
+    fun sameGroup(o: LogRecord): Boolean {
+        if (pkg != o.pkg || block != o.block || would != o.would) return false
+        // 两边都带身份时身份说了算：同一个 tag#id 就是系统里那条通知（正文数值变了也还是它），
+        // 身份不同则是两条不同通知。只有一边缺身份（老记录）才退回文本键。
+        if (nkey != null && o.nkey != null) return nkey == o.nkey
+        return title == o.title && text == o.text
+    }
 
     companion object {
 
@@ -59,8 +73,22 @@ data class LogRecord(
             score = d.score,
             // 与判定同一个 judgeText()：标注文本必须与推理时的输入同分布
             aiText = s?.judgeText()?.take(AI_TEXT_MAX)?.takeIf { it.isNotEmpty() },
+            nkey = notifKey(s),
         )
 
         private fun clip(v: String?): String? = v?.take(TEXT_MAX)
+
+        /**
+         * 通知身份 `tag#id`。
+         *
+         * `id=0` 且无 tag 时不给身份：简单的那种 `notify(0, …)` 被大量 App 当默认值用（每次推的
+         * 是不同内容），拿它当身份会把一个 App 的全部通知合成一条。
+         */
+        private fun notifKey(s: NotifySnapshot?): String? {
+            val id = s?.id ?: return null
+            val tag = s.tag
+            if (id <= 0 && tag.isNullOrEmpty()) return null
+            return "${tag.orEmpty()}#$id"
+        }
     }
 }
