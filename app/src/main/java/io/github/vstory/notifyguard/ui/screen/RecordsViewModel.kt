@@ -49,6 +49,15 @@ class RecordsViewModel : ViewModel() {
         /** 当前筛选档；进屏取哪一档由 [RecordsFilterMemory] 决定。 */
         val filter: Filter = Filter.All,
         /**
+         * 搜索词；空 = 不过滤。
+         *
+         * 刻意不进 [RecordsFilterMemory]：退出搜索会连词一起清掉，而跨进屏留着一个词、搜索框却不在
+         * 屏幕上时，再现的就是「列表被静默过滤」——档位可以记住（界面上看得见），搜索词不行。
+         */
+        val query: String = "",
+        /** 顶栏处于搜索态（输入框占住标题位）。 */
+        val searchOpen: Boolean = false,
+        /**
          * 当前档在**整个记录窗口**里的命中组数，可能大于 [rows] 的条数。
          *
          * 与 [rows] 分开：只报行数会把窗口口径说小（用户以为被拦的只有屏上这几条），
@@ -117,6 +126,16 @@ class RecordsViewModel : ViewModel() {
 
     /** 标注动作要拿原始记录去构造 [LabelRecord]，而界面只持 [RecordRow.key]。 */
     private var records: List<LogRecord> = emptyList()
+
+    /**
+     * 最近一次读盘的结果，供 [applyRows] 重算列表。
+     *
+     * 搜索词每敲一下都要重算列表，而 [repaint] 里的 [ConfigWriter] 是跨进程调用 —— 键一个字符
+     * 读一次盘，输入就会跟着卡。
+     */
+    private var allCache: List<LogRecord> = emptyList()
+    private var marksCache: Map<String, Boolean> = emptyMap()
+    private var protectCache: ProtectSwitches? = null
 
     private var noticeSeq = 0L
 
@@ -261,18 +280,41 @@ class RecordsViewModel : ViewModel() {
         val store = LogStore.get(ctx)
         val all = store.all()
         // 标注索引按全窗口算：筛选档变了要重新截列表，索引在两处各算一遍就会漏掉被筛掉那批记录上的标注
-        val marks = LabelRecord.marksOf(all, LabelStore.get(ctx).all())
-        val hit = filteredOf(all, state.filter)
-        records = hit.take(LIST_LIMIT)
+        allCache = all
+        marksCache = LabelRecord.marksOf(all, LabelStore.get(ctx).all())
         // 保护开关读一次就够：它有上限 100 行的列表，逐行读就是每行一次跨进程调用
-        val protect = ConfigWriter.load()?.protect
+        protectCache = ConfigWriter.load()?.protect
         state = state.copy(
             groups = store.size(),
             rawCount = store.rawCount(),
             labelCount = LabelStore.get(ctx).size(),
-            matched = hit.size,
-            rows = records.map { row(it, marks[LabelRecord.keyOf(it)], protect) },
         )
+        applyRows()
+    }
+
+    /** 只重算列表，不读盘（搜索词逐字符触发，见 [allCache] 的注释）。 */
+    private fun applyRows() {
+        val hit = filteredOf(allCache, state.filter, state.query)
+        records = hit.take(LIST_LIMIT)
+        state = state.copy(
+            matched = hit.size,
+            rows = records.map {
+                row(it, marksCache[LabelRecord.keyOf(it)], protectCache)
+            },
+        )
+    }
+
+    /** 展开 / 收起顶栏搜索。收起时一并清词：留着词而不显示搜索框，列表就是「被静默过滤」的状态。 */
+    fun setSearchOpen(open: Boolean) {
+        if (open == state.searchOpen) return
+        state = state.copy(searchOpen = open, query = if (open) state.query else "")
+        applyRows()
+    }
+
+    fun setQuery(q: String) {
+        if (q == state.query) return
+        state = state.copy(query = q)
+        applyRows()
     }
 
     private fun row(r: LogRecord, marked: Boolean?, protect: ProtectSwitches?): RecordRow = RecordRow(
@@ -319,8 +361,21 @@ class RecordsViewModel : ViewModel() {
          * 顺序不可颠倒：先截断再筛时，「拦截」档只覆盖最近若干组里恰好被拦的那几条，
          * 窗口里更早被拦的条目永远进不了这个档 —— 而档名叫「拦截」。
          */
-        fun filteredOf(records: List<LogRecord>, filter: Filter): List<LogRecord> =
-            records.filter { matches(it, filter) }.sortedByDescending { it.lastTs }
+        fun filteredOf(records: List<LogRecord>, filter: Filter, query: String = ""): List<LogRecord> =
+            records.filter { matches(it, filter) && matchesQuery(it, query) }
+                .sortedByDescending { it.lastTs }
+
+        /**
+         * 搜索词对包名 / 标题 / 正文做子串匹配，不区分大小写、首尾空白不算。
+         *
+         * 只搜这三项：用户在记录页看到的「这条通知是什么」就在这三项里。判定原因、槽位、规则 id
+         * 不进搜索 —— 要找「为什么被判成这样」是展开那条记录的解释，不是搜索框的事。
+         */
+        fun matchesQuery(r: LogRecord, query: String): Boolean {
+            val q = query.trim()
+            if (q.isEmpty()) return true
+            return listOfNotNull(r.pkg, r.title, r.text).any { it.contains(q, ignoreCase = true) }
+        }
 
         private fun matches(r: LogRecord, filter: Filter): Boolean = when (filter) {
             Filter.All -> true

@@ -92,6 +92,12 @@
     <string name="records_empty">(No records yet. Whether the verdict chain is running is visible in the framework log; module-side records live in /data/misc/notifyguard/logs.json)</string>
     <string name="records_count_badge">×%1$d</string>
     <string name="records_no_text">(no text)</string>
+    <string name="records_search">Search records</string>
+    <string name="records_search_hint">Search pkg, title or text</string>
+    <string name="records_search_clear">Clear search</string>
+    <string name="records_search_close">Exit search</string>
+    <string name="records_search_hit">Search hit %1$d groups (over the whole record window), showing the latest %2$d</string>
+    <string name="records_search_empty">No record matches this search (it searches pkg, title and text only)</string>
     <string name="records_label_blocked">Protected type (%1$s) with that protection still on: the chain passes it at the protection step, so a label would not feed training. Turn that protection off in Settings to label it.</string>
     <string name="records_marked_spam">Marked spam</string>
     <string name="records_marked_ham">Marked ham</string>

@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,17 +10,23 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
@@ -29,6 +36,8 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -37,6 +46,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -83,45 +97,56 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
         }
     }
 
+    // 返回键退出搜索：这是搜索态的官方预期（结果占着整屏，返回即退出）
+    BackHandler(enabled = state.searchOpen) { viewModel.setSearchOpen(false) }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.records_title)) },
-                modifier = topBarScrollToTop(listState),
-                actions = {
-                    TooltippedIconButton(
-                        tooltip = stringResource(R.string.records_refresh),
-                        onClick = { viewModel.refresh(ctx) },
-                        enabled = !state.fetching,
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.records_refresh))
-                    }
-                    TooltippedIconButton(
-                        tooltip = stringResource(R.string.records_more),
-                        onClick = { menuOpen = true },
-                    ) {
-                        Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.records_more))
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.records_clear_records)) },
-                            onClick = {
-                                menuOpen = false
-                                viewModel.clearRecords(ctx)
-                            },
-                        )
-                        // 与「清空记录」拆成两项、且只有它二次确认：记录是流水（丢了无所谓），
-                        // 标注是手工劳动（清空不可恢复），两个破坏性动作的误触代价不对等
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.records_clear_labels)) },
-                            onClick = {
-                                menuOpen = false
-                                viewModel.askClearLabels(ctx)
-                            },
-                        )
-                    }
-                },
-            )
+            if (state.searchOpen) {
+                SearchTopBar(
+                    query = state.query,
+                    onQueryChange = viewModel::setQuery,
+                    onClose = { viewModel.setSearchOpen(false) },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.records_title)) },
+                    modifier = topBarScrollToTop(listState),
+                    actions = {
+                        TooltippedIconButton(
+                            tooltip = stringResource(R.string.records_refresh),
+                            onClick = { viewModel.refresh(ctx) },
+                            enabled = !state.fetching,
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.records_refresh))
+                        }
+                        TooltippedIconButton(
+                            tooltip = stringResource(R.string.records_more),
+                            onClick = { menuOpen = true },
+                        ) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.records_more))
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.records_clear_records)) },
+                                onClick = {
+                                    menuOpen = false
+                                    viewModel.clearRecords(ctx)
+                                },
+                            )
+                            // 与「清空记录」拆成两项、且只有它二次确认：记录是流水（丢了无所谓），
+                            // 标注是手工劳动（清空不可恢复），两个破坏性动作的误触代价不对等
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.records_clear_labels)) },
+                                onClick = {
+                                    menuOpen = false
+                                    viewModel.askClearLabels(ctx)
+                                },
+                            )
+                        }
+                    },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
@@ -135,12 +160,14 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
         ) {
             item { StatusCard(state) }
             item { FilterRow(state.filter) { viewModel.setFilter(ctx, it) } }
-            // 命中数紧跟筛选行：切档后视线就在这里，把窗口口径写在筛选项旁边才有人读到
-            if (state.filter != RecordsViewModel.Filter.All) {
+            // 命中数紧跟筛选行：切档后视线就在这里，把窗口口径写在筛选项旁边才有人读到。
+            // 搜索时同一位置换成搜索口径 —— 两处都开着时「本档命中」会与屏上的行数对不上
+            val searching = state.query.isNotEmpty()
+            if (searching || state.filter != RecordsViewModel.Filter.All) {
                 item {
                     Note(
                         stringResource(
-                            R.string.records_filter_hit,
+                            if (searching) R.string.records_search_hit else R.string.records_filter_hit,
                             state.matched,
                             RecordsViewModel.LIST_LIMIT,
                         )
@@ -148,7 +175,7 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
                 }
             }
             if (state.rows.isEmpty()) {
-                item { EmptyHint(state.filter) }
+                item { EmptyHint(state.filter, searching) }
             } else {
                 items(state.rows, key = { it.key }) { row ->
                     RecordCard(
@@ -268,12 +295,12 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
  * 合成一句会把「没记录」说成「筛没了」，用户就不会去查日志了。
  */
 @Composable
-private fun EmptyHint(filter: RecordsViewModel.Filter) {
+private fun EmptyHint(filter: RecordsViewModel.Filter, searching: Boolean) {
     Text(
-        text = if (filter == RecordsViewModel.Filter.All) {
-            stringResource(R.string.records_empty)
-        } else {
-            stringResource(R.string.records_filter_empty)
+        text = when {
+            searching -> stringResource(R.string.records_search_empty)
+            filter == RecordsViewModel.Filter.All -> stringResource(R.string.records_empty)
+            else -> stringResource(R.string.records_filter_empty)
         },
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -373,4 +400,57 @@ private fun RecordCard(
             }
         }
     }
+}
+
+/**
+ * 顶栏搜索态：输入框占住标题位，返回箭头退出（官方 app bar 内就地搜索的形态）。
+ *
+ * 结果随输入实时出现，所以键盘的搜索键只收起键盘、不清词 —— 回车在这里表示「看完了」。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchTopBar(query: String, onQueryChange: (String) -> Unit, onClose: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    TopAppBar(
+        navigationIcon = {
+            IconButton(onClick = onClose) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.records_search_close),
+                )
+            }
+        },
+        title = {
+            TextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focus),
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.records_search_hint)) },
+                // 顶栏里不要输入框自己的容器与下划线：它已经是顶栏的一部分，带边框会叠出两层
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = stringResource(R.string.records_search_clear),
+                            )
+                        }
+                    }
+                },
+            )
+        },
+    )
 }
