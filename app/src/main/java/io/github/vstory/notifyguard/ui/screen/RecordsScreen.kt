@@ -114,6 +114,15 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
                     modifier = topBarScrollToTop(listState),
                     actions = {
                         TooltippedIconButton(
+                            tooltip = stringResource(R.string.records_search),
+                            onClick = { viewModel.setSearchOpen(true) },
+                        ) {
+                            Icon(
+                                Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.records_search),
+                            )
+                        }
+                        TooltippedIconButton(
                             tooltip = stringResource(R.string.records_refresh),
                             onClick = { viewModel.refresh(ctx) },
                             enabled = !state.fetching,
