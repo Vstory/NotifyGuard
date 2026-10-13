@@ -17,11 +17,14 @@ class RecordsViewModelTest {
         block: Boolean = false,
         would: Boolean = false,
         lastTs: Long = ts,
+        pkg: String = "com.example.app",
+        title: String? = "t$ts",
+        text: String? = "b$ts",
     ) = LogRecord(
         ts = ts,
-        pkg = "com.example.app",
-        title = "t$ts",
-        text = "b$ts",
+        pkg = pkg,
+        title = title,
+        text = text,
         reason = "ai:0.90",
         would = would,
         block = block,
@@ -120,6 +123,41 @@ class RecordsViewModelTest {
         RecordsFilterMemory.remember(RecordsViewModel.Filter.Would)
 
         assertEquals(RecordsViewModel.Filter.Would, RecordsFilterMemory.take())
+    }
+
+    /** 搜索命中包名 / 标题 / 正文任一，且与档位是「与」的关系（不是「或」）。 */
+    @Test
+    fun searchMatchesAnyOfPkgTitleTextAndStacksWithFilter() {
+        val rs = listOf(
+            record(1, title = "限时优惠"),
+            record(2, text = "限时优惠券"),
+            record(3, pkg = "com.example.promo"),
+            record(4, block = true, title = "限时优惠"),
+        )
+
+        // 3 号只被包名命中，不在这条搜索词里
+        assertEquals(
+            listOf(4L, 2L, 1L),
+            RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All, "限时优惠").map { it.ts },
+        )
+        assertEquals(
+            listOf(3L),
+            RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All, "promo").map { it.ts },
+        )
+        assertEquals(
+            listOf(4L),
+            RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.Block, "限时优惠").map { it.ts },
+        )
+    }
+
+    /** 大小写不敏感、纯空白等于不过滤 —— 否则「清空搜索框」会把列表也清空。 */
+    @Test
+    fun searchIsCaseInsensitiveAndBlankMeansNoFilter() {
+        val rs = listOf(record(1, title = "Spotify"))
+
+        assertEquals(1, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All, "spotify").size)
+        assertEquals(1, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All, "  ").size)
+        assertEquals(0, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All, "抖音").size)
     }
 
     /** 判定由 `block` / `would` 派生，与筛选口径同源。 */

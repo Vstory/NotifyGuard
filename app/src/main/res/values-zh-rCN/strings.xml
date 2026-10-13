@@ -91,6 +91,12 @@
     <string name="records_empty">（暂无记录。判定链是否在跑看框架日志；模块端记录落在 /data/misc/notifyguard/logs.json）</string>
     <string name="records_count_badge">×%1$d</string>
     <string name="records_no_text">(无文本)</string>
+    <string name="records_search">搜索记录</string>
+    <string name="records_search_hint">搜包名 / 标题 / 正文</string>
+    <string name="records_search_clear">清除搜索词</string>
+    <string name="records_search_close">退出搜索</string>
+    <string name="records_search_hit">搜索命中 %1$d 组（按整个记录窗口算），下列最近 %2$d 组</string>
+    <string name="records_search_empty">没有匹配这条搜索词的记录（只搜包名 / 标题 / 正文）</string>
     <string name="records_label_blocked">命中保护类型（%1$s）且该保护当前开着：判定链在保护这一步就放行了，标注进不了训练。要标它，请先到设置 →「保护类型」里关掉它。</string>
     <string name="records_marked_spam">已标垃圾</string>
     <string name="records_marked_ham">已标正常</string>
