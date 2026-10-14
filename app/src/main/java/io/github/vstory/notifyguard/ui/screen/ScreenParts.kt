@@ -320,6 +320,14 @@ enum class Verdict(@StringRes val labelRes: Int) {
     Would(R.string.verdict_would),
     Pass(R.string.verdict_pass);
 
+    /**
+     * 用户能补的方向只有一个：被拦下的条目只可能是「误拦」（模型已经判它是垃圾，再标一次垃圾等于
+     * 把判定抄一遍，没有信息量），放行与观察模式的条目只可能是「漏拦」。两个方向都摆出来，用户
+     * 就得先想「这条该点哪个」，而其中一个按构造永远是无意义的。
+     */
+    val markSpamAllowed: Boolean get() = this != Block
+    val markHamAllowed: Boolean get() = this == Block
+
     companion object {
         fun of(record: LogRecord): Verdict = when {
             record.block -> Block

@@ -17,29 +17,29 @@ class LabelRecordTest {
         )
     }
 
-    @Test
-    fun keySeparatesDifferentGroups() {
-        assertNotEquals(LabelRecord.keyOf(rec(ts = 100)), LabelRecord.keyOf(rec(ts = 101)))
-        assertNotEquals(LabelRecord.keyOf(rec(ts = 100)), LabelRecord.keyOf(rec(pkg = "com.y")))
-        // 时间与包名仍留在 key 前缀里：排查时要能一眼看出这条标注是哪条通知的
-        assertTrue(LabelRecord.keyOf(rec(ts = 100)).startsWith("100:com.x:"))
-    }
-
     /**
-     * ts 是毫秒级（判定侧取 `System.currentTimeMillis()`）：同一毫秒、同一 App 连推两条不同通知
-     * 会各成一组。只按「时间:包名」定位会让它们共用一条标注 —— 标了其中一条，另一条也显示已标注。
+     * 样本身份只认**内容**：同文本不同时间、不同包名、不同拦截状态都是同一条样本。
+     *
+     * 用户的规矩是「垃圾就是垃圾内容」—— 按包名或时间判同，等于同一份垃圾换个 App 出现就得重标
+     * 一遍；而同一段文案先被拦、后被放（或用户改主意）本该覆盖成一条，不是并成两条方向相反的样本。
      */
     @Test
-    fun keySeparatesGroupsSharingTimestampAndPackage() {
+    fun keyIgnoresTimePackageAndVerdict() {
         val base = LabelRecord.keyOf(rec(ts = 100))
-        assertNotEquals(base, LabelRecord.keyOf(rec(ts = 100, text = "B2")))
-        assertNotEquals(base, LabelRecord.keyOf(rec(ts = 100, block = true)))
-        assertNotEquals(base, LabelRecord.keyOf(rec(ts = 100, would = true)))
-        // title 为 null 与为 "" 在聚合键里是两个组，摘要也必须分得开（长度前缀而非分隔符的原因）
-        assertNotEquals(
-            LabelRecord.keyOf(rec(ts = 100, title = null)),
-            LabelRecord.keyOf(rec(ts = 100, title = "")),
-        )
+        assertEquals(base, LabelRecord.keyOf(rec(ts = 101)))
+        assertEquals(base, LabelRecord.keyOf(rec(pkg = "com.y")))
+        assertEquals(base, LabelRecord.keyOf(rec(block = true)))
+        assertEquals(base, LabelRecord.keyOf(rec(would = true)))
+    }
+
+    /** 内容不同必须分开；大小写差异按归一化后判同（与判定打分喂给模型的是同一份文本）。 */
+    @Test
+    fun keySeparatesDifferentTexts() {
+        val base = LabelRecord.keyOf(rec(ts = 100))
+        assertNotEquals(base, LabelRecord.keyOf(rec(ts = 100, text = "C")))
+        // title 为 null 与为 "" 在记录聚合里是两个组，样本键同样分得开（少了标题就是另一段内容）
+        assertNotEquals(base, LabelRecord.keyOf(rec(ts = 100, title = null)))
+        assertEquals(base, LabelRecord.keyOf(rec(ts = 100, title = "t", text = "b")))
     }
 
     @Test
@@ -55,9 +55,10 @@ class LabelRecordTest {
 
     @Test
     fun marksOfMapsRecordsToTheirVerdict() {
-        val spam = rec(ts = 100)
-        val ham = rec(ts = 200)
-        val unlabeled = rec(ts = 300)
+        // 三条不同内容：默认文本相同的话会落到同一个键上（键只认内容）
+        val spam = rec(ts = 100, text = "甲")
+        val ham = rec(ts = 200, text = "乙")
+        val unlabeled = rec(ts = 300, text = "丙")
         val labels = listOf(
             LabelRecord.of(spam, spam = true, at = 1, modelVersion = 0),
             LabelRecord.of(ham, spam = false, at = 2, modelVersion = 0),
