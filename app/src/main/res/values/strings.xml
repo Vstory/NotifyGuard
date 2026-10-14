@@ -47,10 +47,6 @@
     <string name="learning_ai_group">Records with an AI score</string>
     <string name="learning_ai_note">Tap Why to see which fragments pushed the score up. The highlight uses the very weights the verdict used, and the feature buckets hold weights with no word list — so it can point at fragments, never at words.</string>
     <string name="learning_ai_empty">No record carries an AI score right now.</string>
-    <string name="learning_orphan_group">Orphan labels</string>
-    <string name="learning_orphan_note">Labelled notifications that have left the record window. They still feed fine-tuning — flip the ones you marked the wrong way, undo the ones you no longer stand by.</string>
-    <string name="learning_orphan_flip_note">Flipping changes this sample\'s direction only. The notification has left the window, so the row stays here.</string>
-    <string name="learning_orphan_empty">No orphan label.</string>
     <string name="learning_detail_show">Why</string>
     <string name="learning_detail_hide">Collapse</string>
     <string name="learning_detail_computing">Attributing…</string>
@@ -288,4 +284,21 @@
     <string name="fit_reason_version">delivering the version number failed</string>
     <string name="fit_error">fit error: %1$s</string>
     <string name="fit_state_error">state read error: %1$s</string>
+    <string name="learning_search_samples">Search samples</string>
+    <string name="learning_tab_pending">Pending %1$d</string>
+    <string name="learning_tab_library">Samples %1$d</string>
+    <string name="learning_tab_fit">Tuning</string>
+    <string name="learning_lib_filter_all">All %1$d</string>
+    <string name="learning_lib_filter_spam">Spam %1$d</string>
+    <string name="learning_lib_filter_ham">Normal %1$d</string>
+    <string name="learning_lib_count">%1$d samples · newest first</string>
+    <string name="learning_lib_hit">%1$d found</string>
+    <string name="learning_lib_empty">No samples match</string>
+    <string name="learning_lib_group_count">%1$d</string>
+    <string name="learning_lib_group_more">Show more (%1$d left)</string>
+    <string name="learning_sample_spam">Spam</string>
+    <string name="learning_sample_ham">Normal</string>
+    <string name="learning_sample_to_spam">Mark spam</string>
+    <string name="learning_sample_to_ham">Mark normal</string>
+    <string name="learning_sample_delete">Delete sample</string>
 </resources>
