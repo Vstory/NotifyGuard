@@ -391,16 +391,21 @@ private fun RecordCard(
             // 保护类型命中且开关开着时禁标（见 RecordsViewModel.labelBlocked）——「撤销」不在此列，
             // 撤销是移除旧标注，不是新增样本
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(
-                    onClick = { onMark(true) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != true && row.labelBlocked == null,
-                ) { Text(stringResource(R.string.action_mark_spam)) }
-                TextButton(
-                    onClick = { onMark(false) },
-                    modifier = Modifier.heightIn(min = 48.dp),
-                    enabled = !busy && row.marked != false && row.labelBlocked == null,
-                ) { Text(stringResource(R.string.action_mark_ham)) }
+                // 只给能补的那个方向（见 Verdict.markSpamAllowed）：被拦的给「标正常」，放过的给「标垃圾」
+                if (row.verdict.markSpamAllowed) {
+                    TextButton(
+                        onClick = { onMark(true) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        enabled = !busy && row.marked != true && row.labelBlocked == null,
+                    ) { Text(stringResource(R.string.action_mark_spam)) }
+                }
+                if (row.verdict.markHamAllowed) {
+                    TextButton(
+                        onClick = { onMark(false) },
+                        modifier = Modifier.heightIn(min = 48.dp),
+                        enabled = !busy && row.marked != false && row.labelBlocked == null,
+                    ) { Text(stringResource(R.string.action_mark_ham)) }
+                }
                 TextButton(
                     onClick = onUndo,
                     modifier = Modifier.heightIn(min = 48.dp),

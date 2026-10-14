@@ -66,7 +66,7 @@ class LabelStore(private val file: File) {
     fun replaceAll(list: List<LabelRecord>): Boolean = synchronized(lock) {
         ensureLoaded()
         labels.clear()
-        list.forEach { labels[it.key] = it }
+        LabelRecord.migrate(list).forEach { labels[it.key] = it }
         trim()
         loadFailed = false
         persist()
@@ -96,7 +96,8 @@ class LabelStore(private val file: File) {
             loadFailed = true
             return
         }
-        parsed.forEach { labels[it.key] = it }
+        // 按当前判据重算键并合并同内容的：库可能是旧版本写的（键含时间与拦截状态）
+        LabelRecord.migrate(parsed).forEach { labels[it.key] = it }
     }
 
     private fun trim() {

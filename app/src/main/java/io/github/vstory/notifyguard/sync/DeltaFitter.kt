@@ -201,7 +201,9 @@ object DeltaFitter {
     private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
         val samples = samplesOf(ctx, labels)
-        val sig = signature(samples, model)
+        // 摘要只认**用户标注**：自动正样本跟着记录窗口变，算进摘要会让「新拦了一批通知」也触发一次
+        // 拟合，而用户的规则是被拦的默认即「拦得对」、不该触发训练。
+        val sig = signature(labels, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!force && prefs.getString(KEY_SIG, null) == sig) return currentState(ctx, model)
 
@@ -271,20 +273,19 @@ object DeltaFitter {
     }
 
     /**
-     * 输入摘要 = 样本全集（key + 文本 + 标签） + base 指纹。
-     * 不含 `at`（改一次标注时间就重拟合没有意义）与 `pkg`（文本与 key 已覆盖它的信息）。
+     * 输入摘要 = 用户标注全集（key + 文本 + 标签） + base 指纹。
+     * 不含 `at`（改一次标注时间就重拟合没有意义）；key 已是内容型，`pkg` 的信息不必再单独纳入。
      *
-     * 必须是**样本**而不是标注：自动 spam 那半边跟着记录窗口走，记录一变样本集就变，
-     * 拿标注去算摘要会让「新拦了一批通知」不触发重拟合。
+     * **只认用户标注**：自动正样本跟着记录窗口走，算进来会让「新拦了一批通知」也触发拟合。
      */
-    private fun signature(samples: List<SpamTuner.Sample>, model: SpamModel): String {
+    private fun signature(labels: List<LabelRecord>, model: SpamModel): String {
         val md = MessageDigest.getInstance("SHA-256")
         md.update(model.fingerprintU32.toString().toByteArray())
-        for (s in samples.sortedBy { it.key }) {
+        for (l in labels.sortedBy { it.key }) {
             md.update(0)
-            md.update(s.key.toByteArray())
-            md.update(if (s.spam) 1 else 0)
-            md.update(s.text.toByteArray())
+            md.update(l.key.toByteArray())
+            md.update(if (l.spam) 1 else 0)
+            md.update(l.text.toByteArray())
         }
         return md.digest().joinToString("") { "%02x".format(it) }
     }

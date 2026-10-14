@@ -63,11 +63,14 @@ class DeltaFitterTest {
         assertEquals("judged text", DeltaFitter.autoSpamOf(listOf(r), emptyList())[0].text)
     }
 
+    /** 归一化会滤掉数字与字母 x（与 Python 训练端同口径），所以把数字逐位映射成字母来造不同的文本。 */
+    private fun word(n: Long): String = n.toString().map { 'a' + (it - '0') }.joinToString("")
+
     private fun rec(ts: Long, block: Boolean = false, score: Double? = null) = LogRecord(
         ts = ts,
         pkg = "com.example",
-        title = "t$ts",
-        text = "x$ts",
+        title = "标题${word(ts)}",
+        text = "正文${word(ts)}",
         reason = "",
         would = block,
         block = block,

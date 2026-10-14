@@ -3,8 +3,7 @@ package io.github.vstory.notifyguard.judge
 /**
  * 一条用户标注（纯数据，两端共用）。
  *
- * [key] 用 `"$ts:$pkg:$digest"`，[ts] 取一组记录的**首见**时间：聚合后它恒定（组内后续通知只动
- * `lastTs`/`count`），所以标注天然跟着组走，而不必给 [LogRecord] 加 id 字段。
+ * [key] 由**领域处理后的文本**决定（见 [keyOf]）：同内容只有一条样本，改判即覆盖。
  *
  * [text] 自带训练文本、不引用流水：记录是 500 组滚动窗口，标注产生后流水随时可能被裁掉（判据 J1）。
  */
@@ -22,33 +21,38 @@ data class LabelRecord(
 
     companion object {
 
-        fun keyOf(r: LogRecord): String = "${r.ts}:${r.pkg}:${digestOf(r)}"
+        fun keyOf(r: LogRecord): String = contentKey(trainingText(r))
 
         /**
-         * 同一毫秒、同一包名、内容不同的两条通知必须能分开。
+         * 样本身份 = 归一化后的文本。**不含包名、时间、拦截状态**（用户定的规则：「垃圾就是垃圾内容」）。
          *
-         * `ts` 由判定侧给 `System.currentTimeMillis()`（毫秒级），一个 App 在同一毫秒连推两条不同
-         * 通知完全可能；那时两条记录组不同、而 `"$ts:$pkg"` 相同 ⇒ 标了其中一条，另一条在记录页也
-         * 显示「已标注」，而库里只有一条 —— 用户以为自己标了两条。
+         * 不含包名的依据：模型打分只看 `normalize(文本)`，看不见包名 —— 同一段文案换个 App 出现时
+         * 特征完全相同，按包名判同只会把同一份垃圾人为碎成多条样本，等于换个 App 重训一遍。
          *
-         * `block`/`would` 也进摘要，因为 [LogRecord.sameGroup] 含它们：同文本「拦过」与「放过」
-         * 本来就是两个组。`hashCode` 的 32 位碰撞概率在此可忽略（只为把撞车降到「不会遇到」）。
+         * 不含时间与拦截状态的后果是有意的：同一段文本先被拦、后被放，或用户改主意，都落在同一个
+         * 键上，`upsert` 用最新表态覆盖旧的那条 —— 改判不必先去手删旧样本。
          */
-        private fun digestOf(r: LogRecord): String {
-            val sb = StringBuilder()
-            for (part in listOf(r.title, r.text)) {
-                // 长度前缀而非分隔符：null 与空串必须摘出不同的值（聚合键里它们也是不同的组）
-                sb.append(part?.length ?: -1).append(':').append(part.orEmpty()).append('|')
-            }
-            sb.append(r.block).append('|').append(r.would)
-            return sb.toString().hashCode().toUInt().toString(16)
-        }
+        internal fun contentKey(text: String): String =
+            "c:" + SpamFeatures.normalize(text).hashCode().toUInt().toString(16)
+
+        /**
+         * 旧库迁移：M4 期的键是 `ts:pkg:摘要`（含首见时间与拦截状态）⇒ 同文本改一次标就留下两条样本。
+         * 读入时一律按新判据重算，同内容只留**最后一次表态**那条（`at` 最大；同刻按 key 定，保证两次
+         * 载入得到同一份结果）。
+         */
+        fun migrate(list: List<LabelRecord>): List<LabelRecord> =
+            list.filter { SpamFeatures.normalize(it.text).isNotEmpty() }
+                .groupBy { contentKey(it.text) }
+                .map { (k, g) ->
+                    g.maxWith(compareBy<LabelRecord> { it.at }.thenBy { it.key }).copy(key = k)
+                }
+                .sortedBy { it.key }
 
         /**
          * 记录页用：这批记录各自已标注成什么，**缺失即未标注**（`null`）。
          *
-         * 必须走 [keyOf] —— 拿 `lastTs` 拼 key（组内一条新通知就变）、或另写一套拼法，
-         * 都会让「已标注」永远显示成未标注，用户于是重复标注。
+         * 必须走 [keyOf] —— 另写一套拼法（比如拿 `lastTs` 或包名去拼）会让「已标注」永远显示成
+         * 未标注，用户于是重复标注。
          */
         fun marksOf(records: List<LogRecord>, labels: List<LabelRecord>): Map<String, Boolean> {
             val byKey = labels.associateBy { it.key }
