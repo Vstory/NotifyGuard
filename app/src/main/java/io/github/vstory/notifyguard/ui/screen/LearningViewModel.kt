@@ -3,6 +3,7 @@ package io.github.vstory.notifyguard.ui.screen
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -286,7 +287,7 @@ class LearningViewModel : ViewModel() {
                 notify(UiText.Res(R.string.notice_label_failed, listOf(UiText.Res(R.string.learning_fit_resend))))
                 return@fetch
             }
-            DeltaFitter.progress(list) { state = state.copy(fitProgress = it) }
+            DeltaFitter.progress(app, list) { state = state.copy(fitProgress = it) }
             DeltaFitter.ensureFitted(app, list, force = true) { fit ->
                 onFit(fit)
                 fitNotice(fit)?.let { notify(it) }
@@ -303,7 +304,7 @@ class LearningViewModel : ViewModel() {
             DeltaFitter.ensureFitted(ctx, list) { onFit(it) }
         }
         // 进度单独算：拟合成功后就拿不到 Fit.NotReady 的门槛数了，而那正是用户最想看见「还差几条」的时候
-        if (list != null) DeltaFitter.progress(list) { state = state.copy(fitProgress = it) }
+        if (list != null) DeltaFitter.progress(ctx, list) { state = state.copy(fitProgress = it) }
     }
 
     private fun onFit(fit: DeltaFitter.State) {
@@ -342,6 +343,12 @@ class LearningViewModel : ViewModel() {
         )
     }
 
+    /**
+     * 本次开机的墙钟时刻（`now - 开机以来毫秒`）。用墙钟而非 [SystemClock]：记录的时间戳来自
+     * 判定侧的 `System.currentTimeMillis()`，两者只有在同一条时间轴上才能比较。
+     */
+    private val bootWallClock: Long get() = System.currentTimeMillis() - SystemClock.elapsedRealtime()
+
     private fun repaint(ctx: Context) {
         val store = LogStore.get(ctx)
         val labels0 = LabelStore.get(ctx).all()
@@ -351,7 +358,7 @@ class LearningViewModel : ViewModel() {
         val marks = LabelRecord.marksOf(records, labels0)
         state = state.copy(
             labelTotal = labels0.size,
-            pending = pendingOf(records, marks).take(LIST_LIMIT).map { row(it, marks) },
+            pending = pendingOf(records, marks, bootWallClock).take(LIST_LIMIT).map { row(it, marks) },
             aiRows = aiRowsOf(records).take(LIST_LIMIT).map { row(it, marks) },
             orphans = orphansOf(records, labels0).take(LIST_LIMIT).map { orphan(it) },
         )
@@ -399,10 +406,18 @@ class LearningViewModel : ViewModel() {
          */
         fun hasAiVerdict(r: LogRecord): Boolean = r.score != null
 
-        /** 待处理 = 被拦下但还没表态的：误杀回溯要找的正是它们。 */
-        fun pendingOf(records: List<LogRecord>, marks: Map<String, Boolean>): List<LogRecord> =
+        /**
+         * 待处理 = 被拦下、还没表态、且发生在 [since] 之后的：误杀回溯要找的正是它们。
+         *
+         * 被拦而用户没表态的条目**默认就是「拦得对」**—— 它已经被模型记成垃圾，用户没有要补充的
+         * 信息，所以不该被逐条确认（那会把这张卡永远堵住，也把确认当成了标注）。
+         *
+         * 清空界限取「本次开机」而不是超时：超时会让「昨天没顾上看」的误杀今天再也找不到；
+         * 开机是用户自己会经历的一条界（更早的记录仍可在记录屏标注，只是不再占这张待办卡）。
+         */
+        fun pendingOf(records: List<LogRecord>, marks: Map<String, Boolean>, since: Long): List<LogRecord> =
             records.sortedByDescending { it.lastTs }.filter {
-                it.block && marks[LabelRecord.keyOf(it)] == null
+                it.block && it.lastTs >= since && marks[LabelRecord.keyOf(it)] == null
             }
 
         fun aiRowsOf(records: List<LogRecord>): List<LogRecord> =
