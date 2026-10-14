@@ -10,7 +10,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
-import io.github.vstory.notifyguard.ai.SpamAttribution
 import io.github.vstory.notifyguard.ai.SpamDelta
 import io.github.vstory.notifyguard.ai.SpamTuner
 import io.github.vstory.notifyguard.data.LabelStore
@@ -66,7 +65,6 @@ class LearningViewModel : ViewModel() {
         val labelTotal: Int = 0,
         val tab: Tab = Tab.Library,
         val pending: List<Row> = emptyList(),
-        val aiRows: List<Row> = emptyList(),
         /** 样本库：按来源 App 收好的组（筛选与搜索已作用其上）。 */
         val libGroups: List<Group> = emptyList(),
         /** 全库的垃圾条数（筛选按钮上的数字用它，不能用过滤后的组算）。 */
@@ -79,9 +77,6 @@ class LearningViewModel : ViewModel() {
         val openGroups: Set<String> = emptySet(),
         /** 每组已展开的条数（键是包名）；缺省即只显示 [GROUP_PAGE] 条。 */
         val groupShown: Map<String, Int> = emptyMap(),
-        /** 展开中的那条；null = 都收着。 */
-        val openKey: String? = null,
-        val detail: Detail? = null,
         /** 非空即弹某条记录的判定说明（与记录屏共用同一份说明件）。 */
         val explanation: ReasonExplanation? = null,
         val busy: Boolean = false,
@@ -139,27 +134,6 @@ class LearningViewModel : ViewModel() {
         val text: String,
         val spam: Boolean,
     )
-
-    /**
-     * 展开一条后的归因状态。
-     *
-     * 分三态而不是 `Detail?`：`null` 同时被用来表示「还没算完」与「算不出来」，界面就只能二选一地说，
-     * 两种说法在另一种情形下都是错的（说「正在算」会一直转，说「算不了」则是假话）。
-     */
-    sealed interface Detail {
-        data object Computing : Detail
-
-        /** 内置模型读不出（资源缺失 / 解析失败）：没有权重就没有归因，只能明说。 */
-        data object NoModel : Detail
-
-        data class Ready(
-            val text: String,
-            val score: Double?,
-            /** 权重是否含已下发的微调量；false = 读不到 delta，降级为纯 base（界面必须说出来）。 */
-            val tuned: Boolean,
-            val result: SpamAttribution.Result,
-        ) : Detail
-    }
 
     var state by mutableStateOf(UiState())
         private set
@@ -277,30 +251,6 @@ class LearningViewModel : ViewModel() {
         state = state.copy(groupShown = state.groupShown + (pkg to (state.groupShown[pkg] ?: GROUP_PAGE) + GROUP_PAGE))
     }
 
-    /**
-     * 展开 / 收起某条的高亮。
-     *
-     * 只在 [Row.aiText] 上归因：拿被截断到 200 字的展示文本去高亮，画的是一段判定根本没用过的文字。
-     * 没有该字段（M2 后期才有）时不置 [UiState.detail]，界面据 [Row.aiText] 为 null 说「没有可高亮的文本」。
-     */
-    fun toggleDetail(key: String) {
-        if (state.openKey == key) {
-            state = state.copy(openKey = null, detail = null)
-            return
-        }
-        val row = state.aiRows.firstOrNull { it.key == key } ?: return
-        val text = row.aiText
-        state = state.copy(openKey = key, detail = if (text == null) null else Detail.Computing)
-        if (text == null) return
-        worker.execute {
-            val detail = runCatching { attribute(row, text) }.getOrNull() ?: Detail.NoModel
-            main.post {
-                // 用户可能已经点了别的行：只认此刻仍展开的那条
-                if (state.openKey == key) state = state.copy(detail = detail)
-            }
-        }
-    }
-
     fun noticeShown(n: Notice) {
         if (state.notice == n) state = state.copy(notice = null)
     }
@@ -398,30 +348,6 @@ class LearningViewModel : ViewModel() {
     }
 
     /**
-     * 与判定同源的权重：base 基权重叠加当前已下发的 delta（与 [io.github.vstory.notifyguard.ai.TunedScorer]
-     * 同构）。读不到 delta 时退 base-only —— 界面据此明示降级，绝不假装与实际判定一致。
-     */
-    private fun attribute(row: Row, text: String): Detail.Ready? {
-        val model = DeltaFitter.baseModel() ?: return null
-        val delta = (DeltaWriter.read(model)?.parsed as? SpamDelta.Parse.Ok)?.delta
-        // 稀疏表：归因只碰文本里出现过的桶，摊成 2^18 长的稠密数组是白分配 1 MB
-        val extra: HashMap<Int, Float>? = delta?.let { d ->
-            HashMap<Int, Float>(d.indices.size).also { m ->
-                for (i in d.indices.indices) m[d.indices[i]] = d.values[i]
-            }
-        }
-        val weightOf: (Int) -> Double = { k ->
-            model.baseWeight(k).toDouble() + (extra?.get(k)?.toDouble() ?: 0.0)
-        }
-        return Detail.Ready(
-            text = text,
-            score = row.score,
-            tuned = extra != null,
-            result = SpamAttribution.attribute(text, model.buckets, model.ngramMin, model.ngramMax, weightOf),
-        )
-    }
-
-    /**
      * 本次开机的墙钟时刻（`now - 开机以来毫秒`）。用墙钟而非 [SystemClock]：记录的时间戳来自
      * 判定侧的 `System.currentTimeMillis()`，两者只有在同一条时间轴上才能比较。
      */
@@ -437,7 +363,6 @@ class LearningViewModel : ViewModel() {
         state = state.copy(
             labelTotal = labels0.size,
             pending = pendingOf(records, marks, bootWallClock).take(LIST_LIMIT).map { row(it, marks) },
-            aiRows = aiRowsOf(records).take(LIST_LIMIT).map { row(it, marks) },
             libGroups = libGroupsOf(labels0, state.libFilter, state.libQuery) { appName(ctx, it) },
             libSpam = labels0.count { it.spam },
         )
@@ -471,12 +396,6 @@ class LearningViewModel : ViewModel() {
         private val TIME = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
 
         /**
-         * 「AI 段真的跑过」的判据用 [LogRecord.score] 而不是解析 `reason` 前缀：
-         * 判定链里只有 AI 打分那两条分支会写这个字段，而分数本身也要原样展示（`reason` 里只有两位小数）。
-         */
-        fun hasAiVerdict(r: LogRecord): Boolean = r.score != null
-
-        /**
          * 待处理 = 被拦下、还没表态、且发生在 [since] 之后的：误杀回溯要找的正是它们。
          *
          * 被拦而用户没表态的条目**默认就是「拦得对」**—— 它已经被模型记成垃圾，用户没有要补充的
@@ -489,9 +408,6 @@ class LearningViewModel : ViewModel() {
             records.sortedByDescending { it.lastTs }.filter {
                 it.block && it.lastTs >= since && marks[LabelRecord.keyOf(it)] == null
             }
-
-        fun aiRowsOf(records: List<LogRecord>): List<LogRecord> =
-            records.sortedByDescending { it.lastTs }.filter(::hasAiVerdict)
 
         /**
          * 「这个 key 该发出去的标注」：记录还在窗口里就按记录派生，只在标注库里（孤儿）就翻转原来那条。

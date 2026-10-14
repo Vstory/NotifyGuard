@@ -142,11 +142,16 @@ data class ReasonExplanation(
     val reason: ReasonInfo,
     /** 判定槽的原始枚举名；`null` = 记录没带。 */
     val slot: String?,
+    /**
+     * 判定实际用过的文本（[LogRecord.aiText]）；`null` = 这条早于该字段或没跑过 AI，
+     * 算不出归因（界面据此不给「看高亮」入口，而不是给了再报错）。
+     */
+    val aiText: String?,
 ) {
     companion object {
 
         fun of(r: LogRecord): ReasonExplanation =
-            ReasonExplanation(ReasonInfo.of(r.reason, r.score, r.ruleId), r.slot)
+            ReasonExplanation(ReasonInfo.of(r.reason, r.score, r.ruleId), r.slot, r.aiText)
 
         /**
          * 行内那行元数据：原因短语 + 判定槽（槽位与设置页同一套文案）。

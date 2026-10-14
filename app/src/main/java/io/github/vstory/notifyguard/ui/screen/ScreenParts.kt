@@ -21,7 +21,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
@@ -288,17 +290,39 @@ internal fun ReasonLine(meta: List<UiText>, onClick: () -> Unit) {
  * 判定说明弹窗（两屏共用）。
  *
  * 可读化不替代排障：人话下面并排给出原始原因码与判定槽，出问题时两边都要能拿到。
+ *
+ * 归因（哪几个片段把分数顶上去的）放在这里，且**点了才算**：它要遍历整条文本的 n-gram，
+ * 进屏或开弹窗就全算是白烧电；算完之前只给一个按钮。
  */
 @Composable
-internal fun ReasonDialog(ex: ReasonExplanation, onDismiss: () -> Unit) {
+internal fun ReasonDialog(
+    ex: ReasonExplanation,
+    attribution: AttributionState?,
+    /** `null` = 这一屏不给归因入口（归因统一放在记录屏的说明弹窗里）。 */
+    onAskAttribution: (() -> Unit)?,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(ex.reason.short.text()) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 叠上高亮原文之后内容会超过弹窗高度，让它自己滚
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 Text(ex.reason.why.text(), style = MaterialTheme.typography.bodyMedium)
                 RawLine(R.string.reason_raw_reason, ex.reason.raw)
                 ex.slot?.let { RawLine(R.string.reason_raw_slot, it) }
+                if (onAskAttribution != null) {
+                    if (attribution == null && ex.aiText != null) {
+                        TextButton(onClick = onAskAttribution) {
+                            Text(stringResource(R.string.attribution_show))
+                        }
+                    } else {
+                        AttributionBlock(ex.aiText, attribution)
+                    }
+                }
             }
         },
         confirmButton = {
