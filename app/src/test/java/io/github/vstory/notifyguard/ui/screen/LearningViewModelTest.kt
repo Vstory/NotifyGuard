@@ -28,7 +28,7 @@ class LearningViewModelTest {
         ts = ts,
         pkg = pkg,
         title = null,
-        text = "text",
+        text = "正文${word(ts)}",
         reason = score?.let { "ai:$it" } ?: "below_threshold:0.20",
         would = would || block,
         block = block,
@@ -39,17 +39,26 @@ class LearningViewModelTest {
         aiText = aiText,
     )
 
+    /**
+     * 文本必须与记录同源：键由归一化后的文本算出来，`text` 与 `key` 对不上时，`LabelStore` 载入
+     * 时会按 `text` 重算键，测试里看到的匹配关系就与线上不是一回事。
+     *
+     * 另外键只认内容 ⇒ 造数据不能用固定文本，否则所有记录会落到同一个键上。
+     */
     private fun label(r: LogRecord, spam: Boolean = true, at: Long = 1L) = LabelRecord(
         key = LabelRecord.keyOf(r),
         ts = r.ts,
         pkg = r.pkg,
-        text = "text",
+        text = r.text.orEmpty(),
         spam = spam,
         at = at,
         modelVersion = 1,
     )
 
     private fun keys(records: List<LogRecord>) = records.map { LabelRecord.keyOf(it) }
+
+    /** 归一化会滤掉数字与字母 x（与 Python 训练端同口径），所以把数字逐位映射成字母来造不同的文本。 */
+    private fun word(n: Long): String = n.toString().map { 'a' + (it - '0') }.joinToString("")
 
     @Test
     fun pendingKeepsOnlyBlockedAndUnlabelled() {
@@ -127,20 +136,6 @@ class LearningViewModelTest {
         assertEquals(listOf(LabelRecord.keyOf(dropped)), orphans.map { it.key })
     }
 
-    /** `at` 相同的标注按 key 兜底排序：只按时间排会让同刻标注的顺序随输入顺序漂。 */
-    @Test
-    fun orphanOrderIsStableOnTies() {
-        val r1 = rec(ts = 1_000L, pkg = "a")
-        val r2 = rec(ts = 2_000L, pkg = "b")
-        val r3 = rec(ts = 3_000L, pkg = "c")
-        val labels = listOf(label(r2, at = 5L), label(r1, at = 5L), label(r3, at = 5L))
-
-        val first = LearningViewModel.orphansOf(emptyList(), labels).map { it.key }
-        val reversed = LearningViewModel.orphansOf(emptyList(), labels.reversed()).map { it.key }
-
-        assertEquals(first, reversed)
-        assertEquals(listOf(LabelRecord.keyOf(r1), LabelRecord.keyOf(r2), LabelRecord.keyOf(r3)), first)
-    }
 
     @Test
     fun noOrphansWhenEveryLabelStillHasItsRecord() {

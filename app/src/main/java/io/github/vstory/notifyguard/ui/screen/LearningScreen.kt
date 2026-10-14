@@ -259,7 +259,13 @@ private fun AiCard(
                     if (open) {
                         DetailBlock(row, state.detail)
                     }
-                    MarkActions(row.key, row.marked, state.busy, undoable = true, onMark = onMark, onUndo = onUndo)
+                    MarkActions(
+                        row.key, row.marked, state.busy,
+                        undoable = true,
+                        spamAllowed = row.verdict.markSpamAllowed,
+                        hamAllowed = row.verdict.markHamAllowed,
+                        onMark = onMark, onUndo = onUndo,
+                    )
                     // 展开用独立按钮而不是整行可点：行里已经有三个动作按钮，整行可点会让它们的
                     // 点按区域互相盖住，误触的后果是标注被改掉（不可感知）
                     TextButton(
@@ -412,12 +418,9 @@ private fun MarkActions(
     busy: Boolean,
     /** AI 卡与孤儿卡里是「改判」（可能已标注），待处理卡里是「表态」（按构造必然未标注，撤销没有对象）。 */
     undoable: Boolean,
-    /**
-     * 是否给「标垃圾」。待处理卡不给：那里的条目都是被拦下的，模型已经判它是垃圾，用户再标一次
-     * 只是重复模型的判定；正类样本由 `DeltaFitter` 自动取自被拦记录。AI 卡与孤儿卡要给 ——
-     * 它们含**放过**的记录，那些条目模型没判垃圾，标垃圾才有信息量。
-     */
+    /** 给哪一侧的按钮，由条目的判定三态决定（见 `Verdict.markSpamAllowed`）。 */
     spamAllowed: Boolean = true,
+    hamAllowed: Boolean = true,
     onMark: (String, Boolean) -> Unit,
     onUndo: (String) -> Unit,
 ) {
@@ -429,11 +432,13 @@ private fun MarkActions(
                 enabled = !busy && marked != true,
             ) { Text(stringResource(R.string.action_mark_spam)) }
         }
-        TextButton(
-            onClick = { onMark(key, false) },
-            modifier = Modifier.heightIn(min = 48.dp),
-            enabled = !busy && marked != false,
-        ) { Text(stringResource(R.string.action_mark_ham)) }
+        if (hamAllowed) {
+            TextButton(
+                onClick = { onMark(key, false) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !busy && marked != false,
+            ) { Text(stringResource(R.string.action_mark_ham)) }
+        }
         if (undoable) {
             TextButton(
                 onClick = { onUndo(key) },

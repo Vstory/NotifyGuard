@@ -18,8 +18,8 @@ class LabelStoreTest {
     @Test
     fun upsertSameKeyOverwrites() {
         val s = store()
-        s.upsert(label("1:com.x", spam = true))
-        s.upsert(label("1:com.x", spam = false))
+        s.upsert(label("alpha", spam = true))
+        s.upsert(label("alpha", spam = false))
         assertEquals(1, s.size())
         assertEquals(false, s.all().single().spam)
     }
@@ -27,18 +27,18 @@ class LabelStoreTest {
     @Test
     fun deleteRemovesOne() {
         val s = store()
-        s.upsert(label("1:com.x"))
-        s.upsert(label("2:com.x"))
-        assertTrue(s.delete("1:com.x"))
-        assertEquals(listOf("2:com.x"), s.all().map { it.key })
+        s.upsert(label("alpha"))
+        s.upsert(label("beta"))
+        assertTrue(s.delete(LabelRecord.contentKey("alpha")))
+        assertEquals(listOf(LabelRecord.contentKey("beta")), s.all().map { it.key })
     }
 
     /** 幂等：调用方不必先查存在性，也不该因为删了个不存在的而白写一次盘。 */
     @Test
     fun deleteMissingKeyIsSuccess() {
         val s = store()
-        s.upsert(label("1:com.x"))
-        assertTrue(s.delete("9:com.x"))
+        s.upsert(label("alpha"))
+        assertTrue(s.delete(LabelRecord.contentKey("nope")))
         assertEquals(1, s.size())
     }
 
@@ -46,17 +46,20 @@ class LabelStoreTest {
     @Test
     fun trimsOldestByLabelTime() {
         val s = store(maxLabels = 3)
-        s.upsert(label("a:com.x", at = 30))
-        s.upsert(label("b:com.x", at = 10))
-        s.upsert(label("c:com.x", at = 20))
-        s.upsert(label("d:com.x", at = 40))
-        assertEquals(listOf("a:com.x", "c:com.x", "d:com.x"), s.all().map { it.key })
+        s.upsert(label("aa", at = 30))
+        s.upsert(label("bb", at = 10))
+        s.upsert(label("cc", at = 20))
+        s.upsert(label("dd", at = 40))
+        assertEquals(
+            listOf("aa", "cc", "dd").map { LabelRecord.contentKey(it) },
+            s.all().map { it.key },
+        )
     }
 
     @Test
     fun clearEmptiesMemoryAndDisk() {
         val s = store()
-        s.upsert(label("1:com.x"))
+        s.upsert(label("alpha"))
         s.clear()
         assertEquals(0, s.size())
         assertTrue(store().all().isEmpty())
@@ -64,8 +67,8 @@ class LabelStoreTest {
 
     @Test
     fun reloadKeepsLabels() {
-        store().upsert(label("1:com.x"))
-        assertEquals(listOf("1:com.x"), store().all().map { it.key })
+        store().upsert(label("alpha"))
+        assertEquals(listOf(LabelRecord.contentKey("alpha")), store().all().map { it.key })
     }
 
     @Test
@@ -83,8 +86,8 @@ class LabelStoreTest {
         file().writeText("{ not an array")
         val s = store()
         assertTrue(s.isLoadFailed)
-        assertFalse(s.upsert(label("1:com.x")))
-        assertFalse(s.delete("1:com.x"))
+        assertFalse(s.upsert(label("alpha")))
+        assertFalse(s.delete(LabelRecord.contentKey("alpha")))
         assertFalse(s.clear())
         assertEquals("{ not an array", file().readText())
     }
@@ -103,8 +106,8 @@ class LabelStoreTest {
     @Test
     fun replaceAllRecoversABrokenCache() {
         file().writeText("{ not an array")
-        assertTrue(store().replaceAll(listOf(label("1:com.x"))))
-        assertEquals(listOf("1:com.x"), store().all().map { it.key })
+        assertTrue(store().replaceAll(listOf(label("alpha"))))
+        assertEquals(listOf(LabelRecord.contentKey("alpha")), store().all().map { it.key })
         assertFalse(store().isLoadFailed)
     }
 
@@ -112,46 +115,88 @@ class LabelStoreTest {
     @Test
     fun replaceAllDropsWhatIsNoLongerThere() {
         val s = store()
-        s.upsert(label("1:com.x"))
-        s.upsert(label("2:com.x"))
-        s.replaceAll(listOf(label("2:com.x")))
-        assertEquals(listOf("2:com.x"), s.all().map { it.key })
+        s.upsert(label("alpha"))
+        s.upsert(label("beta"))
+        s.replaceAll(listOf(label("beta")))
+        assertEquals(listOf(LabelRecord.contentKey("beta")), s.all().map { it.key })
     }
 
     @Test
     fun replaceAllRespectsTheLimit() {
         val s = store(maxLabels = 2)
-        s.replaceAll(listOf(label("a:com.x", at = 10), label("b:com.x", at = 20), label("c:com.x", at = 30)))
-        assertEquals(listOf("b:com.x", "c:com.x"), s.all().map { it.key })
+        s.replaceAll(listOf(label("aa", at = 10), label("bb", at = 20), label("cc", at = 30)))
+        assertEquals(listOf("bb", "cc").map { LabelRecord.contentKey(it) }, s.all().map { it.key })
     }
 
     @Test
     fun persistLeavesNoTempFile() {
-        store().upsert(label("1:com.x"))
+        store().upsert(label("alpha"))
         assertTrue(tmp.root.listFiles()!!.none { it.name.endsWith(".tmp") })
     }
 
     /**
-     * 顺序只承诺确定（拟合要固定入参顺序才可复现），且是**字典序**、不是时间序 ——
-     * key 是字符串，`ts=10` 排在 `ts=9` 之前（`'0'` < `':'`）。
+     * 顺序只承诺确定（拟合要固定入参顺序才可复现）：返回的就是按 key 排好的那份。
+     * 不断言 key 之间的先后 —— key 是内容摘要，先后没有语义。
      */
     @Test
     fun allIsOrderedByKeyLexicographically() {
         val s = store()
-        listOf("9:com.x", "10:com.x", "1:com.x").forEach { s.upsert(label(it)) }
-        assertEquals(listOf("10:com.x", "1:com.x", "9:com.x"), s.all().map { it.key })
+        listOf("gamma", "alpha", "beta").forEach { s.upsert(label(it)) }
+        assertEquals(s.all().map { it.key }.sorted(), s.all().map { it.key })
     }
 
+    /**
+     * 旧键（`ts:pkg:摘要`）在载入时按新判据重算：同内容的只留**最后表态**那条。
+     * 这里是两条旧样本、文本相同（同一段文案先被当垃圾、后改判正常）⇒ 迁移后必须只剩一条。
+     */
     @Test
-    fun dropsRecordsWithoutKeyOnLoad() {
-        file().writeText("[{\"ts\":1,\"spam\":true},{\"key\":\"2:com.x\",\"spam\":true}]")
-        assertEquals(listOf("2:com.x"), store().all().map { it.key })
+    fun migratesLegacyKeysToContentKeys() {
+        file().writeText(
+            """
+            [
+              {"key":"1:com.x:ab","ts":1,"pkg":"com.x","text":"限时抢购","spam":true,"at":10,"modelVersion":7},
+              {"key":"2:com.x:cd","ts":2,"pkg":"com.x","text":"限时抢购","spam":false,"at":20,"modelVersion":7},
+              {"key":"3:com.y:ef","ts":3,"pkg":"com.y","text":"另有其事","spam":true,"at":30,"modelVersion":7}
+            ]
+            """.trimIndent()
+        )
+        val all = store().all()
+        assertEquals(2, all.size)
+        val merged = all.single { it.key == LabelRecord.contentKey("限时抢购") }
+        assertEquals(false, merged.spam)
+        assertEquals(20L, merged.at)
+    }
+
+    /**
+     * 连文本都没有的残条算不出键 —— 丢掉，而不是让它落到一个空键上去盖掉别的样本。
+     * （归一化后什么都不剩的同样丢掉：那种文本判定链根本不进 AI 段。）
+     */
+    @Test
+    fun dropsEntriesWithoutUsableTextOnLoad() {
+        file().writeText(
+            """
+            [
+              {"ts":1,"spam":true,"text":""},
+              {"ts":2,"spam":true,"text":"12 34"},
+              {"key":"3:com.x","text":"保留","spam":true,"at":1,"modelVersion":0}
+            ]
+            """.trimIndent()
+        )
+        assertEquals(listOf(LabelRecord.contentKey("保留")), store().all().map { it.key })
     }
 
     private fun file(): File = File(tmp.root, "labels.json")
 
     private fun store(maxLabels: Int = LabelStore.MAX_LABELS) = LabelStore(file()).apply { this.maxLabels = maxLabels }
 
-    private fun label(key: String = "1:com.x", spam: Boolean = true, at: Long = 500) =
-        LabelRecord(key, ts = 100, pkg = "com.x", text = "t", spam = spam, at = at, modelVersion = 7)
+    private fun label(text: String = "alpha", spam: Boolean = true, at: Long = 500) =
+        LabelRecord(
+            key = LabelRecord.contentKey(text),
+            ts = 100,
+            pkg = "com.x",
+            text = text,
+            spam = spam,
+            at = at,
+            modelVersion = 7,
+        )
 }
