@@ -71,8 +71,11 @@ data class LabelRecord(
         /**
          * 取 [LogRecord.aiText]（判定实际用过的文本，与推理同分布）；它缺失时回退标题+正文 ——
          * 该字段是 M2 后期才加的，早期记录没有。
+         *
+         * 对自动 spam 样本（[DeltaFitter] 拿被拦记录当正样本）同样要用这个 —— 两处各写一份，
+         * 训练文本就会分叉：用户手标的样本与自动样本落在不同的分布上，拟合出来互相抵消。
          */
-        private fun trainingText(r: LogRecord): String =
+        internal fun trainingText(r: LogRecord): String =
             r.aiText?.takeIf { it.isNotBlank() } ?: listOfNotNull(r.title, r.text).joinToString("\n")
     }
 }

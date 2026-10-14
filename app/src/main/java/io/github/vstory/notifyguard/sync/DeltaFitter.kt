@@ -8,7 +8,9 @@ import io.github.vstory.notifyguard.ai.DeltaStamp
 import io.github.vstory.notifyguard.ai.SpamDelta
 import io.github.vstory.notifyguard.ai.SpamModel
 import io.github.vstory.notifyguard.ai.SpamTuner
+import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.LabelRecord
+import io.github.vstory.notifyguard.judge.LogRecord
 import java.security.MessageDigest
 import java.util.concurrent.Executors
 
@@ -149,26 +151,60 @@ object DeltaFitter {
      *
      * 走同一个 worker —— 首次算进度要解析内置 base（262 KB 级），不在主线程做。回调里 null = base 不可用。
      */
-    fun progress(labels: List<LabelRecord>, onDone: (SpamTuner.Readiness?) -> Unit) {
+    fun progress(ctx: Context, labels: List<LabelRecord>, onDone: (SpamTuner.Readiness?) -> Unit) {
+        val appContext = ctx.applicationContext
         worker.execute {
             val readiness = runCatching {
                 val model = bundledBase() ?: return@runCatching null
-                SpamTuner.readiness(model, samplesOf(labels))
+                SpamTuner.readiness(model, samplesOf(appContext, labels))
             }.getOrNull()
             onDone(readiness)
         }
     }
 
-    private fun samplesOf(labels: List<LabelRecord>): List<SpamTuner.Sample> =
-        labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
+    /**
+     * 拟合的样本集 = 用户标注 + 自动 spam。
+     *
+     * 为什么要自动那半边：学习屏只提供「标正常」—— 被拦的条目本身就是「模型判它为垃圾」的事实，
+     * 再让用户手标一次「标垃圾」是把确认当标注，还会把待处理列表永远堵住。用户只负责误杀那一个
+     * 方向，正类样本改由被拦记录供上，否则 [SpamTuner] 的两类门槛永远达不到。
+     *
+     * 自动样本**不入库**：随记录窗口滚动天然过期，不占 [LabelStore] 的 5000 条配额，也就不会把
+     * 用户手工标的 ham 挤出去（那是上一版真实存在的失衡来源）。用户表过态的键一律以用户为准。
+     *
+     * 只取最确定的 [AUTO_SPAM_MAX] 条：不设上限时被拦记录（最多几百组）会以压倒性数量淹没用户的
+     * 几条误杀样本，拟合出的 delta 就只往 spam 方向偏。
+     */
+    private fun samplesOf(ctx: Context, labels: List<LabelRecord>): List<SpamTuner.Sample> {
+        val manual = labels.map { SpamTuner.Sample(it.key, it.text, it.spam) }
+        // 用户表过态的键一律以用户为准（含改判）：同一条通知既被自动收进来、又被标成误杀时，
+        // 两条标签相反的样本会互相抵消，而抵消的结果是「标了也没用」
+        return manual + autoSpamOf(LogStore.get(ctx).all(), labels)
+    }
+
+    /**
+     * 被拦记录 → 正样本。抽成纯函数是为了能单测：它决定拟合里正类那半边，测不到就等于没验证过。
+     *
+     * 用户表过态的键一律以用户为准（含改判）：同一条通知既被自动收进来、又被标成误杀时，
+     * 两条标签相反的样本会互相抵消，而抵消的结果是「标了也没用」。
+     */
+    internal fun autoSpamOf(records: List<LogRecord>, labels: List<LabelRecord>): List<SpamTuner.Sample> {
+        val decided = labels.mapTo(HashSet()) { it.key }
+        return records.asSequence()
+            .filter { it.block && LabelRecord.keyOf(it) !in decided }
+            .sortedByDescending { it.score ?: 0.0 }
+            .take(AUTO_SPAM_MAX)
+            .map { SpamTuner.Sample(LabelRecord.keyOf(it), LabelRecord.trainingText(it), spam = true) }
+            .toList()
+    }
 
     private fun fitIfNeeded(ctx: Context, labels: List<LabelRecord>, force: Boolean): State {
         val model = bundledBase() ?: return State.Unavailable(Reason.ModelUnavailable)
-        val sig = signature(labels, model)
+        val samples = samplesOf(ctx, labels)
+        val sig = signature(samples, model)
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!force && prefs.getString(KEY_SIG, null) == sig) return currentState(ctx, model)
 
-        val samples = samplesOf(labels)
         val delta = when (val fit = SpamTuner.fit(model, samples)) {
             is SpamTuner.Fit.NotReady -> return State.NotEnough(fit.readiness)
             is SpamTuner.Fit.Ok -> fit.delta
@@ -235,18 +271,27 @@ object DeltaFitter {
     }
 
     /**
-     * 输入摘要 = 标注全集（key + 文本 + 标注） + base 指纹。
+     * 输入摘要 = 样本全集（key + 文本 + 标签） + base 指纹。
      * 不含 `at`（改一次标注时间就重拟合没有意义）与 `pkg`（文本与 key 已覆盖它的信息）。
+     *
+     * 必须是**样本**而不是标注：自动 spam 那半边跟着记录窗口走，记录一变样本集就变，
+     * 拿标注去算摘要会让「新拦了一批通知」不触发重拟合。
      */
-    private fun signature(labels: List<LabelRecord>, model: SpamModel): String {
+    private fun signature(samples: List<SpamTuner.Sample>, model: SpamModel): String {
         val md = MessageDigest.getInstance("SHA-256")
         md.update(model.fingerprintU32.toString().toByteArray())
-        for (l in labels.sortedBy { it.key }) {
+        for (s in samples.sortedBy { it.key }) {
             md.update(0)
-            md.update(l.key.toByteArray())
-            md.update(if (l.spam) 1 else 0)
-            md.update(l.text.toByteArray())
+            md.update(s.key.toByteArray())
+            md.update(if (s.spam) 1 else 0)
+            md.update(s.text.toByteArray())
         }
         return md.digest().joinToString("") { "%02x".format(it) }
     }
+
+    /**
+     * 自动正样本的条数上限。50 是「比用户手工样本多一个量级、又不至于淹没它」的位置：
+     * 用户标的误杀通常是个位数到几十条，取同一量级才能让两类在拟合里都算得上话。
+     */
+    internal const val AUTO_SPAM_MAX = 50
 }

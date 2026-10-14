@@ -198,7 +198,10 @@ private fun FitCard(
 /**
  * 待处理卡：被拦下但还没表态的条目，也就是误杀回溯的入口。
  *
- * 这里只给「标垃圾 / 标正常」两个动作、不给撤销：按构造这些条必然未标注，撤销没有对象。
+ * 这张卡只给「标正常」一个动作：条目都是已被拦下的（模型已判它为垃圾），用户能补的信息只有
+ * 「拦错了」那一个方向 —— 再点一次「标垃圾」等于把模型的判定抄一遍，没有信息量，而模型的
+ * 正类样本由 [io.github.vstory.notifyguard.sync.DeltaFitter] 直接取被拦记录供上。也不给撤销：
+ * 按构造这些条必然未标注，撤销没有对象。
  */
 @Composable
 private fun PendingCard(
@@ -219,7 +222,11 @@ private fun PendingCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     RowBody(row, onExplain)
-                    MarkActions(row.key, row.marked, state.busy, undoable = false, onMark = onMark, onUndo = { _ -> })
+                    MarkActions(
+                        row.key, row.marked, state.busy,
+                        undoable = false, spamAllowed = false,
+                        onMark = onMark, onUndo = { _ -> },
+                    )
                 }
             }
         }
@@ -405,15 +412,23 @@ private fun MarkActions(
     busy: Boolean,
     /** AI 卡与孤儿卡里是「改判」（可能已标注），待处理卡里是「表态」（按构造必然未标注，撤销没有对象）。 */
     undoable: Boolean,
+    /**
+     * 是否给「标垃圾」。待处理卡不给：那里的条目都是被拦下的，模型已经判它是垃圾，用户再标一次
+     * 只是重复模型的判定；正类样本由 `DeltaFitter` 自动取自被拦记录。AI 卡与孤儿卡要给 ——
+     * 它们含**放过**的记录，那些条目模型没判垃圾，标垃圾才有信息量。
+     */
+    spamAllowed: Boolean = true,
     onMark: (String, Boolean) -> Unit,
     onUndo: (String) -> Unit,
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        TextButton(
-            onClick = { onMark(key, true) },
-            modifier = Modifier.heightIn(min = 48.dp),
-            enabled = !busy && marked != true,
-        ) { Text(stringResource(R.string.action_mark_spam)) }
+        if (spamAllowed) {
+            TextButton(
+                onClick = { onMark(key, true) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !busy && marked != true,
+            ) { Text(stringResource(R.string.action_mark_spam)) }
+        }
         TextButton(
             onClick = { onMark(key, false) },
             modifier = Modifier.heightIn(min = 48.dp),

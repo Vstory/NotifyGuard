@@ -60,7 +60,7 @@ class LearningViewModelTest {
         val records = listOf(blocked, passed, observeOnly, labelled)
         val marks = LabelRecord.marksOf(records, listOf(label(labelled)))
 
-        assertEquals(listOf(LabelRecord.keyOf(blocked)), keys(LearningViewModel.pendingOf(records, marks)))
+        assertEquals(listOf(LabelRecord.keyOf(blocked)), keys(LearningViewModel.pendingOf(records, marks, 0L)))
     }
 
     /** 一条记录是一组通知，排序取最近一次（[LogRecord.lastTs]），否则一直在刷的组会沉到最底。 */
@@ -73,7 +73,7 @@ class LearningViewModelTest {
 
         assertEquals(
             listOf(LabelRecord.keyOf(new), LabelRecord.keyOf(mid), LabelRecord.keyOf(old)),
-            keys(LearningViewModel.pendingOf(records, emptyMap())),
+            keys(LearningViewModel.pendingOf(records, emptyMap(), 0L)),
         )
     }
 
@@ -83,7 +83,23 @@ class LearningViewModelTest {
         val b = rec(ts = 2_000L, block = true)
         val records = listOf(a, b)
 
-        assertEquals(2, LearningViewModel.pendingOf(records, LabelRecord.marksOf(records, emptyList())).size)
+        assertEquals(2, LearningViewModel.pendingOf(records, LabelRecord.marksOf(records, emptyList()), 0L).size)
+    }
+
+    /**
+     * 被拦而没表态的默认就是「拦得对」：本次开机之前的不再占用待办卡，用户不必逐条确认。
+     * 清空界限取开机而不是超时 —— 超时会让隔夜没看的误杀再也找不回来。
+     */
+    @Test
+    fun pendingDropsEntriesFromBeforeBoot() {
+        val before = rec(ts = 1_000L, block = true)
+        val after = rec(ts = 9_000L, block = true)
+        val records = listOf(before, after)
+
+        assertEquals(
+            listOf(LabelRecord.keyOf(after)),
+            keys(LearningViewModel.pendingOf(records, emptyMap(), since = 5_000L)),
+        )
     }
 
     @Test
