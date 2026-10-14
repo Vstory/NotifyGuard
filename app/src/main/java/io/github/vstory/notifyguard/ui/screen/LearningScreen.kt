@@ -1,6 +1,9 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,9 +15,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +35,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,11 +57,10 @@ import io.github.vstory.notifyguard.ui.text
 
 
 /**
- * 学习屏（M4h）：端侧学习这条链路的可解释面 —— 拟合走到哪一步、被拦的待表态、AI 判定的归因、孤儿标注。
+ * 学习屏（M4h）：端侧学习这条链路的可解释面 —— 待表态的误杀、全部样本、拟合走到哪一步。
  *
  * 与记录屏的分工是有意的：记录屏回答「刚才发生了什么」（滚动流水 + 标注入口），这一屏回答
- * 「我标的东西被用上了吗、这条为什么被拦」。两块有 AI 判定的卡都能展开看高亮，高亮片段按贡献排序取
- * 峰值的一部分 —— 哈希 n-gram 的桶里没有词表，所以只能到片段、到不了词。
+ * 「我标的东西被用上了吗、这东西到底有没有被纠过来」。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,21 +85,46 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
         }
     }
 
+    // 搜索态只属于样本库：它占顶栏，与记录屏共用同一份 SearchTopBar
+    BackHandler(enabled = state.libSearchOpen) { viewModel.setLibSearchOpen(false) }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.learning_title)) },
-                modifier = topBarScrollToTop(listState),
-                actions = {
-                    TooltippedIconButton(
-                        tooltip = stringResource(R.string.learning_refresh),
-                        onClick = { viewModel.refresh(ctx) },
-                        enabled = !state.fetching,
-                    ) {
-                        Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.learning_refresh))
-                    }
-                },
-            )
+            if (state.libSearchOpen) {
+                SearchTopBar(
+                    query = state.libQuery,
+                    onQueryChange = viewModel::setLibQuery,
+                    onClose = { viewModel.setLibSearchOpen(false) },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.learning_title)) },
+                    modifier = topBarScrollToTop(listState),
+                    actions = {
+                        if (state.tab == LearningViewModel.Tab.Library) {
+                            TooltippedIconButton(
+                                tooltip = stringResource(R.string.learning_search_samples),
+                                onClick = { viewModel.setLibSearchOpen(true) },
+                            ) {
+                                Icon(
+                                    Icons.Filled.Search,
+                                    contentDescription = stringResource(R.string.learning_search_samples),
+                                )
+                            }
+                        }
+                        TooltippedIconButton(
+                            tooltip = stringResource(R.string.learning_refresh),
+                            onClick = { viewModel.refresh(ctx) },
+                            enabled = !state.fetching,
+                        ) {
+                            Icon(
+                                Icons.Filled.Refresh,
+                                contentDescription = stringResource(R.string.learning_refresh),
+                            )
+                        }
+                    },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
@@ -103,33 +138,57 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
         ) {
             item { StatusCard(state.serviceText, state.connected, state.cfgLoaded) }
             item {
-                FitCard(
-                    state = state,
-                    onResend = { viewModel.resendFit(ctx) },
+                LearningTabs(
+                    tab = state.tab,
+                    pending = state.pending.size,
+                    total = state.labelTotal,
+                    onSelect = viewModel::setTab,
                 )
             }
-            item {
-                PendingCard(
-                    state = state,
-                    onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
-                    onExplain = { viewModel.askExplain(it) },
-                )
-            }
-            item {
-                AiCard(
-                    state = state,
-                    onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
-                    onUndo = { viewModel.undo(ctx, it) },
-                    onToggle = { viewModel.toggleDetail(it) },
-                    onExplain = { viewModel.askExplain(it) },
-                )
-            }
-            item {
-                OrphanCard(
-                    state = state,
-                    onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
-                    onUndo = { viewModel.undo(ctx, it) },
-                )
+            when (state.tab) {
+                LearningViewModel.Tab.Pending -> item {
+                    PendingCard(
+                        state = state,
+                        onMark = { key, spam -> viewModel.mark(ctx, key, spam) },
+                        onExplain = { viewModel.askExplain(it) },
+                    )
+                }
+
+                LearningViewModel.Tab.Library -> {
+                    item {
+                        LibraryBar(
+                            filter = state.libFilter,
+                            spam = state.libSpam,
+                            ham = state.labelTotal - state.libSpam,
+                            total = state.labelTotal,
+                            hit = state.libGroups.sumOf { it.rows.size },
+                            query = state.libQuery,
+                            onFilter = viewModel::setLibFilter,
+                        )
+                    }
+                    if (state.libGroups.isEmpty()) {
+                        item { Note(stringResource(R.string.learning_lib_empty)) }
+                    }
+                    items(state.libGroups, key = { it.pkg }) { group ->
+                        SampleGroup(
+                            group = group,
+                            expanded = group.pkg in state.openGroups,
+                            shown = state.groupShown[group.pkg] ?: LearningViewModel.GROUP_PAGE,
+                            busy = state.busy,
+                            onToggle = { viewModel.toggleGroup(group.pkg) },
+                            onMore = { viewModel.showMoreInGroup(group.pkg) },
+                            onFlip = { key, spam -> viewModel.mark(ctx, key, spam) },
+                            onDelete = { viewModel.deleteSample(ctx, it) },
+                        )
+                    }
+                }
+
+                LearningViewModel.Tab.Fit -> item {
+                    FitCard(
+                        state = state,
+                        onResend = { viewModel.resendFit(ctx) },
+                    )
+                }
             }
         }
     }
@@ -285,48 +344,148 @@ private fun AiCard(
 }
 
 /**
- * 孤儿标注卡：记录窗口里已经找不到的标注。撤销（不再认可这条）与改判（方向标反了）并列 ——
- * 只有撤销的话，一条标反的样本唯一的下场是被删掉，而它正是模型错过、用户当场纠正过的那类样本。
+ * 栏切换：待处理 / 样本库 / 微调。三栏各自滚动，不并成一条长页 —— 样本库几千条，和待处理挤在
+ * 同一个滚动容器里就是滚到死。
  */
 @Composable
-private fun OrphanCard(
-    state: LearningViewModel.UiState,
-    onMark: (String, Boolean) -> Unit,
-    onUndo: (String) -> Unit,
+private fun LearningTabs(
+    tab: LearningViewModel.Tab,
+    pending: Int,
+    total: Int,
+    onSelect: (LearningViewModel.Tab) -> Unit,
 ) {
-    GroupCard(stringResource(R.string.learning_orphan_group)) {
-        Note(stringResource(R.string.learning_orphan_note))
-        if (state.orphans.isEmpty()) {
-            Note(stringResource(R.string.learning_orphan_empty))
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        TabChip(
+            stringResource(R.string.learning_tab_pending, pending),
+            tab == LearningViewModel.Tab.Pending,
+        ) { onSelect(LearningViewModel.Tab.Pending) }
+        TabChip(
+            stringResource(R.string.learning_tab_library, total),
+            tab == LearningViewModel.Tab.Library,
+        ) { onSelect(LearningViewModel.Tab.Library) }
+        TabChip(stringResource(R.string.learning_tab_fit), tab == LearningViewModel.Tab.Fit) {
+            onSelect(LearningViewModel.Tab.Fit)
+        }
+    }
+}
+
+@Composable
+private fun TabChip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = if (selected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
         } else {
-            state.orphans.forEach { row ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    RowHead(row.time, null, row.spam)
-                    Text(
-                        text = row.pkg,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = row.text,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    MarkActions(
-                        key = row.key,
-                        marked = row.spam,
-                        busy = state.busy,
-                        undoable = true,
-                        onMark = onMark,
-                        onUndo = onUndo,
-                    )
-                    Note(stringResource(R.string.learning_orphan_flip_note))
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.large)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+    )
+}
+
+/** 样本库的筛选与计数。计数用**过滤之后**的条数：拿全量去说「垃圾 12 条」而列表里只有 3 条，就是假的。 */
+@Composable
+private fun LibraryBar(
+    filter: LearningViewModel.LibFilter,
+    spam: Int,
+    ham: Int,
+    total: Int,
+    hit: Int,
+    query: String,
+    onFilter: (LearningViewModel.LibFilter) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TabChip(
+                stringResource(R.string.learning_lib_filter_all, total),
+                filter == LearningViewModel.LibFilter.All,
+            ) { onFilter(LearningViewModel.LibFilter.All) }
+            TabChip(
+                stringResource(R.string.learning_lib_filter_spam, spam),
+                filter == LearningViewModel.LibFilter.Spam,
+            ) { onFilter(LearningViewModel.LibFilter.Spam) }
+            TabChip(
+                stringResource(R.string.learning_lib_filter_ham, ham),
+                filter == LearningViewModel.LibFilter.Ham,
+            ) { onFilter(LearningViewModel.LibFilter.Ham) }
+        }
+        Note(
+            if (query.isEmpty()) {
+                stringResource(R.string.learning_lib_count, total)
+            } else {
+                stringResource(R.string.learning_lib_hit, hit)
+            }
+        )
+    }
+}
+
+/**
+ * 一组样本（同一个来源 App）。
+ *
+ * 折叠是这栏的核心：同一个 App 的垃圾往往几十上百条，平铺只能一条条滚过去；收起时只留一行
+ * 「组名 + 条数」，一眼看出是哪个 App 在灌。
+ */
+@Composable
+private fun SampleGroup(
+    group: LearningViewModel.Group,
+    expanded: Boolean,
+    shown: Int,
+    busy: Boolean,
+    onToggle: () -> Unit,
+    onMore: () -> Unit,
+    onFlip: (String, Boolean) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(MaterialTheme.shapes.medium)
+                .clickable(onClick = onToggle)
+                .padding(horizontal = 4.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = group.name,
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = stringResource(R.string.learning_lib_group_count, group.rows.size),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (expanded) {
+            val visible = group.rows.take(shown)
+            visible.forEach { row -> SampleLine(row, busy, onFlip, onDelete) }
+            val rest = group.rows.size - visible.size
+            if (rest > 0) {
+                TextButton(onClick = onMore, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.learning_lib_group_more, rest))
                 }
             }
         }
@@ -334,10 +493,74 @@ private fun OrphanCard(
 }
 
 /**
- * 行的头行：时间 +（紧随）判定 +（右端）标注状态。三块卡共用 —— 各卡自己手写头行时，
- * 孤儿卡就把标注状态整个落下了，而那张卡正是唯一能撤销标注的地方。
+ * 一条样本。文本默认折两行 —— 一条营销文案能占半屏，全展开就没人看得见列表。
+ * `remember(row.key)`：列表重绘（改判、别处删除）时展开态跟着那条走，而不是挪到邻居身上。
+ */
+@Composable
+private fun SampleLine(
+    row: LearningViewModel.SampleRow,
+    busy: Boolean,
+    onFlip: (String, Boolean) -> Unit,
+    onDelete: (String) -> Unit,
+) {
+    var expanded by remember(row.key) { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = row.time,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = stringResource(
+                    if (row.spam) R.string.learning_sample_spam else R.string.learning_sample_ham
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (row.spam) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+            )
+        }
+        Text(
+            text = row.text,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = if (expanded) Int.MAX_VALUE else 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(
+                onClick = { onFlip(row.key, !row.spam) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !busy,
+            ) {
+                Text(
+                    stringResource(
+                        if (row.spam) R.string.learning_sample_to_ham else R.string.learning_sample_to_spam
+                    )
+                )
+            }
+            TextButton(
+                onClick = { onDelete(row.key) },
+                modifier = Modifier.heightIn(min = 48.dp),
+                enabled = !busy,
+            ) { Text(stringResource(R.string.learning_sample_delete)) }
+        }
+    }
+}
+
+/**
+ * 行的头行：时间 +（紧随）判定 +（右端）标注状态。
  *
- * 判定为 `null` 的只有孤儿标注：它没有对应记录，给不出判定。
+ * 判定为 `null` 时只画时间：没有对应记录的条目给不出判定。
  */
 @Composable
 private fun RowHead(time: String, verdict: Verdict?, marked: Boolean?) {
@@ -407,7 +630,7 @@ private fun RowBody(row: LearningViewModel.Row, onExplain: (String) -> Unit) {
  * 而先到的回执会盖掉后点那次的状态）。
  *
  * 收 key 与当前方向而不是整个行模型：三张卡的行模型不同（[LearningViewModel.Row] 与
- * [LearningViewModel.OrphanRow]），而动作需要的只有这两样 —— 各卡自己写一份动作行，迟早有一处把
+ * [LearningViewModel.SampleRow]），而动作需要的只有这两样 —— 各卡自己写一份动作行，迟早有一处把
  * 「已经是当前方向」的那侧画成可点。
  */
 @Composable
