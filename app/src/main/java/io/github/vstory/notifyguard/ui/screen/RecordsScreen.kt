@@ -218,7 +218,7 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
     }
 
     state.explanation?.let { ex ->
-        ReasonDialog(ex, viewModel::dismissExplain)
+        ReasonDialog(ex, state.attribution, viewModel::askAttribution, viewModel::dismissExplain)
     }
 }
 

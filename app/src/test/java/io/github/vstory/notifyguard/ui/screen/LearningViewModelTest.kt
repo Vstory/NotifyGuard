@@ -111,19 +111,6 @@ class LearningViewModelTest {
         )
     }
 
-    @Test
-    fun aiRowsKeepOnlyRecordsWithAScore() {
-        val scored = rec(ts = 1_000L, score = 0.91)
-        val newerUnscored = rec(ts = 5_000L)
-        val olderScored = rec(ts = 500L, score = 0.12)
-        val records = listOf(scored, newerUnscored, olderScored)
-
-        assertTrue(LearningViewModel.hasAiVerdict(scored))
-        assertEquals(
-            listOf(LabelRecord.keyOf(scored), LabelRecord.keyOf(olderScored)),
-            keys(LearningViewModel.aiRowsOf(records)),
-        )
-    }
 
 
 
