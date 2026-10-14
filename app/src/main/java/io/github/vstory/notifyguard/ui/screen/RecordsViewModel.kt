@@ -6,6 +6,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import android.os.Handler
+import android.os.Looper
+import java.util.concurrent.Executors
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.data.LogStore
@@ -72,6 +75,8 @@ class RecordsViewModel : ViewModel() {
         val confirmClearLabels: Int? = null,
         /** 非空即弹某条记录的判定说明。 */
         val explanation: ReasonExplanation? = null,
+        /** 弹窗里的归因；`null` = 还没点「看高亮」。 */
+        val attribution: AttributionState? = null,
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次（连标两条）也要各弹一次。 */
@@ -126,6 +131,16 @@ class RecordsViewModel : ViewModel() {
 
     /** 标注动作要拿原始记录去构造 [LabelRecord]，而界面只持 [RecordRow.key]。 */
     private var records: List<LogRecord> = emptyList()
+
+     /**
+      * 归因在后台算（冷路径），结果一律转主线程写 Compose 状态 —— 工作线程直接改 state 会与
+      * 主线程的重绘竞争（与学习屏 / 设置屏同口径）。
+      */
+     private val worker = Executors.newSingleThreadExecutor { r ->
+         Thread(r, "NotifyGuard-records-attribution").apply { isDaemon = true }
+     }
+
+     private val main = Handler(Looper.getMainLooper())
 
     /**
      * 最近一次读盘的结果，供 [applyRows] 重算列表。
@@ -189,11 +204,28 @@ class RecordsViewModel : ViewModel() {
     /** 点开底部那行：讲清这条为什么没被判定（带参的那几档用记录里的结构字段，不抠串）。 */
     fun askExplain(key: String) {
         val r = records.firstOrNull { LabelRecord.keyOf(it) == key } ?: return
-        state = state.copy(explanation = ReasonExplanation.of(r))
+        // 换了条目要把上一条的归因丢掉：留着会让新弹窗一开就显示别人的高亮
+        state = state.copy(explanation = ReasonExplanation.of(r), attribution = null)
+    }
+
+    /**
+     * 算归因（弹窗里那个「看高亮」）。
+     *
+     * 后台算：要遍历整条文本的 n-gram，主线程上算会卡住弹窗的动画与滚动；算完只回填一次，
+     * 中途用户关掉弹窗也没关系（[dismissExplain] 会清掉）。
+     */
+    fun askAttribution() {
+        val text = state.explanation?.aiText ?: return
+        if (state.attribution != null) return
+        state = state.copy(attribution = AttributionState.Computing)
+        worker.execute {
+            val out = runCatching { attributeOf(text) }.getOrNull() ?: AttributionState.NoModel
+            main.post { state = state.copy(attribution = out) }
+        }
     }
 
     fun dismissExplain() {
-        state = state.copy(explanation = null)
+        state = state.copy(explanation = null, attribution = null)
     }
 
     fun clearLabels(ctx: Context) {
