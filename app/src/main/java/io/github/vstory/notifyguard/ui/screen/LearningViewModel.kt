@@ -33,9 +33,16 @@ import java.util.concurrent.Executors
 /**
  * 学习屏的状态与动作（M4h）：端侧学习这条链路的**可解释面**。
  *
- * 四块卡各自的用途不同，别把它们并成一个列表：拟合状态（这条链路走到哪一步）、待处理（被拦但还没标，
- * 也就是误杀回溯的入口）、有 AI 判定的记录（回看「为什么判成这样」，可展开看高亮）、孤儿标注
- * （记录窗口裁掉后仍在库里、否则用户永远删不掉也改不了的标注）。
+ * 三栏各自独立滚动，不并成一条长页：样本库有几千条，和待处理、微调挤在同一个滚动容器里就是滚到死。
+ *
+ * - 待处理：被拦但还没表态的，误杀回溯的入口；
+ * - 样本库：**全部**样本（不分来源、不分时间、不分是否还有对应记录），按来源 App 收组折叠 —— 同一
+ *   个 App 的垃圾往往几十上百条，平铺只能一条条滚过去；栏内可搜索、可筛选、可改判、可删除。它也是
+ *   **唯一**能删掉一条标注的地方（记录窗口会裁掉老记录，那些样本在记录屏里再也找不到）；
+ * - 微调：这条链路走到哪一步。
+ *
+ * 「孤儿」不再单列：它只是「这条样本目前没有对应记录」这个实现细节，样本库全量列出之后，用户既看
+ * 不到也不需要这个概念。
  *
  * 数据源与记录屏一样：全是模块端权威、App 侧只读缓存的 [LogStore] / [LabelStore]，进屏先渲染缓存
  * 再各拉一次。标注动作沿用记录屏的口径（串行化 + 无回执不改本地状态），两个入口的语义不互相覆盖：
@@ -57,9 +64,21 @@ class LearningViewModel : ViewModel() {
         /** 门槛进度（可训练样本数与两类各自的量）；null = 还没拉过或内置 base 不可用。 */
         val fitProgress: SpamTuner.Readiness? = null,
         val labelTotal: Int = 0,
+        val tab: Tab = Tab.Library,
         val pending: List<Row> = emptyList(),
         val aiRows: List<Row> = emptyList(),
-        val orphans: List<OrphanRow> = emptyList(),
+        /** 样本库：按来源 App 收好的组（筛选与搜索已作用其上）。 */
+        val libGroups: List<Group> = emptyList(),
+        /** 全库的垃圾条数（筛选按钮上的数字用它，不能用过滤后的组算）。 */
+        val libSpam: Int = 0,
+        val libQuery: String = "",
+        val libFilter: LibFilter = LibFilter.All,
+        /** 搜索态：搜索框占顶栏，与记录屏同一套交互（同一份 [SearchTopBar]）。 */
+        val libSearchOpen: Boolean = false,
+        /** 展开中的组。 */
+        val openGroups: Set<String> = emptySet(),
+        /** 每组已展开的条数（键是包名）；缺省即只显示 [GROUP_PAGE] 条。 */
+        val groupShown: Map<String, Int> = emptyMap(),
         /** 展开中的那条；null = 都收着。 */
         val openKey: String? = null,
         val detail: Detail? = null,
@@ -97,17 +116,26 @@ class LearningViewModel : ViewModel() {
         val aiText: String?,
     )
 
+    enum class Tab { Pending, Library, Fit }
+
+    enum class LibFilter { All, Spam, Ham }
+
+    /** 样本库的一组：一个来源 App 底下的全部样本（已排序、已格式化，界面直接画）。 */
+    data class Group(
+        val pkg: String,
+        val name: String,
+        val rows: List<SampleRow>,
+    )
+
     /**
-     * 孤儿标注一行。没有对应记录，所以给不出判定与分数。
+     * 样本库的一行。
      *
-     * [spam] 必须带上：孤儿卡是**唯一能撤销与改判标注的地方**，而两个动作都要先知道这条标的是哪个
-     * 方向 —— 撤销前不给方向，用户就只能靠回忆决定撤不撤（撤错了还不会知道）；改判前不给方向，
-     * 界面上那两个动作就没有置灰的依据（按同义的一次等于白跑一趟广播）。
+     * [spam] 必须带上：样本库是**唯一能改判与删除标注的地方**，两个动作都要先知道这条标在哪个方向
+     * —— 改判前不给方向，那两个动作就没有互斥的依据（按同义的一次等于白跑一趟广播）。
      */
-    data class OrphanRow(
+    data class SampleRow(
         val key: String,
         val time: String,
-        val pkg: String,
         val text: String,
         val spam: Boolean,
     )
@@ -136,11 +164,24 @@ class LearningViewModel : ViewModel() {
     var state by mutableStateOf(UiState())
         private set
 
-    /** 标注动作要拿原始记录构造 [LabelRecord]，而界面只持 [Row.key] / [OrphanRow.key]。 */
+    /** 标注动作要拿原始记录构造 [LabelRecord]，而界面只持 [Row.key] / [SampleRow.key]。 */
     private var records: List<LogRecord> = emptyList()
 
-    /** 改判的来源：孤儿卡的条目在记录里已经找不到，只能拿库里那份标注翻方向。 */
+    /** 改判的来源：记录里已经找不到的条目，只能拿库里那份标注翻方向。 */
     private var labels: List<LabelRecord> = emptyList()
+
+    /**
+     * App 名缓存（样本库的组名与搜索都用它）。`getApplicationInfo` 是 Binder 调用，列表每次重绘都问
+     * 一遍包名会把主线程拖住；样本几千条也就几十个包名，缓存起来是一次性的开销。
+     */
+    private val appNames = HashMap<String, String>()
+
+    private fun appName(ctx: Context, pkg: String): String = appNames.getOrPut(pkg) {
+        runCatching {
+            val pm = ctx.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        }.getOrDefault(pkg)
+    }
 
     private var noticeSeq = 0L
 
@@ -197,6 +238,43 @@ class LearningViewModel : ViewModel() {
     fun undo(ctx: Context, key: String) {
         val app = ctx.applicationContext ?: ctx
         submit(app, UiText.Res(R.string.label_action_undo)) { done -> LabelClient.delete(app, key, done) }
+    }
+
+    /** 删掉一条样本（样本库那个唯一的删除入口）。 */
+    fun deleteSample(ctx: Context, key: String) {
+        val app = ctx.applicationContext ?: ctx
+        submit(app, UiText.Res(R.string.learning_sample_delete)) { done -> LabelClient.delete(app, key, done) }
+    }
+
+    fun setTab(tab: Tab) {
+        // 搜索态只属于样本库：切走再切回来看到搜索框还开着、而栏里是别的栏，是个说不通的界面
+        state = if (tab == Tab.Library) state.copy(tab = tab) else state.copy(tab = tab, libSearchOpen = false)
+    }
+
+    fun setLibSearchOpen(open: Boolean) {
+        state = state.copy(libSearchOpen = open, libQuery = if (open) state.libQuery else "")
+    }
+
+    fun setLibQuery(query: String) {
+        state = state.copy(libQuery = query)
+    }
+
+    fun setLibFilter(filter: LibFilter) {
+        state = state.copy(libFilter = filter)
+    }
+
+    fun toggleGroup(pkg: String) {
+        val open = state.openGroups
+        state = if (pkg in open) {
+            // 收起时把「展开更多」也复位：下次点开看到的还是前几条，而不是上次翻到的位置
+            state.copy(openGroups = open - pkg, groupShown = state.groupShown - pkg)
+        } else {
+            state.copy(openGroups = open + pkg)
+        }
+    }
+
+    fun showMoreInGroup(pkg: String) {
+        state = state.copy(groupShown = state.groupShown + (pkg to (state.groupShown[pkg] ?: GROUP_PAGE) + GROUP_PAGE))
     }
 
     /**
@@ -360,7 +438,8 @@ class LearningViewModel : ViewModel() {
             labelTotal = labels0.size,
             pending = pendingOf(records, marks, bootWallClock).take(LIST_LIMIT).map { row(it, marks) },
             aiRows = aiRowsOf(records).take(LIST_LIMIT).map { row(it, marks) },
-            orphans = orphansOf(records, labels0).take(LIST_LIMIT).map { orphan(it) },
+            libGroups = libGroupsOf(labels0, state.libFilter, state.libQuery) { appName(ctx, it) },
+            libSpam = labels0.count { it.spam },
         )
     }
 
@@ -378,15 +457,6 @@ class LearningViewModel : ViewModel() {
         marked = marks[LabelRecord.keyOf(r)],
         aiText = r.aiText,
     )
-    private fun orphan(l: LabelRecord): OrphanRow = OrphanRow(
-        key = l.key,
-        // 标注时间：孤儿卡要说的是「这条什么时候标的」，不是通知什么时候来的
-        time = TIME.format(Date(l.at)),
-        pkg = l.pkg,
-        text = l.text,
-        spam = l.spam,
-    )
-
     private fun notify(text: UiText) {
         state = state.copy(notice = Notice(++noticeSeq, text))
     }
@@ -452,17 +522,49 @@ class LearningViewModel : ViewModel() {
                 ?.copy(spam = spam, at = at, modelVersion = modelVersion)
         }
 
+        /** 每组默认展开几条：再多就得让位给「展开更多」，否则折叠等于没折。 */
+        const val GROUP_PAGE = 8
+
         /**
-         * 孤儿标注 = 记录窗口里已经找不到的标注。
+         * 样本库的分组：按来源 App 收组，组内按标注时间倒序，组间按条数降序（哪个 App 在灌，一眼看到）。
          *
-         * 记录会裁剪（[LogStore.MAX_RECORDS] 组），标注不会（它是用户的手工劳动，模块端保留）。
-         * 不单列出来，用户就永远删不掉一条不再出现在记录里的标注。
-         * `at` 相同时按 key 兜底，否则同一份数据两次进屏可能给出两种顺序。
+         * 过滤与搜索放在分组**之前**：先收组再筛，组头上的条数就会与实际展开的内容对不上。
+         * `nameOf` 由调用方注入（要读 App 名就得有 Context），这样这层仍是纯函数、可单测。
          */
-        fun orphansOf(records: List<LogRecord>, labels: List<LabelRecord>): List<LabelRecord> {
-            val live = records.mapTo(HashSet()) { LabelRecord.keyOf(it) }
-            return labels.filter { it.key !in live }
+        internal fun libGroupsOf(
+            labels: List<LabelRecord>,
+            filter: LibFilter,
+            query: String,
+            nameOf: (String) -> String,
+        ): List<Group> {
+            val k = query.trim().lowercase()
+            return labels
+                .filter {
+                    when (filter) {
+                        LibFilter.All -> true
+                        LibFilter.Spam -> it.spam
+                        LibFilter.Ham -> !it.spam
+                    }
+                }
+                .filter { k.isEmpty() || (it.text + " " + it.pkg + " " + nameOf(it.pkg)).lowercase().contains(k) }
                 .sortedWith(compareByDescending<LabelRecord> { it.at }.thenBy { it.key })
+                .groupBy { it.pkg }
+                .map { (pkg, list) ->
+                    Group(
+                        pkg = pkg,
+                        name = nameOf(pkg),
+                        rows = list.map {
+                            SampleRow(
+                                key = it.key,
+                                // 标注时间：这一栏说的是「这条什么时候标的」
+                                time = TIME.format(Date(it.at)),
+                                text = it.text,
+                                spam = it.spam,
+                            )
+                        },
+                    )
+                }
+                .sortedWith(compareByDescending<Group> { it.rows.size }.thenBy { it.pkg })
         }
     }
 }

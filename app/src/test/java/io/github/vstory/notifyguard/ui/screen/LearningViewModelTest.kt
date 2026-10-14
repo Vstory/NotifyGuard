@@ -125,25 +125,8 @@ class LearningViewModelTest {
         )
     }
 
-    @Test
-    fun orphansAreLabelsWhoseRecordLeftTheWindow() {
-        val kept = rec(ts = 1_000L)
-        val dropped = rec(ts = 2_000L)
-        val records = listOf(kept)
-
-        val orphans = LearningViewModel.orphansOf(records, listOf(label(kept), label(dropped, at = 9L)))
-
-        assertEquals(listOf(LabelRecord.keyOf(dropped)), orphans.map { it.key })
-    }
 
 
-    @Test
-    fun noOrphansWhenEveryLabelStillHasItsRecord() {
-        val r1 = rec(ts = 1_000L, pkg = "a")
-        val r2 = rec(ts = 2_000L, pkg = "b")
-
-        assertTrue(LearningViewModel.orphansOf(listOf(r1, r2), listOf(label(r1), label(r2))).isEmpty())
-    }
 
     /** 记录还在窗口里时，标注按记录派生：文本取判定实际用过的 `aiText`，而不是库里那份。 */
     @Test
@@ -188,19 +171,49 @@ class LearningViewModelTest {
         assertEquals(null, LearningViewModel.labelFor(listOf(r), listOf(label(r)), "1:a:deadbeef", true, 1L, 1))
     }
 
-    /** 改判刷新 `at` ⇒ 这条排到孤儿列表最前（淘汰依据也是 `at`，刚表过态的不该还在队首等淘汰）。 */
+    /**
+     * 分组：按来源 App 收组、组间按条数降序、组内按**标注时间**倒序。
+     *
+     * 组间按条数是这一栏的意义所在 —— 哪个 App 在灌，不看内容先看得出来。
+     */
     @Test
-    fun flippedOrphanMovesToTheFront() {
-        val a = rec(ts = 1_000L, pkg = "a")
-        val b = rec(ts = 2_000L, pkg = "b")
-        val labels = listOf(label(a, at = 5L), label(b, at = 9L))
+    fun groupsBySourceAppWithCountAndLabelTimeOrder() {
+        val a1 = rec(ts = 1_000L, pkg = "com.a")
+        val a2 = rec(ts = 2_000L, pkg = "com.a")
+        val b1 = rec(ts = 3_000L, pkg = "com.b")
+        val labels = listOf(label(a1, at = 10L), label(a2, at = 20L), label(b1, at = 30L))
 
-        val flipped = LearningViewModel.labelFor(emptyList(), labels, LabelRecord.keyOf(a), false, 20L, 1)
-        val after = labels.map { if (it.key == flipped?.key) flipped!! else it }
+        val groups = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.All, "") { it }
 
+        assertEquals(listOf("com.a", "com.b"), groups.map { it.pkg })
+        assertEquals(listOf(2, 1), groups.map { it.rows.size })
         assertEquals(
-            listOf(LabelRecord.keyOf(a), LabelRecord.keyOf(b)),
-            LearningViewModel.orphansOf(emptyList(), after).map { it.key },
+            listOf(LabelRecord.keyOf(a2), LabelRecord.keyOf(a1)),
+            groups[0].rows.map { it.key },
         )
+    }
+
+    /** 筛选与搜索都在分组**之前**：先收组再筛，组头上的条数会和实际展开的内容对不上。 */
+    @Test
+    fun filtersAndSearchesBeforeGrouping() {
+        val spamRec = rec(ts = 1_000L, pkg = "com.a")
+        val hamRec = rec(ts = 2_000L, pkg = "com.b")
+        val labels = listOf(label(spamRec, spam = true), label(hamRec, spam = false))
+
+        val spamOnly = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.Spam, "") { it }
+        assertEquals(listOf("com.a"), spamOnly.map { it.pkg })
+        assertEquals(listOf(1), spamOnly.map { it.rows.size })
+
+        // 搜索命中 App 名：组名与搜索同源，按名字搜不到会很怪（两条分属不同的 App，所以是两组）
+        val byName = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.All, "商店") { "应用商店" }
+        assertEquals(listOf("com.a", "com.b"), byName.map { it.pkg })
+    }
+
+    /** 空搜索（含只有空白）匹配全部，否则用户清空输入框时会看到空列表。 */
+    @Test
+    fun blankSearchMatchesEverything() {
+        val r = rec(ts = 1_000L)
+
+        assertEquals(1, LearningViewModel.libGroupsOf(listOf(label(r)), LearningViewModel.LibFilter.All, "  ") { it }.size)
     }
 }

@@ -46,10 +46,6 @@
     <string name="learning_ai_group">有 AI 分数的记录</string>
     <string name="learning_ai_note">点「为什么」看是哪些片段把分数推高的。高亮用的是与判定同一份权重；特征桶里只有权重、没有词表，所以只能落到片段、到不了词。</string>
     <string name="learning_ai_empty">当前没有带 AI 分数的记录。</string>
-    <string name="learning_orphan_group">孤儿标注</string>
-    <string name="learning_orphan_note">已经不在记录窗口里的标注。它们仍会参与微调 —— 标反的改判，不再认可的就撤销。</string>
-    <string name="learning_orphan_flip_note">改判只翻这条样本的方向。通知已经离开窗口，所以这一条仍留在这里。</string>
-    <string name="learning_orphan_empty">没有孤儿标注。</string>
     <string name="learning_detail_show">为什么</string>
     <string name="learning_detail_hide">收起</string>
     <string name="learning_detail_computing">正在归因…</string>
@@ -287,4 +283,21 @@
     <string name="fit_reason_version">下发版本号失败</string>
     <string name="fit_error">拟合异常：%1$s</string>
     <string name="fit_state_error">状态读取异常：%1$s</string>
+    <string name="learning_search_samples">搜索样本</string>
+    <string name="learning_tab_pending">待处理 %1$d</string>
+    <string name="learning_tab_library">样本库 %1$d</string>
+    <string name="learning_tab_fit">微调</string>
+    <string name="learning_lib_filter_all">全部 %1$d</string>
+    <string name="learning_lib_filter_spam">垃圾 %1$d</string>
+    <string name="learning_lib_filter_ham">正常 %1$d</string>
+    <string name="learning_lib_count">共 %1$d 条 · 按时间倒序</string>
+    <string name="learning_lib_hit">找到 %1$d 条</string>
+    <string name="learning_lib_empty">没有匹配的样本</string>
+    <string name="learning_lib_group_count">%1$d 条</string>
+    <string name="learning_lib_group_more">展开更多（还剩 %1$d 条）</string>
+    <string name="learning_sample_spam">垃圾</string>
+    <string name="learning_sample_ham">正常</string>
+    <string name="learning_sample_to_spam">改判为垃圾</string>
+    <string name="learning_sample_to_ham">改判为正常</string>
+    <string name="learning_sample_delete">删除样本</string>
 </resources>
