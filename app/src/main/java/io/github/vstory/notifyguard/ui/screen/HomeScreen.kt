@@ -1,16 +1,17 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -18,17 +19,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.ui.text
-import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.ui.text.font.FontWeight
 
 /**
  * 首页（M4g）：**只读**概览 —— 拦截统计与命中排行。
@@ -38,11 +36,14 @@ import androidx.compose.ui.text.font.FontWeight
  *
  * 统计不只报「已拦截」一个数：观察模式下 `block` 恒为 false，只报 0 会让用户以为模块没工作。
  * 今日拦截按本地日期计、已拦截按模块端累计口径，两个数不同源，每行都跟着写口径。
+ *
+ * 版式按 M3 的 Lists 规范：**列表不套卡片**，用分区标题分段（Card 是 Containment 类的独立内容块，
+ * 只有上面的服务状态卡归它）。原先统计与排行各包一层卡片、块内再排布，卡与卡之间的空白把一屏
+ * 切成了几块互不相干的内容，列表本身反而看不出是列表。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-
     viewModel: HomeViewModel = viewModel(),
 ) {
     val ctx = LocalContext.current.applicationContext
@@ -53,6 +54,33 @@ fun HomeScreen(
         onDispose { unbind() }
     }
     LaunchedEffect(Unit) { viewModel.refresh(ctx) }
+
+    // 文案在 composable 上下文里先求出来：LazyColumn 的 content 不是 @Composable，里面调不了
+    // stringResource（同 M4g 里 LaunchedEffect 那条口径）
+    val statsTitle = stringResource(R.string.home_stats_group)
+    val topTitle = stringResource(R.string.home_top_group)
+    val observeTitle = stringResource(R.string.home_observe_group)
+    val observeNote = stringResource(R.string.home_observe_note)
+    val todayLabel = stringResource(R.string.home_stat_today)
+    val todayNote = stringResource(R.string.home_stat_today_note)
+    val todayUnknown = stringResource(R.string.home_stat_today_unknown)
+    val noneValue = stringResource(R.string.home_stat_no_value)
+    val blockedLabel = stringResource(R.string.home_stat_blocked)
+    val totalNote = stringResource(R.string.home_stat_total_note)
+    val windowNote = stringResource(R.string.home_stat_window_note)
+    val windowTitle = stringResource(R.string.home_stat_window_title)
+    val emptyNote = stringResource(R.string.home_top_empty)
+    val scopeNote = stringResource(R.string.home_top_scope)
+
+    val stats = state.stats
+    val totals = state.totals
+    // 今日排最前：进这一屏问的是「今天拦了多少」，总量是背景
+    // -1 = 旧版模块端没上报这个字段，不能拿它当「今天拦了 0 条」
+    val today = totals?.today ?: -1L
+    // 口径逐行跟着数走，不在顶上写一段总结：各数不是同一套口径，一句话说完必然有人读错
+    // （同一个位置静默换数据源也一样 —— 读不到累计就把那一行标成窗口口径）
+    val countNote = if (totals == null) windowNote else totalNote
+    val observeOn = state.cfg?.let { it.enabled && it.observe } == true
 
     Scaffold(
         topBar = {
@@ -70,53 +98,47 @@ fun HomeScreen(
             )
         },
     ) { inner ->
-        Column(
+        // 统计与排行都是「数量不定、以后会更多」的内容，用 LazyColumn 而不是滚动 Column
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(inner),
+            // 内边距走 contentPadding 而不是 Modifier.padding：后者会被裁进滚动区，首尾两项贴边
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            StatusCard(state.serviceText, state.connected, state.cfg != null)
+            item { StatusCard(state.serviceText, state.connected, state.cfg != null) }
 
             // 总开关关着时判定链不跑，这条提示就是假话（M4g 已有「未知不等于开着」的口径，同理）
-            if (state.cfg?.let { it.enabled && it.observe } == true) {
-                GroupCard(stringResource(R.string.home_observe_group)) {
-                    Note(stringResource(R.string.home_observe_note))
-                }
+            if (observeOn) {
+                item { SectionTitle(observeTitle) }
+                item { AlertNote(observeNote) }
             }
 
-            val stats = state.stats
-            val totals = state.totals
-            GroupCard(stringResource(R.string.home_stats_group)) {
-                // 口径逐行跟着数走，不在顶上写一段总结：三个数不是同一套口径，一句话说完必然有人读错
-                // （同一个位置静默换数据源也一样 —— 读不到累计就把那一行标成窗口口径）
-                val totalNote = stringResource(R.string.home_stat_total_note)
-                val windowNote = stringResource(R.string.home_stat_window_note)
-                // 今日排最前：进这张卡问的是「今天拦了多少」，总量是背景
-                // -1 = 旧版模块端没上报这个字段，不能拿它当「今天拦了 0 条」
-                val today = totals?.today ?: -1L
-                StatRow(
-                    label = stringResource(R.string.home_stat_today),
-                    value = if (today >= 0) countText(today) else stringResource(R.string.home_stat_no_value),
-                    note = if (today >= 0) {
-                        stringResource(R.string.home_stat_today_note)
-                    } else {
-                        stringResource(R.string.home_stat_today_unknown)
-                    },
+            item { SectionTitle(statsTitle) }
+            item {
+                StatItem(
+                    label = todayLabel,
+                    value = if (today >= 0) countText(today) else noneValue,
+                    note = if (today >= 0) todayNote else todayUnknown,
                 )
-                val countNote = if (totals == null) windowNote else totalNote
-                StatRow(
-                    label = stringResource(R.string.home_stat_blocked),
+            }
+            item {
+                StatItem(
+                    label = blockedLabel,
                     value = countText(totals?.blocked ?: stats.blocked.toLong()),
                     note = countNote,
                 )
-                HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 4.dp))
+            }
+            // 窗口口径的两个数（组数 / 事件数）没有单列一行：它们是「上面的数从哪来」的注解
+            item {
                 Text(
-                    text = stringResource(R.string.home_stat_window_title),
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = windowTitle,
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
                 )
+            }
+            item {
                 Note(
                     stringResource(
                         R.string.home_stat_scope,
@@ -126,24 +148,25 @@ fun HomeScreen(
                 )
             }
 
-            GroupCard(stringResource(R.string.home_top_group)) {
-                if (stats.top.isEmpty()) {
-                    Note(stringResource(R.string.home_top_empty))
-                } else {
-                    val max = stats.top.first().events
-                    stats.top.forEach {
-                        RankRow(
-                            pkg = it.pkg,
-                            countText = stringResource(R.string.records_count_badge, it.events),
-                            fraction = if (max > 0) it.events.toFloat() / max else 0f,
-                        )
-                    }
-                    if (stats.otherApps > 0) {
+            item { SectionTitle(topTitle) }
+            if (stats.top.isEmpty()) {
+                item { Note(emptyNote) }
+            } else {
+                val max = stats.top.first().events
+                items(stats.top) {
+                    RankRow(
+                        pkg = it.pkg,
+                        countText = stringResource(R.string.records_count_badge, it.events),
+                        fraction = if (max > 0) it.events.toFloat() / max else 0f,
+                    )
+                }
+                if (stats.otherApps > 0) {
+                    item {
                         Note(stringResource(R.string.home_top_other, stats.otherApps, stats.otherEvents))
                     }
-                    // 上面那三个数已经是累计口径了，排行还是窗口口径 —— 不写这句，两个口径会被当成一套
-                    Note(stringResource(R.string.home_top_scope))
                 }
+                // 上面那些数已经是累计口径了，排行还是窗口口径 —— 不写这句，两个口径会被当成一套
+                item { Note(scopeNote) }
             }
         }
     }
@@ -156,25 +179,29 @@ fun HomeScreen(
  * 只读（整行可点跳记录屏的行为按用户要求取消）。
  */
 @Composable
-private fun StatRow(label: String, value: String, note: String) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+private fun StatItem(label: String, value: String, note: String) {
+    ListItem(
+        headlineContent = { Text(text = label, style = MaterialTheme.typography.bodyLarge) },
+        supportingContent = { Note(note) },
+        trailingContent = {
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
-        }
-        Note(note)
-    }
+        },
+    )
+}
+
+/** 分区标题：M3 的 Lists 用标题分段，而不是把每段装进一张卡片。 */
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+    )
 }
