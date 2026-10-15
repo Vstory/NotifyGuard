@@ -26,7 +26,6 @@
     <string name="home_stat_total_note">**All time** · counted by the module, survives clearing records</string>
     <string name="home_stat_no_value">—</string>
     <string name="home_stat_today_unknown">**Not reported** — the module build is older</string>
-    <string name="home_stat_pass">Passed</string>
     <string name="home_stat_scope">%1$s groups · %2$s events</string>
     <string name="home_top_scope">Ranked by counts in the **current record window**.</string>
     <string name="home_top_group">Top apps (blocked)</string>

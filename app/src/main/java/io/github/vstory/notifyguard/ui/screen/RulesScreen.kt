@@ -153,7 +153,7 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         // 界面上写着「微信」而配置里是包名，多用户/分身时没有包名就没有据可查）
                         AppSwitchRow(
                             pkg = c.pkg,
-                            trailingNote = seenText,
+                            seenText = seenText,
                             checked = c.whitelisted,
                             enabled = connected,
                             onCheckedChange = { viewModel.setWhitelist(c.pkg, it) },
