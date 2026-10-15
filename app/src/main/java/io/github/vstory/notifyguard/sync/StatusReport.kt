@@ -55,4 +55,10 @@ data class StatusReport(
     val passTotal: Long = 0L,
     /** 累计的起算时刻（第一条判定）；0 = 还没有过判定。 */
     val tallySince: Long = 0L,
+    /**
+     * 今日拦截（模块端按本地日期维护，跨天自动归零、跨重启保留）。
+     *
+     * **-1 = 模块端没上报这个字段**（旧版本模块）—— 与「今天真的拦了 0 条」是两回事，界面要分开说。
+     */
+    val blockedToday: Long = -1L,
 )
