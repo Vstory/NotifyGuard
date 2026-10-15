@@ -1,12 +1,9 @@
 package io.github.vstory.notifyguard.ui.screen
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -25,11 +22,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
-import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.ui.text
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.HorizontalDivider
@@ -41,8 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
  * 不放开关是有意的：开关一放进来就得连带着处理「未连接时置灰、拨动即下发、失败回滚」，那是设置屏
  * 已经有一套的生效值口径，两处各有一套时分歧的表现是「首页显示开着、判定却按关着跑」。
  *
- * 判定分布按三类展示而不是只报「已拦截」：观察模式下 `block` 恒为 false，只报 0 会让用户以为
- * 模块没工作，而此时真正有意义的是「建议拦截」。
+ * 统计不只报「已拦截」一个数：观察模式下 `block` 恒为 false，只报 0 会让用户以为模块没工作。
+ * 今日拦截按本地日期计、已拦截按模块端累计口径，两个数不同源，每行都跟着写口径。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -115,11 +110,6 @@ fun HomeScreen(
                 StatRow(
                     label = stringResource(R.string.home_stat_blocked),
                     value = countText(totals?.blocked ?: stats.blocked.toLong()),
-                    note = countNote,
-                )
-                StatRow(
-                    label = stringResource(R.string.home_stat_pass),
-                    value = countText(totals?.pass ?: stats.pass.toLong()),
                     note = countNote,
                 )
                 HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 4.dp))
