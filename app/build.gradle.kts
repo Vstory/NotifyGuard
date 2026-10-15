@@ -124,6 +124,9 @@ dependencies {
     // 记录屏的状态要跨重组与屏幕旋转存活（在途的标注指令若随重组丢掉标志位，连点会并发下发）
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.4")
 
+    // 应用图标按 AOSP iconloaderlib 渲染（自适应图标的阴影、badging）。直接用 PackageManager.getApplicationIcon 对自适应图标拿不到阴影，白底图标会融进背景
+    implementation("me.zhanghai.android.appiconloader:appiconloader:1.5.0")
+
     testImplementation("junit:junit:4.13.2")
     // JVM 单测需要 org.json 的真实现：android.jar 里那份是 stub，未 mock 时调用即抛
     testImplementation("org.json:json:20240303")
