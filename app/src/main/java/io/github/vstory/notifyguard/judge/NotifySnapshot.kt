@@ -56,7 +56,8 @@ data class NotifySnapshot(
     val textLength: Int
         get() = allTexts.distinct().sumOf { it.length }
 
-    fun hasNoText(): Boolean = allTexts.isEmpty()
+    /** 按 blank 判而不是按空串：只有空白的标题/正文（`" "`、`"\n"`）同样算没有内容。 */
+    fun hasNoText(): Boolean = allTexts.none { it.isNotBlank() }
 
     /** 是否携带可渲染的自定义布局（界面据此决定要不要给「看原始样式」入口）。 */
     fun hasContentView(): Boolean = contentView != null
