@@ -1,9 +1,7 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -45,7 +42,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -293,46 +289,22 @@ private fun LearningTabs(
     total: Int,
     onSelect: (LearningViewModel.Tab) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        TabChip(
-            stringResource(R.string.learning_tab_pending, pending),
-            tab == LearningViewModel.Tab.Pending,
-        ) { onSelect(LearningViewModel.Tab.Pending) }
-        TabChip(
-            stringResource(R.string.learning_tab_library, total),
-            tab == LearningViewModel.Tab.Library,
-        ) { onSelect(LearningViewModel.Tab.Library) }
-        TabChip(stringResource(R.string.learning_tab_fit), tab == LearningViewModel.Tab.Fit) {
-            onSelect(LearningViewModel.Tab.Fit)
+    val entries = listOf(
+        LearningViewModel.Tab.Pending to stringResource(R.string.learning_tab_pending, pending),
+        LearningViewModel.Tab.Library to stringResource(R.string.learning_tab_library, total),
+        LearningViewModel.Tab.Fit to stringResource(R.string.learning_tab_fit),
+    )
+    SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+        entries.forEachIndexed { index, (value, label) ->
+            SegmentedButton(
+                selected = tab == value,
+                onClick = { onSelect(value) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = entries.size),
+            ) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
     }
 }
 
-@Composable
-private fun TabChip(text: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = if (selected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        },
-        modifier = Modifier
-            .clip(MaterialTheme.shapes.large)
-            .background(
-                if (selected) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
-}
 
 /**
  * 样本库的筛选与计数。
@@ -351,24 +323,19 @@ private fun LibraryBar(
     onFilter: (LearningViewModel.LibFilter) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            TabChip(
-                stringResource(R.string.learning_lib_filter_all, total),
-                filter == LearningViewModel.LibFilter.All,
-            ) { onFilter(LearningViewModel.LibFilter.All) }
-            TabChip(
-                stringResource(R.string.learning_lib_filter_spam, spam),
-                filter == LearningViewModel.LibFilter.Spam,
-            ) { onFilter(LearningViewModel.LibFilter.Spam) }
-            TabChip(
-                stringResource(R.string.learning_lib_filter_ham, ham),
-                filter == LearningViewModel.LibFilter.Ham,
-            ) { onFilter(LearningViewModel.LibFilter.Ham) }
+        val filters = listOf(
+            LearningViewModel.LibFilter.All to stringResource(R.string.learning_lib_filter_all, total),
+            LearningViewModel.LibFilter.Spam to stringResource(R.string.learning_lib_filter_spam, spam),
+            LearningViewModel.LibFilter.Ham to stringResource(R.string.learning_lib_filter_ham, ham),
+        )
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            filters.forEachIndexed { index, (value, label) ->
+                SegmentedButton(
+                    selected = filter == value,
+                    onClick = { onFilter(value) },
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = filters.size),
+                ) { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
         }
         Note(
             if (query.isEmpty()) {
