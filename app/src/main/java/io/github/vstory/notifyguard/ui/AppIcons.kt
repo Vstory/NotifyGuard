@@ -66,14 +66,17 @@ internal object AppIcons {
     fun icon(context: Context, pkg: String): Bitmap? {
         val app = context.applicationContext
         val info = runCatching { app.packageManager.getPackageInfo(pkg, 0) }.getOrNull()
-        if (info == null) {
+        // 两个都要显式判：新版 SDK 把 PackageInfo.applicationInfo 标了可空，而 Kotlin 不会从
+        // applicationInfo 非空反推 info 非空
+        val appInfo = info?.applicationInfo
+        if (info == null || appInfo == null) {
             unresolved.put(pkg, true)
             return null
         }
         val key = AppIconLoader.getIconKey(info, app)
         icons.get(key)?.let { return it }
         if (unresolved.get(key) != null) return null
-        val bitmap = runCatching { loader(app).loadIcon(info.applicationInfo) }.getOrNull()
+        val bitmap = runCatching { loader(app).loadIcon(appInfo) }.getOrNull()
         if (bitmap == null) unresolved.put(key, true) else icons.put(key, bitmap)
         return bitmap
     }
