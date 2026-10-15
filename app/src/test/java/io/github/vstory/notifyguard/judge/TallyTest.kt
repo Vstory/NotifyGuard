@@ -55,4 +55,41 @@ class TallyTest {
         assertEquals(0L, Tally.sinceAt())
         Tally.resetForTest(null)
     }
+
+    /** 今日拦截按本地日期走：同一天累加，跨过零点归零，而累计总量不受影响。 */
+    @Test
+    fun todayBlockedResetsOnDayRollover() {
+        val f = tmpFile()
+        Tally.resetForTest(f)
+        val noon = 1_800_000_000_000L
+        Tally.clock = { noon }
+        Tally.add(block = true, would = true)
+        Tally.add(block = true, would = true)
+        Tally.add(block = false, would = false)
+        assertEquals(2L, Tally.todayBlockedTotal())
+
+        // 跨到第二天：读的时候就得按新的一天算（不能等下一次判定）
+        Tally.clock = { noon + 86_400_000L }
+        assertEquals(0L, Tally.todayBlockedTotal())
+        Tally.add(block = true, would = true)
+        assertEquals(1L, Tally.todayBlockedTotal())
+        assertEquals(3L, Tally.blockedTotal())
+        Tally.resetForTest(null)
+    }
+
+    /** 重启后今天还是同一天 ⇒ 今日计数接着算。 */
+    @Test
+    fun todayBlockedSurvivesRestartWithinTheSameDay() {
+        val f = tmpFile()
+        val noon = 1_800_000_000_000L
+        Tally.resetForTest(f)
+        Tally.clock = { noon }
+        Tally.add(block = true, would = true)
+        Tally.flushForTest()
+
+        Tally.resetForTest(f)
+        Tally.clock = { noon + 3_600_000L }
+        assertEquals(1L, Tally.todayBlockedTotal())
+        Tally.resetForTest(null)
+    }
 }

@@ -4,6 +4,7 @@ import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.data.ModuleDir
 import org.json.JSONObject
 import java.io.File
+import java.util.Calendar
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -21,15 +22,23 @@ object Tally {
 
     private const val FLUSH_EVERY = 20L
     private const val FLUSH_DELAY_MS = 5_000L
+    private const val DAY_MS = 86_400_000L
 
     /** 单测注入点（与 [io.github.vstory.notifyguard.sync.LogSink] 的 flushThreshold 同一套做法）。 */
     internal var fileOverride: File? = null
+
+    /** 单测注入点：真机取挂钟。 */
+    internal var clock: () -> Long = System::currentTimeMillis
 
     private val blocked = AtomicLong()
     private val would = AtomicLong()
     private val pass = AtomicLong()
     private val since = AtomicLong()
     private val pending = AtomicLong()
+
+    /** 今日拦截的总量，与它所属那天的零点（[todayStart] 一变就意味着跨天）。 */
+    private val todayBlocked = AtomicLong()
+    private val todayStart = AtomicLong()
 
     @Volatile private var loaded = false
     @Volatile private var scheduled = false
@@ -41,9 +50,11 @@ object Tally {
     /** 一条判定落下。`block` ⇒ `would`（拦下来的必然也是建议拦截的那条），两者不能各记一套。 */
     fun add(block: Boolean, would: Boolean) {
         ensureLoaded()
+        rollToday()
         if (block) {
             blocked.incrementAndGet()
             this.would.incrementAndGet()
+            todayBlocked.incrementAndGet()
         } else if (would) {
             this.would.incrementAndGet()
         } else {
@@ -74,6 +85,39 @@ object Tally {
         return since.get()
     }
 
+    /**
+     * 今日拦截（模块端按**本地日期**维护）。
+     *
+     * 读数前先滚一次日期：被动等下一次判定才归零的话，跨天后的第一次进屏会把昨天的数当今天报。
+     */
+    fun todayBlockedTotal(): Long {
+        ensureLoaded()
+        rollToday()
+        return todayBlocked.get()
+    }
+
+    /**
+     * 跨天就把今日计数推到今天。
+     *
+     * 热路径（每条判定）只做一次比较：当前时刻越过已记的「明天零点」才重算日历 —— 否则每条判定都要
+     * 构造一次 Calendar。
+     */
+    private fun rollToday() {
+        val now = clock()
+        val start = todayStart.get()
+        if (start != 0L && now < start + DAY_MS) return
+        val fresh = startOfDay(now)
+        if (todayStart.getAndSet(fresh) != fresh) todayBlocked.set(0L)
+    }
+
+    private fun startOfDay(now: Long): Long = Calendar.getInstance().apply {
+        timeInMillis = now
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
     private fun ensureLoaded() {
         if (loaded) return
         synchronized(this) {
@@ -86,6 +130,9 @@ object Tally {
             would.set(o.optLong("would", 0L))
             pass.set(o.optLong("pass", 0L))
             since.set(o.optLong("since", 0L))
+            // 重启后今天还是同一天 ⇒ 今日计数接着算；跨了天 ⇒ rollToday 会把它清零
+            todayBlocked.set(o.optLong("todayBlocked", 0L))
+            todayStart.set(o.optLong("todayStart", 0L))
         }
     }
 
@@ -107,6 +154,8 @@ object Tally {
             put("would", would.get())
             put("pass", pass.get())
             put("since", since.get())
+            put("todayBlocked", todayBlocked.get())
+            put("todayStart", todayStart.get())
         }.toString()
         // 先写临时文件再改名：读方要么看到上一份完整快照、要么看到这一份，不会读到写了一半的 JSON
         runCatching {
@@ -127,7 +176,10 @@ object Tally {
         would.set(0L)
         pass.set(0L)
         since.set(0L)
+        todayBlocked.set(0L)
+        todayStart.set(0L)
         pending.set(0L)
+        clock = System::currentTimeMillis
         loaded = false
     }
 

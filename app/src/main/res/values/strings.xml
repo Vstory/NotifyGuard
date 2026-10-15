@@ -20,12 +20,12 @@
     <string name="home_stats_group">Block stats</string>
     <string name="home_stat_blocked">Blocked (total): %1$d</string>
     <string name="home_stat_today">Blocked today: %1$d</string>
+    <string name="home_stat_today_unknown">Blocked today: — (the module has not reported it; its build is older)</string>
     <string name="home_stat_pass">Passed (total): %1$d</string>
     <string name="home_stat_scope">Current window: %1$d groups · %2$d events</string>
-    <string name="home_stats_note_total">Blocked and passed are the module-side running totals (counted per notification): clearing records or restarting the system framework does not reset them. Blocked today is counted from the current record window — the module keeps no date breakdown — so clearing records resets it. The group and event counts below cover only the current record window — the module keeps the latest %1$d groups.</string>
-    <string name="home_stats_note_window">The module has not reported its running totals yet (not connected, or installed without restarting the system framework): the three numbers below are from the current record window and reset when records are cleared.</string>
+    <string name="home_stats_note_total">These are the module-side running totals (counted per notification): clearing records or restarting the system framework does not reset them. Blocked today is kept by the module per local date and resets at midnight. The group and event counts below cover only the current record window — the module keeps the latest %1$d groups.</string>
+    <string name="home_stats_note_window">The module has not reported its running totals yet (not connected, or installed without restarting the system framework): the blocked / passed numbers below are from the current record window and reset when records are cleared, and blocked today is unavailable.</string>
     <string name="home_top_scope">Ranked by counts in the current record window.</string>
-    <string name="home_stats_tap_hint">Tap a row to open Records filtered to just that verdict.</string>
     <string name="home_top_group">Top apps (blocked)</string>
     <string name="home_top_empty">Nothing has been blocked in this window. Nothing is ever blocked while observe mode is on — in Settings, make sure verdicts are enabled and then turn observe mode off; otherwise check the framework log to confirm the verdict chain is running.</string>
     <string name="home_top_other">Other apps: %1$d · %2$d events</string>
