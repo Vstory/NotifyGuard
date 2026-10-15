@@ -8,7 +8,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import io.github.libxposed.service.XposedService
-import java.util.Calendar
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
@@ -42,8 +41,6 @@ class HomeViewModel : ViewModel() {
         val stats: Stats = Stats.EMPTY,
         /** 模块端累计账本；null = 模块端还没回传（未连接 / 刚装完没重启系统框架）。 */
         val totals: Totals? = null,
-        /** 今日拦截（记录窗口内算出来的，不是模块端累计）。 */
-        val todayBlocked: Int = 0,
         val fetching: Boolean = false,
     )
 
@@ -53,6 +50,8 @@ class HomeViewModel : ViewModel() {
         val would: Long,
         val pass: Long,
         val since: Long,
+        /** 今日拦截（模块端按本地日期维护）；-1 = 模块端没上报这个字段。 */
+        val today: Long,
     )
 
     /** 排行里的一行。 */
@@ -145,7 +144,9 @@ class HomeViewModel : ViewModel() {
         }
         StatusClient.fetch(app) { report ->
             state = state.copy(
-                totals = report?.let { Totals(it.blockedTotal, it.wouldTotal, it.passTotal, it.tallySince) },
+                totals = report?.let { Totals(
+                        it.blockedTotal, it.wouldTotal, it.passTotal, it.tallySince, it.blockedToday,
+                    ) },
             )
         }
     }
@@ -159,32 +160,6 @@ class HomeViewModel : ViewModel() {
     }
 
     private fun repaint(ctx: Context) {
-        val records = LogStore.get(ctx).all()
-        state = state.copy(
-            stats = Stats.of(records),
-            todayBlocked = todayBlockedOf(records, startOfToday()),
-        )
-    }
-
-    companion object {
-
-        /**
-         * 今日拦截 = 窗口内「最近一次发生在今天零点之后」的拦截**条数**（累 `count`，与另两行同口径）。
-         *
-         * 与同一张卡上的拦截 / 放行不同源：那两行是模块端累计（不记日期），这一行只能从 App 侧的
-         * 记录窗口算。代价是清空记录会把它清零，界面上的说明写明了这一点。
-         */
-        fun todayBlockedOf(records: List<LogRecord>, since: Long): Int =
-            records.filter { it.block && it.lastTs >= since }.sumOf { it.count }
-
-        /** 本地日期零点的墙钟时刻。 */
-        fun startOfToday(now: Long = System.currentTimeMillis()): Long =
-            Calendar.getInstance().apply {
-                timeInMillis = now
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.timeInMillis
+        state = state.copy(stats = Stats.of(LogStore.get(ctx).all()))
     }
 }

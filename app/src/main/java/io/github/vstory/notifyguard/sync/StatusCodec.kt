@@ -39,6 +39,7 @@ object StatusCodec {
         put("wouldTotal", s.wouldTotal)
         put("passTotal", s.passTotal)
         put("tallySince", s.tallySince)
+        put("blockedToday", s.blockedToday)
     }.toString()
 
     fun decode(json: String?): StatusReport? {
@@ -74,6 +75,7 @@ object StatusCodec {
             wouldTotal = o.optLong("wouldTotal", d.wouldTotal),
             passTotal = o.optLong("passTotal", d.passTotal),
             tallySince = o.optLong("tallySince", d.tallySince),
+            blockedToday = o.optLong("blockedToday", d.blockedToday),
         )
     }
 }

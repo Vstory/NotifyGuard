@@ -19,9 +19,8 @@ class HomeStatsTest {
         block: Boolean = false,
         would: Boolean = false,
         count: Int = 1,
-        ts: Long = 1_000L,
     ) = LogRecord(
-        ts = ts,
+        ts = 1_000L,
         pkg = pkg,
         title = null,
         text = "text",
@@ -109,25 +108,4 @@ class HomeStatsTest {
         assertEquals(91, s.blocked)
     }
 
-    /** 今日拦截只数「今天零点的墙钟时刻之后」的拦截，且按条（`count`）累，不把建议拦截算进来。 */
-    @Test
-    fun todayBlockedCountsOnlyBlocksSinceTheGivenMoment() {
-        val today = rec("a", block = true, count = 3, ts = 5_000L)
-        val yesterday = rec("b", block = true, count = 4, ts = 100L)
-        val wouldToday = rec("c", would = true, count = 5, ts = 6_000L)
-
-        assertEquals(3, HomeViewModel.todayBlockedOf(listOf(today, yesterday, wouldToday), 1_000L))
-    }
-
-    /** 零点取的是本地日期：同一时刻的零点必须早于该时刻、且与前一天零点相差一整天。 */
-    @Test
-    fun startOfTodayIsTheLocalMidnightBeforeIt() {
-        val now = 1_800_000_000_000L
-
-        val zero = HomeViewModel.startOfToday(now)
-
-        assertTrue(zero <= now)
-        assertTrue(now - zero < 86_400_000L)
-        assertEquals(86_400_000L, HomeViewModel.startOfToday(zero + 1) - HomeViewModel.startOfToday(zero - 1))
-    }
 }

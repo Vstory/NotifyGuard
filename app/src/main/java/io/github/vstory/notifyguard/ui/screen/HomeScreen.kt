@@ -44,7 +44,7 @@ import io.github.vstory.notifyguard.ui.text
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onOpenRecords: (RecordsViewModel.Filter) -> Unit = {},
+
     viewModel: HomeViewModel = viewModel(),
 ) {
     val ctx = LocalContext.current.applicationContext
@@ -100,19 +100,18 @@ fun HomeScreen(
                 }
                 val blocked = totals?.blocked ?: stats.blocked.toLong()
                 val pass = totals?.pass ?: stats.pass.toLong()
-                StatLine(stringResource(R.string.home_stat_blocked, blocked)) {
-                    onOpenRecords(RecordsViewModel.Filter.Block)
-                }
-                // 今日拦截没有对应的时间筛选档，点进去看的是全部拦截（组明细里带时间）
-                StatLine(stringResource(R.string.home_stat_today, state.todayBlocked)) {
-                    onOpenRecords(RecordsViewModel.Filter.Block)
-                }
-                StatLine(stringResource(R.string.home_stat_pass, pass)) {
-                    onOpenRecords(RecordsViewModel.Filter.Pass)
-                }
+                StatLine(stringResource(R.string.home_stat_blocked, blocked))
+                // -1 = 旧版模块端没上报这个字段，不能拿它当「今天拦了 0 条」
+                val today = totals?.today ?: -1L
+                StatLine(
+                    if (today >= 0) {
+                        stringResource(R.string.home_stat_today, today)
+                    } else {
+                        stringResource(R.string.home_stat_today_unknown)
+                    }
+                )
+                StatLine(stringResource(R.string.home_stat_pass, pass))
                 Note(stringResource(R.string.home_stat_scope, stats.groups, stats.events))
-                // 整行可点但没有任何可点的样子，不写一句就没人会去点
-                Note(stringResource(R.string.home_stats_tap_hint))
             }
 
             GroupCard(stringResource(R.string.home_top_group)) {
@@ -139,16 +138,17 @@ fun HomeScreen(
 }
 
 /**
- * 整行可点：这三行是「哪些通知被拦了」的入口，只报数不给出路时用户看到「已拦截 12」也无从下钻。
- * 触控目标按无障碍口径撑到 48dp（文本本身远低于此）。
+ * 统计里的一行，只读。
+ *
+ * 原先整行可点、点进去跳到记录屏对应的判定档，按用户要求取消了跳转；触控目标仍按无障碍口径撑到
+ * 48dp（文本本身远低于此），行高与下面几张卡保持一致。
  */
 @Composable
-private fun StatLine(text: String, onClick: () -> Unit) {
+private fun StatLine(text: String) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(role = Role.Button, onClick = onClick),
+            .heightIn(min = 48.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(text = text, style = MaterialTheme.typography.bodyMedium)
