@@ -16,37 +16,45 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmapOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.zhanghai.android.appiconloader.AppIconLoader
 
 /**
  * 包名 → 应用图标与名称。给排行这类「按应用列」的地方用（记录与规则屏仍显示包名：那里要的是可复制的标识）。
  *
- * 为什么要 manifest 里的 `<queries>`：Android 11 起默认看不见别的应用，`getApplicationIcon("com.taobao.taobao")`
- * 直接抛 `NameNotFoundException`。那不是权限项 —— `AndroidManifest.xml` 里仍没有一条 `uses-permission` ——
+ * 图标渲染交给 [AppIconLoader]（AOSP iconloaderlib 的移植，Apache-2.0），不要自己拿
+ * `PackageManager.getApplicationIcon()` 画：那个对**自适应图标**没有阴影，白底图标会直接融进背景；
+ * iconloaderlib 自带阴影与 badging 逻辑，正是系统自己画通知栏图标的做法。
+ *
+ * 缓存键用库的 `getIconKey()`（含 versionCode 与用户序号）而不是裸包名 —— 应用升级换了图标，
+ * 裸包名键会一直吐旧图。
+ *
+ * 为什么要 manifest 里的 `<queries>`：Android 11 起默认看不见别的应用，`getApplicationInfo` 对
+ * 不可见包抛 `NameNotFoundException`。那不是权限项 —— manifest 里仍没有一条 `uses-permission` ——
  * 但语义上等于声明「要枚举已安装应用」，隐私说明里另记一笔。
- *
- * 解码走 androidx.core 的 `toBitmapOrNull`（core-ktx 已由 compose / activity-compose 传递引入，不必显式声明）。
- * 它内部就是「BitmapDrawable 直接取，其余建同尺寸 bitmap 后 setBounds 再 draw」—— 这段不要手写：
- * 自适应图标的 intrinsic 尺寸可能是 -1，手写时漏掉 setBounds 会得到一张全透明图，且不报错。
- *
- * 缓存用框架的 [LruCache]（自身线程安全，故这里不加锁）：图标与「查过但没有」各一个。
- * 负缓存必须留 —— 系统包、已卸载、不可见的包名会一直出现在记录里，不记住就会每次重组都去 binder 问一遍。
  */
 internal object AppIcons {
 
-    /** 图标画到这个边长（像素）。通知风格的列表里 28dp 够看清，再大就吃掉名称的宽度。 */
+    /** 图标渲染到这个边长（像素）。通知风格的列表里 28dp 够看清，再大就吃掉名称的宽度。 */
     private const val ICON_PX = 96
 
     private val labels = LruCache<String, String>(64)
     private val icons = LruCache<String, Bitmap>(64)
+
+    /**
+     * 「查过但没有」的负缓存，键是裸包名（失败时还拿不到含 versionCode 的键）。
+     * 必须留：系统包、已卸载、不可见的包名会一直出现在记录里，不记住就每次重组都去 binder 问一遍。
+     */
     private val unresolved = LruCache<String, Boolean>(256)
+
+    @Volatile
+    private var loader: AppIconLoader? = null
 
     fun label(context: Context, pkg: String): String {
         labels.get(pkg)?.let { return it }
         val name = runCatching {
-            val pm = context.packageManager
+            val pm = context.applicationContext.packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         }.getOrNull()?.takeIf { it.isNotBlank() }
         // 回落包名而不是空串：排行榜上出现空行比出现包名更难理解
@@ -56,13 +64,28 @@ internal object AppIcons {
     }
 
     fun icon(context: Context, pkg: String): Bitmap? {
-        icons.get(pkg)?.let { return it }
-        if (unresolved.get(pkg) != null) return null
-        val bitmap = runCatching {
-            context.packageManager.getApplicationIcon(pkg).toBitmapOrNull(ICON_PX, ICON_PX)
-        }.getOrNull()
-        if (bitmap == null) unresolved.put(pkg, true) else icons.put(pkg, bitmap)
+        val app = context.applicationContext
+        val info = runCatching { app.packageManager.getPackageInfo(pkg, 0) }.getOrNull()
+        if (info == null) {
+            unresolved.put(pkg, true)
+            return null
+        }
+        val key = AppIconLoader.getIconKey(info, app)
+        icons.get(key)?.let { return it }
+        if (unresolved.get(key) != null) return null
+        val bitmap = runCatching { loader(app).loadIcon(info.applicationInfo) }.getOrNull()
+        if (bitmap == null) unresolved.put(key, true) else icons.put(key, bitmap)
         return bitmap
+    }
+
+    /**
+     * 复用同一个实例：它内部有 IconFactory 池，每次新建都要重新初始化 AOSP 那套绘制对象。
+     */
+    private fun loader(context: Context): AppIconLoader {
+        loader?.let { return it }
+        return synchronized(this) {
+            loader ?: AppIconLoader(ICON_PX, false, context).also { loader = it }
+        }
     }
 }
 
