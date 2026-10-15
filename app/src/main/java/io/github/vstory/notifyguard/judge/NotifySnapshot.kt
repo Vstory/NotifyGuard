@@ -24,6 +24,15 @@ data class NotifySnapshot(
     val group: String?,
     val category: String?,
     val hasMessagingStyle: Boolean,
+    /**
+     * 补充文本来源（都属通知正文，不是装饰）：折叠摘要行、信息行、以及 `InboxStyle` 的多行列表。
+     *
+     * 推广类通知常用 `InboxStyle` 把内容列在 [textLines] 里，正文本身留空 —— 只读三段会判成「无文本」。
+     * 放在末尾是因为这三项是后补的，前面的位置参数不能动。
+     */
+    val subText: String? = null,
+    val infoText: String? = null,
+    val textLines: List<String> = emptyList(),
 ) {
 
     val isGroupSummary: Boolean
@@ -32,15 +41,19 @@ data class NotifySnapshot(
     val isForegroundService: Boolean
         get() = flags and Notification.FLAG_FOREGROUND_SERVICE != 0
 
-    /** 三段文本去重后长度（§6 第 2 步：标题与正文全空 ⇒ 放行）。 */
+    /** 全部文本来源（判定口径的唯一出处，[textLength] / [hasNoText] / [judgeText] 都从它派生）。 */
+    private val allTexts: List<String>
+        get() = listOfNotNull(title, text, bigText, subText, infoText)
+            .filter { it.isNotEmpty() } + textLines.filter { it.isNotEmpty() }
+
+    /** 全部来源去重后长度（§6 第 2 步：标题与正文全空 ⇒ 放行）。 */
     val textLength: Int
-        get() = setOfNotNull(title, text, bigText).sumOf { it.length }
+        get() = allTexts.distinct().sumOf { it.length }
 
-    fun hasNoText(): Boolean = title.isNullOrBlank() && text.isNullOrBlank() && bigText.isNullOrBlank()
+    fun hasNoText(): Boolean = allTexts.isEmpty()
 
-    /** 判定与将来 AI 共用的文本口径：三段去重后按行拼接。 */
-    fun judgeText(): String =
-        listOfNotNull(title, text, bigText).filter { it.isNotEmpty() }.distinct().joinToString("\n")
+    /** 判定与将来 AI 共用的文本口径：全部来源去重后按行拼接。 */
+    fun judgeText(): String = allTexts.distinct().joinToString("\n")
 
     companion object {
 
@@ -67,6 +80,9 @@ data class NotifySnapshot(
                 title = charSeq(extras, Notification.EXTRA_TITLE),
                 text = charSeq(extras, Notification.EXTRA_TEXT),
                 bigText = charSeq(extras, Notification.EXTRA_BIG_TEXT),
+                subText = charSeq(extras, Notification.EXTRA_SUB_TEXT),
+                infoText = charSeq(extras, Notification.EXTRA_INFO_TEXT),
+                textLines = charSeqArray(extras, Notification.EXTRA_TEXT_LINES),
                 flags = n.flags,
                 // getGroup() 是 SDK 里公开的群标识；postTime 属隐藏成员，不取（记录时间由框架日志自带）
                 group = runCatching { n.group }.getOrNull(),
@@ -78,5 +94,8 @@ data class NotifySnapshot(
 
         private fun charSeq(extras: Bundle?, key: String): String? =
             runCatching { extras?.getCharSequence(key)?.toString() }.getOrNull()
+
+        private fun charSeqArray(extras: Bundle?, key: String): List<String> =
+            runCatching { extras?.getCharSequenceArray(key)?.map { it.toString() } }.getOrNull().orEmpty()
     }
 }

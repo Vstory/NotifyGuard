@@ -62,8 +62,12 @@ data class LogRecord(
             ts = ts,
             pkg = s?.pkg.orEmpty(),
             title = clip(s?.title),
-            // 正文优先 text，为空才退到 bigText（长文通知里 text 常常只是摘要）
-            text = clip(s?.text?.takeIf { it.isNotBlank() } ?: s?.bigText),
+            // 正文逐级回退：text → bigText（长文通知里 text 常只是摘要）→ 折叠摘要行 → 信息行 → InboxStyle 多行
+            text = clip(
+                sequenceOf(s?.text, s?.bigText, s?.subText, s?.infoText)
+                    .firstOrNull { !it.isNullOrBlank() }
+                    ?: s?.textLines?.firstOrNull { it.isNotBlank() }
+            ),
             reason = d.reason,
             // would/block 分开记：观察模式下 would=true, block=false，这一对就是切拦截模式的依据
             would = d.wouldBlock,

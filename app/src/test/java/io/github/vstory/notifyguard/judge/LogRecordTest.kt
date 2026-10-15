@@ -19,6 +19,15 @@ class LogRecordTest {
         assertEquals("长文正文", r.text)
     }
 
+    /** 记录里的正文要与判定同口径逐级回退，否则会出现「记录显示无文本、判定其实有文本」。 */
+    @Test
+    fun fallsBackToSubTextThenLines() {
+        val d = Judge.Decision(false, "pass")
+        assertEquals("3 条新消息", LogRecord.from(snap(text = null, subText = "3 条新消息"), d, "FUNNEL", 1L).text)
+        assertEquals("限时特惠", LogRecord.from(snap(text = null, textLines = listOf("限时特惠")), d, "FUNNEL", 1L).text)
+        assertEquals("信息行", LogRecord.from(snap(text = null, infoText = "信息行"), d, "FUNNEL", 1L).text)
+    }
+
     @Test
     fun observeModeKeepsWouldWithoutBlock() {
         val d = Judge.Decision(block = false, reason = "rule:r1", wouldBlock = true, ruleId = "r1")
@@ -99,6 +108,9 @@ class LogRecordTest {
         bigText: String? = null,
         id: Int = 3,
         tag: String? = null,
+        subText: String? = null,
+        infoText: String? = null,
+        textLines: List<String> = emptyList(),
     ) = NotifySnapshot(
         pkg = "com.x",
         opPkg = null,
@@ -115,5 +127,8 @@ class LogRecordTest {
         group = null,
         category = null,
         hasMessagingStyle = false,
+        subText = subText,
+        infoText = infoText,
+        textLines = textLines,
     )
 }
