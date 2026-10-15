@@ -18,12 +18,12 @@
     <string name="home_title">Home</string>
     <string name="home_refresh">Refresh statistics</string>
     <string name="home_stats_group">Block stats</string>
-    <string name="home_stat_blocked">Blocked</string>
+    <string name="home_stat_blocked">Total blocked</string>
     <string name="home_stat_today">Blocked today</string>
     <string name="home_stat_window_title">Current record window</string>
     <string name="home_stat_today_note">**By local date** — resets at midnight</string>
     <string name="home_stat_window_note">**Current record window** — resets when records are cleared</string>
-    <string name="home_stat_total_note">**All time**, counted by the module — clearing records or restarting System Framework does not reset it</string>
+    <string name="home_stat_total_note">**All time** · counted by the module, survives clearing records</string>
     <string name="home_stat_no_value">—</string>
     <string name="home_stat_today_unknown">**Not reported** — the module build is older</string>
     <string name="home_stat_pass">Passed</string>

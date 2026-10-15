@@ -99,12 +99,7 @@ fun HomeScreen(
                 // （同一个位置静默换数据源也一样 —— 读不到累计就把那一行标成窗口口径）
                 val totalNote = stringResource(R.string.home_stat_total_note)
                 val windowNote = stringResource(R.string.home_stat_window_note)
-                val blockedNote = if (totals == null) windowNote else totalNote
-                StatRow(
-                    label = stringResource(R.string.home_stat_blocked),
-                    value = countText(totals?.blocked ?: stats.blocked.toLong()),
-                    note = blockedNote,
-                )
+                // 今日排最前：进这张卡问的是「今天拦了多少」，总量是背景
                 // -1 = 旧版模块端没上报这个字段，不能拿它当「今天拦了 0 条」
                 val today = totals?.today ?: -1L
                 StatRow(
@@ -116,10 +111,16 @@ fun HomeScreen(
                         stringResource(R.string.home_stat_today_unknown)
                     },
                 )
+                val countNote = if (totals == null) windowNote else totalNote
+                StatRow(
+                    label = stringResource(R.string.home_stat_blocked),
+                    value = countText(totals?.blocked ?: stats.blocked.toLong()),
+                    note = countNote,
+                )
                 StatRow(
                     label = stringResource(R.string.home_stat_pass),
                     value = countText(totals?.pass ?: stats.pass.toLong()),
-                    note = blockedNote,
+                    note = countNote,
                 )
                 HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 4.dp))
                 Text(
