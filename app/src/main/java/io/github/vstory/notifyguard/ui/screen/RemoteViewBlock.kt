@@ -28,7 +28,7 @@ import io.github.vstory.notifyguard.R
 /** 渲染结果。用三态而不是可空 View：没展开与渲染失败要分得开（失败要说明，没展开不用）。 */
 private sealed class RemoteRender {
     class Ok(val root: View) : RemoteRender()
-    data object Failed : RemoteRender
+    data object Failed : RemoteRender()
 }
 
 /**
