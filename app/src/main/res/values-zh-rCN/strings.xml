@@ -99,7 +99,7 @@
     <string name="reason_short_disabled">总开关关闭</string>
     <string name="reason_short_self_pkg">本应用自己的通知</string>
     <string name="reason_short_group_summary">通知组摘要</string>
-    <string name="reason_short_empty_text">没有可判定的文本</string>
+    <string name="reason_short_empty_text">模块端读不到文本</string>
     <string name="reason_short_protect">保护类型：%1$s</string>
     <string name="reason_short_rule">命中规则：%1$s</string>
     <string name="reason_short_text_too_short">文本太短，未进 AI</string>
@@ -115,7 +115,7 @@
     <string name="reason_why_disabled">设置页的「启用拦截判定」当时是关的，判定链在这一步就**整体短路、直接放行**。\n这条通知**没有经过任何规则或 AI 判定**，因此它**不代表「判定认为正常」**。\n要让后续通知回到判定里，先在设置页打开「启用拦截判定」。</string>
     <string name="reason_why_self_pkg">通知来自 **NotifyGuard 自己**。\n本应用的通知不判：自己的提示被自己拦掉，是最没必要的一种自伤。</string>
     <string name="reason_why_group_summary">这是**通知组的摘要行**。\n摘要是壳不是内容，判它等于替整组下结论。</string>
-    <string name="reason_why_empty_text">标题和正文都是空的，**没有可判的文本**：规则匹配和 AI 打分都无从下手，直接放行。</string>
+    <string name="reason_why_empty_text">标题和正文都是空的，**模块端读不到可判定的文本**。\n若通知栏上看得见内容，那是应用用了**自定义通知布局**（图标 + 快捷按钮那类）。\n文字画在布局里、不在通知的字段里，模块端拿不到 —— 这类通知**按放行处理**。</string>
     <string name="reason_why_protect">%1$s属保护类型。\n通话、闹钟、导航这类通知**被误拦的代价远大于漏一条广告**，所以**命中即放行** —— 不进规则，也不进 AI。\n哪几类受保护，在设置页的「保护类型」里改。</string>
     <string name="reason_why_rule">命中了用户规则 %1$s。\n规则排在**保护类型之后、AI 之前**：写进规则的词是明确要求拦的，不必再问 AI。\n观察模式下这条**只记录不拦**，关掉观察模式才会真的拦下来。</string>
     <string name="reason_why_text_too_short">规范化（小写、去空白、去数字）之后**不足 4 个字**。\n这么短的文本进 AI 段只会放大噪声，所以**直接放行、不参与打分**。</string>
