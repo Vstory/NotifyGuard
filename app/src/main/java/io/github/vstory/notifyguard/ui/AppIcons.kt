@@ -2,8 +2,7 @@ package io.github.vstory.notifyguard.ui
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.Drawable
+import android.util.LruCache
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +16,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmapOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -27,53 +27,41 @@ import kotlinx.coroutines.withContext
  * 直接抛 `NameNotFoundException`。那不是权限项 —— `AndroidManifest.xml` 里仍没有一条 `uses-permission` ——
  * 但语义上等于声明「要枚举已安装应用」，隐私说明里另记一笔。
  *
- * 全部带缓存且分正负两面：取不到（未安装 / 系统包 / 不可见）也要记住，否则每次重组都去 binder 问一遍。
- * 查询本身是 binder 调用，排行是列表，逐行重复付这个成本会明显拖滚动。
+ * 解码走 androidx.core 的 `toBitmapOrNull`（core-ktx 已由 compose / activity-compose 传递引入，不必显式声明）。
+ * 它内部就是「BitmapDrawable 直接取，其余建同尺寸 bitmap 后 setBounds 再 draw」—— 这段不要手写：
+ * 自适应图标的 intrinsic 尺寸可能是 -1，手写时漏掉 setBounds 会得到一张全透明图，且不报错。
+ *
+ * 缓存用框架的 [LruCache]（自身线程安全，故这里不加锁）：图标与「查过但没有」各一个。
+ * 负缓存必须留 —— 系统包、已卸载、不可见的包名会一直出现在记录里，不记住就会每次重组都去 binder 问一遍。
  */
 internal object AppIcons {
 
     /** 图标画到这个边长（像素）。通知风格的列表里 28dp 够看清，再大就吃掉名称的宽度。 */
     private const val ICON_PX = 96
 
-    private val labels = HashMap<String, String>()
-    private val icons = HashMap<String, Bitmap>()
-    private val unresolved = HashSet<String>()
+    private val labels = LruCache<String, String>(64)
+    private val icons = LruCache<String, Bitmap>(64)
+    private val unresolved = LruCache<String, Boolean>(256)
 
-    @Synchronized
     fun label(context: Context, pkg: String): String {
-        labels[pkg]?.let { return it }
+        labels.get(pkg)?.let { return it }
         val name = runCatching {
             val pm = context.packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         }.getOrNull()?.takeIf { it.isNotBlank() }
         // 回落包名而不是空串：排行榜上出现空行比出现包名更难理解
         val value = name ?: pkg
-        labels[pkg] = value
+        labels.put(pkg, value)
         return value
     }
 
-    @Synchronized
     fun icon(context: Context, pkg: String): Bitmap? {
-        icons[pkg]?.let { return it }
-        if (unresolved.contains(pkg)) return null
+        icons.get(pkg)?.let { return it }
+        if (unresolved.get(pkg) != null) return null
         val bitmap = runCatching {
-            val pm = context.packageManager
-            pm.getApplicationIcon(pkg).toSquareBitmap(ICON_PX)
+            context.packageManager.getApplicationIcon(pkg).toBitmapOrNull(ICON_PX, ICON_PX)
         }.getOrNull()
-        if (bitmap == null) unresolved.add(pkg) else icons[pkg] = bitmap
-        return bitmap
-    }
-
-    /**
-     * 自己画而不走 `Drawable.toBitmap()`（那在 androidx.core 里，本项目没引）。
-     *
-     * 必须显式 `setBounds`：图标 drawable 的 intrinsic 尺寸可能为 -1（自适应图标常见），
-     * 不设边界就画不出东西，得到一张全透明的图。
-     */
-    private fun Drawable.toSquareBitmap(sizePx: Int): Bitmap {
-        val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
-        setBounds(0, 0, sizePx, sizePx)
-        draw(Canvas(bitmap))
+        if (bitmap == null) unresolved.put(pkg, true) else icons.put(pkg, bitmap)
         return bitmap
     }
 }
