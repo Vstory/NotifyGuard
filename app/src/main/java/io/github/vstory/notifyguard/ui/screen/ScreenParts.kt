@@ -74,6 +74,12 @@ import io.github.vstory.notifyguard.ui.ReasonExplanation
 import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import java.text.NumberFormat
+import java.util.Locale
 
 
 /**
@@ -231,14 +237,64 @@ internal fun topBarScrollToTop(state: ScrollState): Modifier {
     return Modifier.clickable(onClickLabel = label) { scope.launch { state.animateScrollTo(0) } }
 }
 
+internal data class RichPart(val text: String, val bold: Boolean)
+
+/**
+ * 把 `**重点**` 标记切成若干段。
+ *
+ * 说明文字里真正要人读的是「模块端累计」「过零点归零」这类口径词；整段同一个灰字字重时，关键词
+ * 与铺垫一样轻，一眼扫过去分不出轻重。为一条说明引整套 Markdown 太重，只认 `**`：落单的 `**`
+ * 原样输出 —— 宁可让人看到两个星号，也不能把该读的字吞掉。
+ */
+internal fun richParts(text: String): List<RichPart> {
+    val out = ArrayList<RichPart>()
+    var i = 0
+    while (i < text.length) {
+        val open = text.indexOf("**", i)
+        val close = if (open < 0) -1 else text.indexOf("**", open + 2)
+        if (close < 0) {
+            out.add(RichPart(text.substring(i), false))
+            break
+        }
+        if (open > i) out.add(RichPart(text.substring(i, open), false))
+        // `****` 不是标记，原样吐回去
+        if (close == open + 2) out.add(RichPart("****", false)) else out.add(RichPart(text.substring(open + 2, close), true))
+        i = close + 2
+    }
+    return out
+}
+
+/**
+ * 说明文字。`**…**` 之间加粗并提到正文色 [MaterialTheme.colorScheme.onSurface]：灰字里的重点只
+ * 加粗还是一片灰，提色才拉得开层次。
+ */
 @Composable
 internal fun Note(text: String) {
+    val base = MaterialTheme.colorScheme.onSurfaceVariant
+    val strong = MaterialTheme.colorScheme.onSurface
+    val parts = remember(text, strong) { richParts(text) }
     Text(
-        text = text,
+        text = buildAnnotatedString {
+            for (p in parts) {
+                if (p.bold) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = strong)) { append(p.text) }
+                } else {
+                    append(p.text)
+                }
+            }
+        },
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        color = base,
     )
 }
+
+/**
+ * 数值加千分位。
+ *
+ * `81496` 得逐位读才知道量级，`81,496` 一眼就是八万；分组符交由系统区域决定，不替用户拍板。
+ */
+internal fun countText(value: Long, locale: Locale = Locale.getDefault()): String =
+    NumberFormat.getIntegerInstance(locale).format(value)
 
 /**
  * 需要注意的状态行（某项在当前配置下不生效之类）。

@@ -505,7 +505,7 @@ jobs:
 
             # ③m App 侧首页统计入口（M4g）。首页整块没了 ⇒ 用户看不到拦了多少、哪些应用最烦；
             #     「本应被拦」那一行尤其不能少：观察模式下真拦截恒为 0，少了它首页只剩一个 0。
-            for A in home_stats_group home_stat_blocked home_stat_today home_top_group; do
+            for A in home_stats_group home_stat_blocked home_stat_today home_stat_total_note home_top_group; do
               res_entry "$A" || { echo "::error::$NAME 缺 App 侧首页统计资源「$A」—— 首页的统计与排行在 App 侧没了（或被 R8 裁掉）"; exit 1; }
             done
             echo "  ✅ App 侧首页统计入口在（含中文值）"
