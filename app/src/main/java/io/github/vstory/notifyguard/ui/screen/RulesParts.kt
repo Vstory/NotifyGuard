@@ -1,14 +1,10 @@
 package io.github.vstory.notifyguard.ui.screen
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
@@ -19,22 +15,36 @@ import io.github.vstory.notifyguard.ui.appLabel
 /**
  * 规则屏专用零件。
  *
- * 用官方 [ListItem]（M3 规范：行高由最高元素决定，56 / 72 / 88dp），不要自己拼 Row —— 原来把
- * 「包名 + 记录里 N 次」塞进同一行副文本，宽度不够就被省略号吃掉（真机上包名与次数一起断掉）。
- * 现在按槽位各归各位：**包名是 supporting**（标识，独占一行）、**次数是 trailing 的元信息**
- * （Material 列表控件把次要信息与动作都放右侧），开关也在 trailing。
+ * 用官方 [ListItem] 的槽位分层（M3：overline 在 headline 上方、supporting 在下方，行高由最高元素
+ * 决定 56 / 72 / 88dp）。**三个槽位的宽度是各自的、不互相抢** —— 早先把「记录里出现过 N 次」
+ * 放进 trailing 与开关并排，那一串就占掉约 200dp，headline 只剩几十 dp，真机上应用名被截成
+ * `A...`、`Ke...`，包名同样断掉。次数是「关于这一行的元信息」，规范给它的位置是 overline。
  */
 
-/** 整行可点、`Switch` 不吃事件（与 [SwitchRow] 同一套无障碍口径：读屏把整行当一个带名字的开关）。 */
+/**
+ * 整行可点、`Switch` 不吃事件（与 [SwitchRow] 同一套无障碍口径：读屏把整行当一个带名字的开关）。
+ *
+ * [seenText] 传的是**始终非空**的 composable，内部再判空：按空值决定传不传 lambda 会让每处都要
+ * 处理「空 lambda」，而空 composable 测出的高度是 0，不占位。
+ */
 @Composable
 internal fun AppSwitchRow(
     pkg: String,
     checked: Boolean,
     enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    trailingNote: String? = null,
+    seenText: String? = null,
 ) {
     ListItem(
+        overlineContent = {
+            seenText?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
         headlineContent = {
             Text(
                 text = appLabel(pkg),
@@ -52,22 +62,8 @@ internal fun AppSwitchRow(
                 overflow = TextOverflow.Ellipsis,
             )
         },
-        leadingContent = { AppIcon(pkg) },
-        trailingContent = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                trailingNote?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = checked, onCheckedChange = null, enabled = enabled)
-            }
-        },
+        leadingContent = { AppIcon(pkg, size = 40.dp) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled) },
         modifier = Modifier.toggleable(
             value = checked,
             enabled = enabled,

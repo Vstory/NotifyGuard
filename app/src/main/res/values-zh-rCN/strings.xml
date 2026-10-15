@@ -25,7 +25,6 @@
     <string name="home_stat_total_note">**全部时间** · 模块端累计，清空记录也不归零</string>
     <string name="home_stat_no_value">—</string>
     <string name="home_stat_today_unknown">**模块端未上报** · 模块端版本较旧</string>
-    <string name="home_stat_pass">放行</string>
     <string name="home_stat_scope">%1$s 组 · %2$s 次</string>
     <string name="home_top_scope">排行按**当前记录窗口**的次数排。</string>
     <string name="home_top_group">命中排行（按应用）</string>
