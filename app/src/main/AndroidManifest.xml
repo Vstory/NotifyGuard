@@ -25,4 +25,14 @@
             android:authorities="${applicationId}.XposedService"
             android:exported="true" />
     </application>
+
+    <!-- 首页排行要显示应用图标与名称，而 Android 11 起默认看不见别的应用（取到的是 NameNotFoundException）。
+         这不是权限 —— 本文件仍没有一条 uses-permission —— 但语义上等于声明「要枚举已安装应用」，隐私说明里另记一笔。
+         只声明带启动图标的那些；系统包之类取不到就回落成包名。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 </manifest>

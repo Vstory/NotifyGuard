@@ -189,7 +189,8 @@ python3 -m venv .venv && .venv/bin/pip install numpy scipy scikit-learn
 
 ## 隐私
 
-- APK **不申请任何权限**，不含联网代码（记录走本地文件 + 广播，配置走框架的 remote prefs）
+- APK **不申请任何权限**（`AndroidManifest.xml` 里没有一条 `uses-permission`），不含联网代码（记录走本地文件 + 广播，配置走框架的 remote prefs）
+- 首页排行要显示应用图标与名称，为此 manifest 里有一条 `<queries>`（`MAIN` / `LAUNCHER`）声明 —— **它不进权限体系**，但语义上等于告诉系统「要看已安装应用」，所以写在这里：读到的只有包名、应用名与图标，且只用于显示
 - 读不到正文的通知，其**自定义布局字节**（`RemoteViews` 的 Parcel，上限 8 KB）也会随记录落在同一个本地目录，用途只有一个：让你在记录页看见它长什么样
 - 通知内容与标注**只存在本机** `/data/misc/notifyguard/`，不上传任何服务器
 - 卸载本模块 App 不清除记录与标注（它们在模块端）
