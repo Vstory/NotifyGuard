@@ -31,6 +31,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -219,19 +222,9 @@ private fun FitCard(
         // 与按钮挤同一行时会在时间戳中间折行，看起来像串坏了
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             // 重算 → 与模块端手上那份比对：内容一样就不发（再发一次写的是同样的字节）
-            Text(
-                text = stringResource(R.string.learning_fit_resend),
-                style = MaterialTheme.typography.labelLarge,
-                color = if (state.fitBusy) {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                } else {
-                    MaterialTheme.colorScheme.primary
-                },
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.small)
-                    .clickable(enabled = !state.fitBusy, onClick = onResend)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-            )
+            TextButton(onClick = onResend, enabled = !state.fitBusy) {
+                Text(stringResource(R.string.learning_fit_resend))
+            }
         }
         Note(stringResource(R.string.learning_fit_resend_hint))
         Note(stringResource(R.string.learning_labels_line, state.labelTotal))
