@@ -186,7 +186,8 @@ fun RecordsScreen(viewModel: RecordsViewModel = viewModel()) {
             if (state.rows.isEmpty()) {
                 item { EmptyHint(state.filter, searching) }
             } else {
-                items(state.rows, key = { it.key }) { row ->
+                // 用 listKey 而不是 key：后者是内容身份，不含包名与判定，会撞（撞上即崩）
+                items(state.rows, key = { it.listKey }) { row ->
                     RecordCard(
                         row = row,
                         busy = state.busy,
