@@ -18,10 +18,10 @@
     <string name="home_refresh">刷新统计</string>
     <string name="home_stats_group">拦截统计</string>
     <string name="home_stat_blocked">已拦截（累计）：%1$d</string>
-    <string name="home_stat_would">建议拦截（观察模式，累计）：%1$d</string>
+    <string name="home_stat_today">今日拦截：%1$d</string>
     <string name="home_stat_pass">放行（累计）：%1$d</string>
     <string name="home_stat_scope">当前窗口：组数 %1$d · 事件 %2$d</string>
-    <string name="home_stats_note_total">上面三个数是模块端的累计账本（按条计）：清空记录、重启系统框架都不会归零。下面的组数与事件只统计当前记录窗口 —— 模块端只保留最近 %1$d 组。</string>
+    <string name="home_stats_note_total">「拦截」与「放行」是模块端累计（按条计）：清空记录或重启系统框架都不会归零。「今日拦截」取自当前记录窗口（模块端不记日期），清空记录会把它清零。下面的组数与事件数只覆盖当前记录窗口 —— 模块端只保留最近 %1$d 组。</string>
     <string name="home_stats_note_window">模块端还没回传累计账本（未连接，或装完还没重启系统框架）：下面三个数是当前记录窗口的，清空记录即归零。</string>
     <string name="home_top_scope">排行按当前记录窗口的次数排。</string>
     <string name="home_stats_tap_hint">点任一行可跳到记录屏、只看该判定档。</string>

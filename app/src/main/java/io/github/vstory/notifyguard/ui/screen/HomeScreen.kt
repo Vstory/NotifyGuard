@@ -99,13 +99,13 @@ fun HomeScreen(
                     Note(stringResource(R.string.home_stats_note_total, LogStore.MAX_RECORDS))
                 }
                 val blocked = totals?.blocked ?: stats.blocked.toLong()
-                val would = totals?.would ?: stats.would.toLong()
                 val pass = totals?.pass ?: stats.pass.toLong()
                 StatLine(stringResource(R.string.home_stat_blocked, blocked)) {
                     onOpenRecords(RecordsViewModel.Filter.Block)
                 }
-                StatLine(stringResource(R.string.home_stat_would, would)) {
-                    onOpenRecords(RecordsViewModel.Filter.Would)
+                // 今日拦截没有对应的时间筛选档，点进去看的是全部拦截（组明细里带时间）
+                StatLine(stringResource(R.string.home_stat_today, state.todayBlocked)) {
+                    onOpenRecords(RecordsViewModel.Filter.Block)
                 }
                 StatLine(stringResource(R.string.home_stat_pass, pass)) {
                     onOpenRecords(RecordsViewModel.Filter.Pass)
