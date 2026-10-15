@@ -254,11 +254,13 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
-                text = stringResource(
-                    R.string.records_summary,
-                    state.groups,
-                    state.rawCount,
-                    LogStore.MAX_RECORDS,
+                text = richText(
+                    stringResource(
+                        R.string.records_summary,
+                        state.groups,
+                        state.rawCount,
+                        LogStore.MAX_RECORDS,
+                    )
                 ),
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -277,8 +279,10 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
                 )
             }
             Text(
-                text = state.labelError?.text()
-                    ?: stringResource(R.string.records_label_summary, state.labelCount),
+                text = richText(
+                    state.labelError?.text()
+                        ?: stringResource(R.string.records_label_summary, state.labelCount)
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = if (state.labelError != null) {
                     MaterialTheme.colorScheme.error
@@ -287,12 +291,12 @@ private fun StatusCard(state: RecordsViewModel.UiState) {
                 },
             )
             Text(
-                text = fitLine(state.fit),
+                text = richText(fitLine(state.fit)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = stringResource(R.string.records_label_hint),
+                text = richText(stringResource(R.string.records_label_hint)),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

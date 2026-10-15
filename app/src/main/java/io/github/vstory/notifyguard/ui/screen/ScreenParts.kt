@@ -74,6 +74,7 @@ import io.github.vstory.notifyguard.ui.ReasonExplanation
 import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
 import kotlinx.coroutines.launch
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -153,7 +154,7 @@ internal fun SwitchRow(
             Text(label, style = MaterialTheme.typography.bodyLarge)
             note?.let {
                 Text(
-                    text = it,
+                    text = richText(it),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -265,26 +266,35 @@ internal fun richParts(text: String): List<RichPart> {
 }
 
 /**
- * 说明文字。`**…**` 之间加粗并提到正文色 [MaterialTheme.colorScheme.onSurface]：灰字里的重点只
- * 加粗还是一片灰，提色才拉得开层次。
+ * 把 `**重点**` 渲染成带样式的文本：粗体段加粗并提到正文色 [MaterialTheme.colorScheme.onSurface]。
+ *
+ * 灰字里的重点只加粗还是一片灰，提色才拉得开层次。凡是读 `**` 的说明文字都走这一个出口 ——
+ * 否则会出现「这屏认标记、那屏把星号原样吐给用户」。
+ *
+ * 注意：`SnackbarHostState.showSnackbar(String)` 收的是纯文本，一次性提示的文案不能带标记。
  */
 @Composable
-internal fun Note(text: String) {
-    val base = MaterialTheme.colorScheme.onSurfaceVariant
+internal fun richText(text: String): AnnotatedString {
     val strong = MaterialTheme.colorScheme.onSurface
     val parts = remember(text, strong) { richParts(text) }
-    Text(
-        text = buildAnnotatedString {
-            for (p in parts) {
-                if (p.bold) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = strong)) { append(p.text) }
-                } else {
-                    append(p.text)
-                }
+    return buildAnnotatedString {
+        for (p in parts) {
+            if (p.bold) {
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = strong)) { append(p.text) }
+            } else {
+                append(p.text)
             }
-        },
+        }
+    }
+}
+
+/** 说明文字。`**…**` 之间加粗提色（见 [richText]）；`\n` 分行，用于把几件事分开说。 */
+@Composable
+internal fun Note(text: String) {
+    Text(
+        text = richText(text),
         style = MaterialTheme.typography.bodySmall,
-        color = base,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
 
@@ -305,7 +315,7 @@ internal fun countText(value: Long, locale: Locale = Locale.getDefault()): Strin
 @Composable
 internal fun AlertNote(text: String) {
     Text(
-        text = text,
+        text = richText(text),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,
     )
@@ -367,7 +377,10 @@ internal fun ReasonDialog(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(ex.reason.why.text(), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = richText(ex.reason.why.text()),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 RawLine(R.string.reason_raw_reason, ex.reason.raw)
                 ex.slot?.let { RawLine(R.string.reason_raw_slot, it) }
                 if (onAskAttribution != null) {

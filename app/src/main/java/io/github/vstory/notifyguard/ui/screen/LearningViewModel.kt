@@ -192,7 +192,7 @@ class LearningViewModel : ViewModel() {
         val blocked = records.firstOrNull { LabelRecord.keyOf(it) == key }
             ?.let { LabelGate.blockedLabel(it, ConfigWriter.load()?.protect) }
         if (blocked != null) {
-            notify(UiText.Res(R.string.records_label_blocked, listOf(blocked)))
+            notify(UiText.Res(R.string.notice_label_blocked, listOf(blocked)))
             return
         }
         val label = labelFor(

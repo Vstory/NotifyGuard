@@ -197,7 +197,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     onCheckedChange = viewModel::setSpam,
                 )
                 Text(
-                    text = viewModel.thresholdText().text(),
+                    text = richText(viewModel.thresholdText().text()),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
