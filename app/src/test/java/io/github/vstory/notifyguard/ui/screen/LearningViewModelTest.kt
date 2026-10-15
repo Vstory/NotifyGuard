@@ -170,7 +170,7 @@ class LearningViewModelTest {
         val b1 = rec(ts = 3_000L, pkg = "com.b")
         val labels = listOf(label(a1, at = 10L), label(a2, at = 20L), label(b1, at = 30L))
 
-        val groups = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.All, "") { it }
+        val groups = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.All, "", emptyMap())
 
         assertEquals(listOf("com.a", "com.b"), groups.map { it.pkg })
         assertEquals(listOf(2, 1), groups.map { it.rows.size })
@@ -187,12 +187,15 @@ class LearningViewModelTest {
         val hamRec = rec(ts = 2_000L, pkg = "com.b")
         val labels = listOf(label(spamRec, spam = true), label(hamRec, spam = false))
 
-        val spamOnly = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.Spam, "") { it }
+        val spamOnly = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.Spam, "", emptyMap())
         assertEquals(listOf("com.a"), spamOnly.map { it.pkg })
         assertEquals(listOf(1), spamOnly.map { it.rows.size })
 
         // 搜索命中 App 名：组名与搜索同源，按名字搜不到会很怪（两条分属不同的 App，所以是两组）
-        val byName = LearningViewModel.libGroupsOf(labels, LearningViewModel.LibFilter.All, "商店") { "应用商店" }
+        val byName = LearningViewModel.libGroupsOf(
+            labels, LearningViewModel.LibFilter.All, "商店",
+            mapOf("com.a" to "应用商店", "com.b" to "应用商店"),
+        )
         assertEquals(listOf("com.a", "com.b"), byName.map { it.pkg })
     }
 
@@ -201,6 +204,6 @@ class LearningViewModelTest {
     fun blankSearchMatchesEverything() {
         val r = rec(ts = 1_000L)
 
-        assertEquals(1, LearningViewModel.libGroupsOf(listOf(label(r)), LearningViewModel.LibFilter.All, "  ") { it }.size)
+        assertEquals(1, LearningViewModel.libGroupsOf(listOf(label(r)), LearningViewModel.LibFilter.All, "  ", emptyMap()).size)
     }
 }
