@@ -28,6 +28,8 @@ data class LogRecord(
      * 或 `id=0` 无 tag 这种被 App 当默认值用的取值（见 [notifKey]）。
      */
     val nkey: String? = null,
+    /** 自定义布局的 base64 `Parcel`；见 [NotifySnapshot.contentView]。展示用，不参与判定与聚合。 */
+    val contentView: String? = null,
 ) {
 
     /**
@@ -78,6 +80,7 @@ data class LogRecord(
             // 与判定同一个 judgeText()：标注文本必须与推理时的输入同分布
             aiText = s?.judgeText()?.take(AI_TEXT_MAX)?.takeIf { it.isNotEmpty() },
             nkey = notifKey(s),
+            contentView = s?.contentView,
         )
 
         private fun clip(v: String?): String? = v?.take(TEXT_MAX)

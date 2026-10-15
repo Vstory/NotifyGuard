@@ -93,6 +93,11 @@
     <string name="records_search_hit">Search hit %1$d groups (over the whole record window), showing the latest %2$d</string>
     <string name="records_search_empty">No record matches this search (it searches pkg, title and text only)</string>
     <string name="records_label_blocked">Protected type (%1$s) with that protection still on: the chain passes it at the protection step, so a label would **not feed training**.\nTo label it, turn that protection off in Settings → Protected kinds.</string>
+    <string name="records_no_text_view">(No readable text — the content is drawn in the app\u2019s custom notification layout)</string>
+    <string name="records_view_show">Show the original notification style</string>
+    <string name="records_view_hide">Hide the original style</string>
+    <string name="records_view_failed">This notification\u2019s layout cannot be rendered here (the app used its own custom views).</string>
+
     <string name="notice_label_blocked">Protected type (%1$s): a label would not feed training — turn that protection off in Settings → Protected kinds.</string>
     <string name="records_marked_spam">Marked spam</string>
     <string name="records_marked_ham">Marked ham</string>

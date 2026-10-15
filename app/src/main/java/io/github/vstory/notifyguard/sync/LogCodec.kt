@@ -27,6 +27,7 @@ object LogCodec {
         r.score?.let { put("score", it) }
         r.aiText?.let { put("aiText", it) }
         r.nkey?.let { put("nkey", it) }
+        r.contentView?.let { put("contentView", it) }
     }
 
     fun fromJson(o: JSONObject): LogRecord? {
@@ -50,6 +51,7 @@ object LogCodec {
             aiText = o.optString("aiText").takeIf { it.isNotEmpty() },
             // 老文件（M2 及更早）没有这个键：缺省即「不带身份」，聚合退回文本键
             nkey = o.optString("nkey").takeIf { it.isNotEmpty() },
+            contentView = o.optString("contentView").takeIf { it.isNotEmpty() },
         )
     }
 

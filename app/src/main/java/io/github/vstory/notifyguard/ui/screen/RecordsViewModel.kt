@@ -131,6 +131,8 @@ class RecordsViewModel : ViewModel() {
          * 保护出口的通知不进规则与 AI，标了只会给微调喂噪音。
          */
         val labelBlocked: UiText? = null,
+        /** 非空 = 这条通知带自定义布局，可给「显示原始通知样式」入口（见 [RemoteViewBlock]）。 */
+        val contentView: String? = null,
     )
 
     /**
@@ -380,6 +382,7 @@ class RecordsViewModel : ViewModel() {
         meta = ReasonExplanation.meta(r),
         marked = marked,
         labelBlocked = protectedLabel(r, protect),
+        contentView = r.contentView,
     )
 
     /** 命中保护类型且该保护仍开着 → 不可标注（返回类型的人话标签）；null = 可以标。 */
