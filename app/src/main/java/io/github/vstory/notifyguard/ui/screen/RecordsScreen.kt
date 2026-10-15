@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
@@ -334,9 +333,12 @@ private fun RecordCard(
 ) {
     OutlinedCard(Modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            // 卡片内边距与内部间距都走官方值：内容边距 16dp、间距用 8dp 网格
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // 元数据行只留时间 / 判定 / 计数三个 —— 标注状态原先也挤在这一行（四个元素加一个
+            // Spacer），窄屏上先被压掉的正是这条；它挪到下面的应用行右侧，那里本来就空着
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -359,7 +361,23 @@ private fun RecordCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.weight(1f))
+            }
+            // 图标 + 应用名而不是包名：这一行是给用户看的，com.eg.android.AlipayGphone 认不出来。
+            // 图标取 24dp（官方列表项 leading 图标尺寸），名字用 weight 占满剩余宽度、给标注状态让位
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIcon(row.pkg, size = 24.dp)
+                Text(
+                    text = appLabel(row.pkg),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
                 row.marked?.let { spam ->
                     Text(
                         text = stringResource(
@@ -369,18 +387,6 @@ private fun RecordCard(
                         color = if (spam) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     )
                 }
-            }
-            // 图标 + 应用名而不是包名：这一行是给用户看的，com.eg.android.AlipayGphone 认不出来
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                AppIcon(row.pkg, size = 18.dp)
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = appLabel(row.pkg),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
             }
             if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
                 Text(
@@ -393,7 +399,7 @@ private fun RecordCard(
                 )
             } else {
                 row.title?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(it, style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
                 row.text?.takeIf { it.isNotBlank() }?.let {
                     Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
