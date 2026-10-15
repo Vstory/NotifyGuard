@@ -252,7 +252,7 @@ class RecordsViewModel : ViewModel() {
         // 未连接时读不到开关 ⇒ 不拦（「未知不等于开着」同口径）
         val blocked = protectedLabel(r, ConfigWriter.load()?.protect)
         if (blocked != null) {
-            notify(UiText.Res(R.string.records_label_blocked, listOf(blocked)))
+            notify(UiText.Res(R.string.notice_label_blocked, listOf(blocked)))
             return
         }
         val what = if (spam) UiText.Res(R.string.label_action_mark_spam) else UiText.Res(R.string.label_action_mark_ham)
