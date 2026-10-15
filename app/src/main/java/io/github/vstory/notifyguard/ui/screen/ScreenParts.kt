@@ -30,6 +30,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -142,26 +143,27 @@ internal fun SwitchRow(
     onCheckedChange: (Boolean) -> Unit,
     note: String? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
+    ListItem(
+        headlineContent = { Text(label, style = MaterialTheme.typography.bodyLarge) },
+        // 不按 note 是否为空决定传不传 composable：那样每处都要处理「空 lambda」，而这里
+        // 判空只多占一点高度（官方列表项高度由最高元素决定，空 supporting 不留位不算数）
+        supportingContent = {
             note?.let {
                 Text(
                     text = richText(it),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
-    }
+        },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled) },
+        modifier = Modifier.toggleable(
+            value = checked,
+            enabled = enabled,
+            role = Role.Switch,
+            onValueChange = onCheckedChange,
+        ),
+    )
 }
 
 /**
