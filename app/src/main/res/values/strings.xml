@@ -249,6 +249,8 @@
     <string name="rules_no_candidates">No candidates yet: the module side has not recorded any notification, or neither this page nor the records page has pulled yet.\nYou can type a package name below.</string>
     <string name="rules_candidate_seen">seen in records %1$d times</string>
     <string name="rules_candidate_unseen">not seen in records yet</string>
+    <string name="rules_search_hint">Filter by name or package</string>
+    <string name="rules_search_empty">No candidate matches the filter.</string>
     <string name="rules_candidates_capped">Only the first %1$d are listed (whitelisted ones first).\nIf the app you want to allow is not among them, type its package name below.</string>
     <string name="rules_pkg_hint">com.example.app</string>
     <string name="rules_add_whitelist">Add to whitelist</string>
