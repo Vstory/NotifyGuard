@@ -100,7 +100,18 @@ class RecordsViewModel : ViewModel() {
      * 界面只管画，也免得「同一份拼接逻辑在界面里再写一遍」。
      */
     data class RecordRow(
+        /**
+         * 内容身份：标注 / 撤销 / 解释都作用在它上面（同一段文本换个 App 推来算同一条样本）。
+         */
         val key: String,
+        /**
+         * `LazyColumn` 的键，**只能用这个**。
+         *
+         * [key] 不含包名、也不含判定，而列表的聚合键含这两者 ⇒ 同一段文案被两个 App 推来、或同一 App
+         * 下同内容两种判定，都会出现两行同 [key] 的记录。拿它当列表键，LazyColumn 会直接抛
+         * 「Key was already used」把整个进程带崩（Android 16 上实测）。
+         */
+        val listKey: String,
         val time: String,
         val verdict: Verdict,
         val count: Int,
@@ -328,10 +339,11 @@ class RecordsViewModel : ViewModel() {
     private fun applyRows() {
         val hit = filteredOf(allCache, state.filter, state.query)
         records = hit.take(LIST_LIMIT)
+        val keys = listKeysOf(records)
         state = state.copy(
             matched = hit.size,
-            rows = records.map {
-                row(it, marksCache[LabelRecord.keyOf(it)], protectCache)
+            rows = records.mapIndexed { i, r ->
+                row(r, marksCache[LabelRecord.keyOf(r)], protectCache, keys[i])
             },
         )
     }
@@ -349,8 +361,14 @@ class RecordsViewModel : ViewModel() {
         applyRows()
     }
 
-    private fun row(r: LogRecord, marked: Boolean?, protect: ProtectSwitches?): RecordRow = RecordRow(
+    private fun row(
+        r: LogRecord,
+        marked: Boolean?,
+        protect: ProtectSwitches?,
+        listKey: String,
+    ): RecordRow = RecordRow(
         key = LabelRecord.keyOf(r),
+        listKey = listKey,
         // 一条记录是一组通知：时间取最近一次，首见时间对用户没有意义
         time = TIME.format(Date(r.lastTs)),
         verdict = Verdict.of(r),
@@ -373,6 +391,20 @@ class RecordsViewModel : ViewModel() {
     }
 
     companion object {
+        /**
+         * 给每一行算一个在列表内唯一的键：主体是「包名 / 内容身份 / 判定」，仍撞则补序号。
+         *
+         * 纯函数，便于单测 —— 这条不变量（不唯一就崩进程）值得有个断言盯着，不能只靠「应该不会撞」。
+         */
+        internal fun listKeysOf(records: List<LogRecord>): List<String> {
+            val seen = HashMap<String, Int>()
+            return records.map { r ->
+                val base = r.pkg + "/" + LabelRecord.keyOf(r) + "/" + Verdict.of(r)
+                val n = (seen[base] ?: 0)
+                seen[base] = n + 1
+                if (n == 0) base else base + "#" + n
+            }
+        }
 
         /**
          * 每档在屏上列出的上限。筛选**先作用于整个窗口**再截到这里，所以命中数可以大于它。
