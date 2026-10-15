@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
@@ -59,6 +60,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ui.AppIcon
+import io.github.vstory.notifyguard.ui.appLabel
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.ui.text
 
@@ -367,11 +370,18 @@ private fun RecordCard(
                     )
                 }
             }
-            Text(
-                text = row.pkg,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // 图标 + 应用名而不是包名：这一行是给用户看的，com.eg.android.AlipayGphone 认不出来
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AppIcon(row.pkg, size = 18.dp)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = appLabel(row.pkg),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
                 Text(
                     // 带布局时说清「读不到」不等于「没内容」，否则用户会以为模块坏了
