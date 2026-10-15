@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard.ui.screen
 
 import io.github.vstory.notifyguard.judge.LogRecord
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
@@ -166,5 +167,30 @@ class RecordsViewModelTest {
         assertEquals(Verdict.Block, Verdict.of(record(1, block = true)))
         assertEquals(Verdict.Would, Verdict.of(record(1, would = true)))
         assertEquals(Verdict.Pass, Verdict.of(record(1)))
+    }
+
+    /**
+     * 列表键必须唯一 —— 内容身份不含包名与判定，而列表行的聚合键含这两者，撞键会让 `LazyColumn`
+     * 直接抛「Key was already used」崩掉进程（Android 16 上实测过）。
+     */
+    @Test
+    fun listKeysAreUniqueAcrossPackagesAndVerdicts() {
+        fun rec(pkg: String, block: Boolean) = io.github.vstory.notifyguard.judge.LogRecord(
+            ts = 1_000L,
+            pkg = pkg,
+            title = null,
+            text = "同一段文案",
+            reason = if (block) "ai:0.91" else "below_threshold:0.20",
+            would = true,
+            block = block,
+            slot = null,
+            count = 1,
+        )
+        val keys = RecordsViewModel.listKeysOf(
+            listOf(rec("com.a", true), rec("com.b", true), rec("com.a", false), rec("com.a", true))
+        )
+
+        assertEquals(keys.size, keys.toSet().size)
+        assertNotEquals(keys[0], keys[1])
     }
 }
