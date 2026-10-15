@@ -31,6 +31,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.ui.text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.text.font.FontWeight
 
 /**
  * 首页（M4g）：**只读**概览 —— 拦截统计与命中排行。
@@ -92,26 +95,44 @@ fun HomeScreen(
             val stats = state.stats
             val totals = state.totals
             GroupCard(stringResource(R.string.home_stats_group)) {
-                // 同一个位置静默换数据源，等于让用户拿两次不同的答案去对比：读不到累计就明说这是窗口口径
-                if (totals == null) {
-                    Note(stringResource(R.string.home_stats_note_window))
-                } else {
-                    Note(stringResource(R.string.home_stats_note_total, LogStore.MAX_RECORDS))
-                }
-                val blocked = totals?.blocked ?: stats.blocked.toLong()
-                val pass = totals?.pass ?: stats.pass.toLong()
-                StatLine(stringResource(R.string.home_stat_blocked, blocked))
+                // 口径逐行跟着数走，不在顶上写一段总结：三个数不是同一套口径，一句话说完必然有人读错
+                // （同一个位置静默换数据源也一样 —— 读不到累计就把那一行标成窗口口径）
+                val totalNote = stringResource(R.string.home_stat_total_note)
+                val windowNote = stringResource(R.string.home_stat_window_note)
+                val blockedNote = if (totals == null) windowNote else totalNote
+                StatRow(
+                    label = stringResource(R.string.home_stat_blocked),
+                    value = countText(totals?.blocked ?: stats.blocked.toLong()),
+                    note = blockedNote,
+                )
                 // -1 = 旧版模块端没上报这个字段，不能拿它当「今天拦了 0 条」
                 val today = totals?.today ?: -1L
-                StatLine(
-                    if (today >= 0) {
-                        stringResource(R.string.home_stat_today, today)
+                StatRow(
+                    label = stringResource(R.string.home_stat_today),
+                    value = if (today >= 0) countText(today) else stringResource(R.string.home_stat_no_value),
+                    note = if (today >= 0) {
+                        stringResource(R.string.home_stat_today_note)
                     } else {
                         stringResource(R.string.home_stat_today_unknown)
-                    }
+                    },
                 )
-                StatLine(stringResource(R.string.home_stat_pass, pass))
-                Note(stringResource(R.string.home_stat_scope, stats.groups, stats.events))
+                StatRow(
+                    label = stringResource(R.string.home_stat_pass),
+                    value = countText(totals?.pass ?: stats.pass.toLong()),
+                    note = blockedNote,
+                )
+                HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 4.dp))
+                Text(
+                    text = stringResource(R.string.home_stat_window_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Note(
+                    stringResource(
+                        R.string.home_stat_scope,
+                        countText(stats.groups.toLong()),
+                        countText(stats.events.toLong()),
+                    )
+                )
             }
 
             GroupCard(stringResource(R.string.home_top_group)) {
@@ -138,19 +159,31 @@ fun HomeScreen(
 }
 
 /**
- * 统计里的一行，只读。
+ * 统计里的一行：左侧口径标签、右侧数值（大号加粗），下面一行小字说这一行的口径。
  *
- * 原先整行可点、点进去跳到记录屏对应的判定档，按用户要求取消了跳转；触控目标仍按无障碍口径撑到
- * 48dp（文本本身远低于此），行高与下面几张卡保持一致。
+ * 原先标签与数值同字号拼在一行，最重的是括号里的「（累计）」而不是那个数 —— 用户是来看数的。
+ * 只读（整行可点跳记录屏的行为按用户要求取消）。
  */
 @Composable
-private fun StatLine(text: String) {
-    Box(
+private fun StatRow(label: String, value: String, note: String) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 48.dp),
-        contentAlignment = Alignment.CenterStart,
+            .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(text = text, style = MaterialTheme.typography.bodyMedium)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+        Note(note)
     }
 }
