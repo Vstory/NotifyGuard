@@ -92,6 +92,11 @@
     <string name="records_search_hit">搜索命中 %1$d 组（按整个记录窗口算），下列最近 %2$d 组</string>
     <string name="records_search_empty">没有匹配这条搜索词的记录（只搜包名 / 标题 / 正文）</string>
     <string name="records_label_blocked">命中保护类型（%1$s）且该保护当前开着：判定链在保护这一步就放行了，**标注进不了训练**。\n要标它，先到设置 →「保护类型」里关掉它。</string>
+    <string name="records_no_text_view">（读不到正文 —— 内容画在应用的自定义通知布局里）</string>
+    <string name="records_view_show">显示原始通知样式</string>
+    <string name="records_view_hide">收起原始样式</string>
+    <string name="records_view_failed">这条通知的布局在这里渲染不出来（应用用了自定义控件）。</string>
+
     <string name="notice_label_blocked">这条命中保护类型（%1$s）：标注进不了训练，先到设置 →「保护类型」里关掉它</string>
     <string name="records_marked_spam">已标垃圾</string>
     <string name="records_marked_ham">已标正常</string>
