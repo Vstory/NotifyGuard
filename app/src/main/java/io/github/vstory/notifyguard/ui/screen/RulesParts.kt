@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
