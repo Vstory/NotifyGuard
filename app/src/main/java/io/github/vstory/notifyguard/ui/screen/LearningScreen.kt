@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ui.AppIcon
 import io.github.vstory.notifyguard.ui.text
 
 
@@ -403,31 +405,37 @@ private fun SampleGroup(
     onDelete: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onToggle)
-                .padding(horizontal = 4.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Icon(
-                if (expanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = group.name,
-                style = MaterialTheme.typography.titleSmall,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = stringResource(R.string.learning_lib_group_count, group.rows.size),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
+        // 官方 ListItem：leading 是应用图标（一眼认出是哪个 App），条数与折叠箭头都在 trailing ——
+        // 「次要动作与信息放右侧」是 Material 列表控件的规定位置
+        ListItem(
+            headlineContent = {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
+            leadingContent = { AppIcon(group.pkg) },
+            trailingContent = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.learning_lib_group_count, group.rows.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Icon(
+                        if (expanded) Icons.Filled.KeyboardArrowDown else Icons.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            modifier = Modifier.clickable(onClick = onToggle),
+        )
         if (expanded) {
             val visible = group.rows.take(shown)
             visible.forEach { row -> SampleLine(row, busy, onFlip, onDelete) }
