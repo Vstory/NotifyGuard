@@ -19,10 +19,10 @@
     <string name="home_refresh">Refresh statistics</string>
     <string name="home_stats_group">Block stats</string>
     <string name="home_stat_blocked">Blocked (total): %1$d</string>
-    <string name="home_stat_would">Would block (observe mode, total): %1$d</string>
+    <string name="home_stat_today">Blocked today: %1$d</string>
     <string name="home_stat_pass">Passed (total): %1$d</string>
     <string name="home_stat_scope">Current window: %1$d groups · %2$d events</string>
-    <string name="home_stats_note_total">The three numbers above are the module-side running totals (counted per notification): clearing records or restarting the system framework does not reset them. The group and event counts below cover only the current record window — the module keeps the latest %1$d groups.</string>
+    <string name="home_stats_note_total">Blocked and passed are the module-side running totals (counted per notification): clearing records or restarting the system framework does not reset them. Blocked today is counted from the current record window — the module keeps no date breakdown — so clearing records resets it. The group and event counts below cover only the current record window — the module keeps the latest %1$d groups.</string>
     <string name="home_stats_note_window">The module has not reported its running totals yet (not connected, or installed without restarting the system framework): the three numbers below are from the current record window and reset when records are cleared.</string>
     <string name="home_top_scope">Ranked by counts in the current record window.</string>
     <string name="home_stats_tap_hint">Tap a row to open Records filtered to just that verdict.</string>
