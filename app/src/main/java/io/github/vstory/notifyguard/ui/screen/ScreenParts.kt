@@ -1,7 +1,6 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -131,6 +130,22 @@ internal fun GroupCard(title: String, content: @Composable ColumnScope.() -> Uni
 }
 
 /**
+ * 分区标题：M3 的 Lists 用标题把列表分段，而不是把每一段装进一张卡片（Card 是 Containment 类的
+ * 独立内容块，只有状态卡那种自成一块的内容才归它）。
+ */
+@Composable
+internal fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp),
+    )
+}
+
+/**
  * 整行可点、`Switch` 自身不吃事件（`onCheckedChange = null`）：读屏会把这一行当一个带名字的开关念，
  * 而不是只念一个无标签的「开关」。
  */
@@ -229,14 +244,6 @@ internal fun topBarScrollToTop(state: LazyListState): Modifier {
     val scope = rememberCoroutineScope()
     val label = stringResource(R.string.scroll_to_top)
     return Modifier.clickable(onClickLabel = label) { scope.launch { state.animateScrollToItem(0) } }
-}
-
-/** [topBarScrollToTop] 的普通滚动容器版（规则屏是 Column + verticalScroll）。 */
-@Composable
-internal fun topBarScrollToTop(state: ScrollState): Modifier {
-    val scope = rememberCoroutineScope()
-    val label = stringResource(R.string.scroll_to_top)
-    return Modifier.clickable(onClickLabel = label) { scope.launch { state.animateScrollTo(0) } }
 }
 
 internal data class RichPart(val text: String, val bold: Boolean)

@@ -1,14 +1,15 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
@@ -42,7 +43,9 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
     val state = viewModel.state
     val ctx = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
-    val scrollState = rememberScrollState()
+    // 候选是「几千条、以后只会更多」的列表，用 LazyColumn 而不是滚动 Column：
+    // 后者把每一行都组合出来，等于把整份名单铺在内存里
+    val listState = rememberLazyListState()
 
     // 订阅只在屏活着时有效。切 tab 回来会重新订阅并立刻渲染一次，不需要额外的进屏刷新
     DisposableEffect(Unit) {
@@ -60,109 +63,137 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
         }
     }
 
+    // 文案先在这里求出来：LazyColumn 的 content 不是 @Composable，里面调不了 stringResource
+    // （同本函数里 LaunchedEffect 那条口径）
+    val keywordTitle = stringResource(R.string.rules_keyword_group)
+    val keywordNote = stringResource(R.string.rules_keyword_note)
+    val ruleEnabledLabel = stringResource(R.string.rules_rule_enabled)
+    val ruleEnabledNote = stringResource(
+        if (viewModel.keywordsSaved()) R.string.rules_rule_enabled_note else R.string.rules_rule_empty_note
+    )
+    val keywordHint = stringResource(R.string.rules_keyword_hint)
+    val keywordSubmitNote = stringResource(R.string.rules_keyword_submit_note)
+    val saveLabel = viewModel.saveLabel().text()
+    val whitelistTitle = stringResource(R.string.rules_whitelist_group)
+    val whitelistNote = stringResource(R.string.rules_whitelist_note)
+    val candidatesNote = stringResource(R.string.rules_whitelist_candidates_note)
+    val refreshLabel = stringResource(
+        if (state.refreshing) R.string.rules_refreshing else R.string.rules_refresh_candidates
+    )
+    val noCandidates = stringResource(R.string.rules_no_candidates)
+    val searchHint = stringResource(R.string.rules_search_hint)
+    val searchEmpty = stringResource(R.string.rules_search_empty)
+    val cappedNote = stringResource(R.string.rules_candidates_capped, RulesViewModel.CANDIDATE_MAX)
+    val pkgHint = stringResource(R.string.rules_pkg_hint)
+    val addLabel = stringResource(R.string.rules_add_whitelist)
+    val title = stringResource(R.string.rules_title)
+
+    val connected = state.connected
+    val all = state.candidates
+    val visible = state.visibleCandidates
+    val ruleEnabled = viewModel.ruleEnabled()
+    val canToggleRule = viewModel.canToggleRule()
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.rules_title)) },
-                modifier = topBarScrollToTop(scrollState),
+                title = { Text(title) },
+                modifier = topBarScrollToTop(listState),
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { inner ->
-        Column(
+        LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(inner)
-                .verticalScroll(scrollState)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(inner),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val connected = state.connected
-            StatusCard(state.serviceText, connected, state.cfg != null)
+            item { StatusCard(state.serviceText, connected, state.cfg != null) }
 
-            GroupCard(stringResource(R.string.rules_keyword_group)) {
-                Note(stringResource(R.string.rules_keyword_note))
+            item { SectionTitle(keywordTitle) }
+            item { Note(keywordNote) }
+            item {
                 SwitchRow(
-                    label = stringResource(R.string.rules_rule_enabled),
-                    note = stringResource(
-                        if (viewModel.keywordsSaved()) {
-                            R.string.rules_rule_enabled_note
-                        } else {
-                            R.string.rules_rule_empty_note
-                        }
-                    ),
-                    checked = viewModel.ruleEnabled(),
-                    enabled = viewModel.canToggleRule(),
+                    label = ruleEnabledLabel,
+                    note = ruleEnabledNote,
+                    checked = ruleEnabled,
+                    enabled = canToggleRule,
                     onCheckedChange = viewModel::setRuleEnabled,
                 )
+            }
+            item {
                 OutlinedTextField(
                     value = state.keywordDraft,
                     onValueChange = viewModel::dragKeywords,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(stringResource(R.string.rules_keyword_hint)) },
+                    placeholder = { Text(keywordHint) },
                     minLines = 4,
                     enabled = connected,
                 )
-                Note(stringResource(R.string.rules_keyword_submit_note))
+            }
+            item { Note(keywordSubmitNote) }
+            item {
                 Button(
                     onClick = viewModel::saveKeywords,
                     enabled = connected,
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
-                    Text(viewModel.saveLabel().text())
+                    Text(saveLabel)
                 }
             }
 
-            GroupCard(stringResource(R.string.rules_whitelist_group)) {
-                Note(stringResource(R.string.rules_whitelist_note))
-                Note(stringResource(R.string.rules_whitelist_candidates_note))
+            item { SectionTitle(whitelistTitle) }
+            item { Note(whitelistNote) }
+            item { Note(candidatesNote) }
+            item {
                 OutlinedButton(
                     onClick = viewModel::refreshCandidates,
                     enabled = connected && !state.refreshing,
                     modifier = Modifier.heightIn(min = 48.dp),
                 ) {
-                    Text(
-                        stringResource(
-                            if (state.refreshing) R.string.rules_refreshing else R.string.rules_refresh_candidates
-                        )
-                    )
+                    Text(refreshLabel)
                 }
-                val all = state.candidates
-                if (all.isEmpty()) {
-                    Note(stringResource(R.string.rules_no_candidates))
-                } else {
+            }
+            if (all.isEmpty()) {
+                item { Note(noCandidates) }
+            } else {
+                item {
                     OutlinedTextField(
                         value = state.query,
                         onValueChange = viewModel::dragQuery,
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text(stringResource(R.string.rules_search_hint)) },
+                        placeholder = { Text(searchHint) },
                         singleLine = true,
                         enabled = connected,
                     )
-                    val visible = state.visibleCandidates
-                    if (visible.isEmpty()) {
-                        Note(stringResource(R.string.rules_search_empty))
-                    }
-                    visible.forEach { c ->
-                        val seenText = if (c.groups > 0) {
+                }
+                if (visible.isEmpty()) {
+                    item { Note(searchEmpty) }
+                }
+                // 不加 key：候选的身份就是它自己那一行，用 index 就够了，而 key 写错会让列表崩
+                items(visible) { c ->
+                    // 包名由 AppSwitchRow 的 supporting 槽位显示（白名单是按包名精确匹配的配置，
+                    // 界面上写着「微信」而配置里是包名，多用户/分身时没有包名就没有据可查）
+                    AppSwitchRow(
+                        pkg = c.pkg,
+                        seenText = if (c.groups > 0) {
                             stringResource(R.string.rules_candidate_seen, c.groups)
                         } else {
                             stringResource(R.string.rules_candidate_unseen)
-                        }
-                        // 包名由 AppSwitchRow 的 supporting 槽位显示（白名单是按包名精确匹配的配置，
-                        // 界面上写着「微信」而配置里是包名，多用户/分身时没有包名就没有据可查）
-                        AppSwitchRow(
-                            pkg = c.pkg,
-                            seenText = seenText,
-                            checked = c.whitelisted,
-                            enabled = connected,
-                            onCheckedChange = { viewModel.setWhitelist(c.pkg, it) },
-                        )
-                    }
-                    if (visible.size < all.size) {
-                        Note(stringResource(R.string.rules_candidates_capped, RulesViewModel.CANDIDATE_MAX))
-                    }
+                        },
+                        checked = c.whitelisted,
+                        enabled = connected,
+                        onCheckedChange = { viewModel.setWhitelist(c.pkg, it) },
+                    )
                 }
+                if (visible.size < all.size) {
+                    item { Note(cappedNote) }
+                }
+            }
+            item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -172,7 +203,7 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         value = state.pkgDraft,
                         onValueChange = viewModel::dragPkg,
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text(stringResource(R.string.rules_pkg_hint)) },
+                        placeholder = { Text(pkgHint) },
                         singleLine = true,
                         enabled = connected,
                     )
@@ -181,7 +212,7 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         enabled = connected && state.pkgDraft.isNotBlank(),
                         modifier = Modifier.heightIn(min = 48.dp),
                     ) {
-                        Text(stringResource(R.string.rules_add_whitelist))
+                        Text(addLabel)
                     }
                 }
             }
