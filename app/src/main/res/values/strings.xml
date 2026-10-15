@@ -100,7 +100,7 @@
     <string name="reason_short_disabled">Master switch off</string>
     <string name="reason_short_self_pkg">From this app</string>
     <string name="reason_short_group_summary">Group summary</string>
-    <string name="reason_short_empty_text">No text to judge</string>
+    <string name="reason_short_empty_text">no text the module can read</string>
     <string name="reason_short_protect">Protected kind: %1$s</string>
     <string name="reason_short_rule">Rule hit: %1$s</string>
     <string name="reason_short_text_too_short">Too short for AI</string>
@@ -116,7 +116,7 @@
     <string name="reason_why_disabled">\"Enable verdicts\" was off in Settings, so the chain **short-circuited and passed everything**.\nThis notification **never went through rules or AI**, so it does **not** mean \"judged as fine\".\nTurn the master switch on to bring later notifications back into the chain.</string>
     <string name="reason_why_self_pkg">The notification comes from **NotifyGuard itself**.\nNotifications from this app are never judged — blocking your own alerts is self-harm with no upside.</string>
     <string name="reason_why_group_summary">This is the **summary row of a notification group**.\nA summary is a shell, not content; judging it would decide for the whole group.</string>
-    <string name="reason_why_empty_text">Both title and text are empty, so there is **no text to judge**: neither rules nor AI have anything to work with, and the chain passes.</string>
+    <string name="reason_why_empty_text">Title and text are both empty, so the module side **has no text to judge**.\nIf the content is visible in the shade, the app used a **custom notification layout** (icons plus quick-action buttons).\nThat text is drawn inside the layout — the notification itself carries no text field — so the module side cannot read it, and such notifications **pass**.</string>
     <string name="reason_why_protect">%1$s counts as a protected kind.\nMissing a call, an alarm or a navigation prompt **costs far more than missing one ad**, so a match **passes straight through** — it never reaches rules or AI.\nWhich kinds are protected is set in Settings.</string>
     <string name="reason_why_rule">User rule %1$s matched.\nRules sit **after protected kinds and before AI**: a word you put in a rule is an explicit request to block it, so AI is not asked.\nIn observe mode this row is **recorded but not blocked**; turning observe mode off makes it block for real.</string>
     <string name="reason_why_text_too_short">After normalisation (lowercase; whitespace and digits dropped) **fewer than 4 characters** remain.\nText that short only adds noise to the AI stage, so it is **passed without scoring**.</string>
