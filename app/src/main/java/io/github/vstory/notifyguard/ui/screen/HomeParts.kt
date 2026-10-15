@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,14 +34,14 @@ internal fun ShareBar(fraction: Float, modifier: Modifier = Modifier) {
         modifier
             .fillMaxWidth()
             .height(6.dp)
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(3.dp)),
+            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small),
     ) {
         if (fraction > 0f) {
             Box(
                 Modifier
                     .fillMaxWidth(fraction.coerceIn(0f, 1f))
                     .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)),
+                    .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small),
             )
         }
     }

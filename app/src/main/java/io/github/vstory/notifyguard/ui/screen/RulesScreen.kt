@@ -149,10 +149,11 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         } else {
                             stringResource(R.string.rules_candidate_unseen)
                         }
-                        // 包名不能省：白名单是按包名精确匹配的配置，界面上写着「微信」而配置里是包名
+                        // 包名由 AppSwitchRow 的 supporting 槽位显示（白名单是按包名精确匹配的配置，
+                        // 界面上写着「微信」而配置里是包名，多用户/分身时没有包名就没有据可查）
                         AppSwitchRow(
                             pkg = c.pkg,
-                            note = c.pkg + " · " + seenText,
+                            trailingNote = seenText,
                             checked = c.whitelisted,
                             enabled = connected,
                             onCheckedChange = { viewModel.setWhitelist(c.pkg, it) },
