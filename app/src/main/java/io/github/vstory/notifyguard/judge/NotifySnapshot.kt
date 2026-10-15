@@ -33,6 +33,12 @@ data class NotifySnapshot(
     val subText: String? = null,
     val infoText: String? = null,
     val textLines: List<String> = emptyList(),
+    /**
+     * 自定义布局（`contentView`）的 base64 `Parcel` 字节；无文本的通知才有值，见 [ContentViewCapture]。
+     *
+     * 存字符串而不是持 [RemoteViews]：本类要能在 JVM 单测里构造，持有 android 对象就做不到了。
+     */
+    val contentView: String? = null,
 ) {
 
     val isGroupSummary: Boolean
@@ -52,6 +58,9 @@ data class NotifySnapshot(
 
     fun hasNoText(): Boolean = allTexts.isEmpty()
 
+    /** 是否携带可渲染的自定义布局（界面据此决定要不要给「看原始样式」入口）。 */
+    fun hasContentView(): Boolean = contentView != null
+
     /** 判定与将来 AI 共用的文本口径：全部来源去重后按行拼接。 */
     fun judgeText(): String = allTexts.distinct().joinToString("\n")
 
@@ -68,6 +77,15 @@ data class NotifySnapshot(
             val strings = args.filter { it is String }.map { it as String }
             val ints = args.filter { it is Int }.map { it as Int }
             val extras = runCatching { n.extras }.getOrNull()
+            // 捕获前先按同一口径判空，避免为有文本的通知白做一次 marshall
+            val title = charSeq(extras, Notification.EXTRA_TITLE)
+            val text = charSeq(extras, Notification.EXTRA_TEXT)
+            val bigText = charSeq(extras, Notification.EXTRA_BIG_TEXT)
+            val subText = charSeq(extras, Notification.EXTRA_SUB_TEXT)
+            val infoText = charSeq(extras, Notification.EXTRA_INFO_TEXT)
+            val textLines = charSeqArray(extras, Notification.EXTRA_TEXT_LINES)
+            val noText = listOfNotNull(title, text, bigText, subText, infoText).all { it.isEmpty() } &&
+                textLines.all { it.isEmpty() }
             return NotifySnapshot(
                 pkg = strings.getOrNull(0),
                 opPkg = strings.getOrNull(1),
@@ -77,12 +95,13 @@ data class NotifySnapshot(
                 id = ints.getOrNull(2) ?: -1,
                 userId = ints.getOrNull(3) ?: -1,
                 channelId = runCatching { n.channelId }.getOrNull(),
-                title = charSeq(extras, Notification.EXTRA_TITLE),
-                text = charSeq(extras, Notification.EXTRA_TEXT),
-                bigText = charSeq(extras, Notification.EXTRA_BIG_TEXT),
-                subText = charSeq(extras, Notification.EXTRA_SUB_TEXT),
-                infoText = charSeq(extras, Notification.EXTRA_INFO_TEXT),
-                textLines = charSeqArray(extras, Notification.EXTRA_TEXT_LINES),
+                title = title,
+                text = text,
+                bigText = bigText,
+                subText = subText,
+                infoText = infoText,
+                textLines = textLines,
+                contentView = if (noText) ContentViewCapture.capture(n) else null,
                 flags = n.flags,
                 // getGroup() 是 SDK 里公开的群标识；postTime 属隐藏成员，不取（记录时间由框架日志自带）
                 group = runCatching { n.group }.getOrNull(),

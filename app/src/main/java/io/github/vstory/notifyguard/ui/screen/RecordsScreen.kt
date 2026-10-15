@@ -374,7 +374,10 @@ private fun RecordCard(
             )
             if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
                 Text(
-                    text = stringResource(R.string.records_no_text),
+                    // 带布局时说清「读不到」不等于「没内容」，否则用户会以为模块坏了
+                    text = stringResource(
+                        if (row.contentView != null) R.string.records_no_text_view else R.string.records_no_text
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -386,6 +389,7 @@ private fun RecordCard(
                     Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 }
             }
+            row.contentView?.let { RemoteViewBlock(it) }
             // 这行原本直接贴模块端的技术串（`disabled · EXT_SLOT`），看不懂只能去翻代码。
             // 现在出人话、点开给解释；原始串挪进弹窗，排障时仍能与框架日志对上
             ReasonLine(row.meta, onExplain)
