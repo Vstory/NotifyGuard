@@ -192,16 +192,3 @@ private fun StatItem(label: String, value: String, note: String) {
         },
     )
 }
-
-/** 分区标题：M3 的 Lists 用标题分段，而不是把每段装进一张卡片。 */
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp, bottom = 4.dp),
-    )
-}
