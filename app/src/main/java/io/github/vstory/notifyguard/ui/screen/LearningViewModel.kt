@@ -67,6 +67,8 @@ class LearningViewModel : ViewModel() {
         val pending: List<Row> = emptyList(),
         /** 样本库：按来源 App 收好的组（筛选与搜索已作用其上）。 */
         val libGroups: List<Group> = emptyList(),
+        /** 包名 → App 名（分组名与搜索都用它）。在 [repaint] 里解析一次，重分组时只查这张表。 */
+        val appNames: Map<String, String> = emptyMap(),
         /** 全库的垃圾条数（筛选按钮上的数字用它，不能用过滤后的组算）。 */
         val libSpam: Int = 0,
         val libQuery: String = "",
@@ -225,16 +227,31 @@ class LearningViewModel : ViewModel() {
         state = if (tab == Tab.Library) state.copy(tab = tab) else state.copy(tab = tab, libSearchOpen = false)
     }
 
+    /**
+     * 筛选 / 搜索变更后**必须**走这里重算样本库。
+     *
+     * 只 `copy` 状态是不够的：[UiState.libGroups] 是算好的快照，不重算就等于筛选只换了按钮的高亮，
+     * 列表仍是上一次的结果 —— 界面上表现为「点了筛选没反应」。
+     */
+    private fun refreshLibrary() {
+        state = state.copy(
+            libGroups = libGroupsOf(labels, state.libFilter, state.libQuery, state.appNames),
+        )
+    }
+
     fun setLibSearchOpen(open: Boolean) {
         state = state.copy(libSearchOpen = open, libQuery = if (open) state.libQuery else "")
+        if (!open) refreshLibrary()
     }
 
     fun setLibQuery(query: String) {
         state = state.copy(libQuery = query)
+        refreshLibrary()
     }
 
     fun setLibFilter(filter: LibFilter) {
         state = state.copy(libFilter = filter)
+        refreshLibrary()
     }
 
     fun toggleGroup(pkg: String) {
@@ -363,9 +380,10 @@ class LearningViewModel : ViewModel() {
         state = state.copy(
             labelTotal = labels0.size,
             pending = pendingOf(records, marks, bootWallClock).take(LIST_LIMIT).map { row(it, marks) },
-            libGroups = libGroupsOf(labels0, state.libFilter, state.libQuery) { appName(ctx, it) },
             libSpam = labels0.count { it.spam },
+            appNames = labels0.map { it.pkg }.distinct().associateWith { appName(ctx, it) },
         )
+        refreshLibrary()
     }
 
     private fun row(r: LogRecord, marks: Map<String, Boolean>): Row = Row(
@@ -451,8 +469,10 @@ class LearningViewModel : ViewModel() {
             labels: List<LabelRecord>,
             filter: LibFilter,
             query: String,
-            nameOf: (String) -> String,
+            names: Map<String, String>,
         ): List<Group> {
+            // 解析不出 App 名的（已卸载等）回落包名：组名总得有个能读的东西
+            val nameOf: (String) -> String = { names[it] ?: it }
             val k = query.trim().lowercase()
             return labels
                 .filter {
