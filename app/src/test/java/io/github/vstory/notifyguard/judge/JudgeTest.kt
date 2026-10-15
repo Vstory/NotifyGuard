@@ -27,6 +27,9 @@ class JudgeTest {
         flags: Int = 0,
         category: String? = null,
         messaging: Boolean = false,
+        subText: String? = null,
+        infoText: String? = null,
+        textLines: List<String> = emptyList(),
     ) = NotifySnapshot(
         pkg = pkg,
         opPkg = null,
@@ -43,6 +46,9 @@ class JudgeTest {
         group = null,
         category = category,
         hasMessagingStyle = messaging,
+        subText = subText,
+        infoText = infoText,
+        textLines = textLines,
     )
 
     private fun rule(vararg keywords: String) = Rule(id = "r1", keywords = keywords.toList())
@@ -60,6 +66,27 @@ class JudgeTest {
     @Test
     fun nullSnapshotIsBadArgs() {
         assertEquals("bad_args", Judge.decide(null, blocking).reason)
+    }
+
+    /** InboxStyle 的正文在 textLines 里、三段留空是推广通知的常见形态，不能当成「无文本」放行。 */
+    @Test
+    fun inboxStyleLinesCountAsText() {
+        val s = snap(text = null, textLines = listOf("限时特惠", "立即领取"))
+        assertFalse(Judge.decide(s, blocking).reason == "empty_text")
+    }
+
+    /** 折叠摘要行同理：extras 里三段可能全空，内容只在 subText。 */
+    @Test
+    fun subTextCountsAsText() {
+        val s = snap(text = null, subText = "3 条新消息")
+        assertFalse(Judge.decide(s, blocking).reason == "empty_text")
+    }
+
+    /** 三段、补充字段、多行全空才真的是「无文本」。 */
+    @Test
+    fun noTextAtAllIsEmptyText() {
+        val s = snap(title = null, text = null, textLines = emptyList())
+        assertEquals("empty_text", Judge.decide(s, blocking).reason)
     }
 
     @Test
