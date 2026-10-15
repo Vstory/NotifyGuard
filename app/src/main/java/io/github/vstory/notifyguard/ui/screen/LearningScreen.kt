@@ -157,7 +157,7 @@ fun LearningScreen(viewModel: LearningViewModel = viewModel()) {
                             spam = state.libSpam,
                             ham = state.labelTotal - state.libSpam,
                             total = state.labelTotal,
-                            hit = state.libGroups.sumOf { it.rows.size },
+                            shown = state.libGroups.sumOf { it.rows.size },
                             query = state.libQuery,
                             onFilter = viewModel::setLibFilter,
                         )
@@ -339,14 +339,19 @@ private fun TabChip(text: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
-/** 样本库的筛选与计数。计数用**过滤之后**的条数：拿全量去说「垃圾 12 条」而列表里只有 3 条，就是假的。 */
+/**
+ * 样本库的筛选与计数。
+ *
+ * 两组数字不同源，别混：按钮上的是**全库分方向总计**（选中「正常」时也要看得到「垃圾 116」才知道
+ * 另一边有多少），下面那行是**当前筛选与搜索之后**的条数。
+ */
 @Composable
 private fun LibraryBar(
     filter: LearningViewModel.LibFilter,
     spam: Int,
     ham: Int,
     total: Int,
-    hit: Int,
+    shown: Int,
     query: String,
     onFilter: (LearningViewModel.LibFilter) -> Unit,
 ) {
@@ -372,9 +377,9 @@ private fun LibraryBar(
         }
         Note(
             if (query.isEmpty()) {
-                stringResource(R.string.learning_lib_count, total)
+                stringResource(R.string.learning_lib_count, shown)
             } else {
-                stringResource(R.string.learning_lib_hit, hit)
+                stringResource(R.string.learning_lib_hit, shown)
             }
         )
     }
