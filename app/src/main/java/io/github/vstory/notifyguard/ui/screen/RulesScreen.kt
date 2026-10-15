@@ -127,24 +127,38 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         )
                     )
                 }
-                val candidates = state.candidates
-                if (candidates.isEmpty()) {
+                val all = state.candidates
+                if (all.isEmpty()) {
                     Note(stringResource(R.string.rules_no_candidates))
                 } else {
-                    candidates.forEach { c ->
-                        SwitchRow(
-                            label = c.pkg,
-                            note = if (c.groups > 0) {
-                                stringResource(R.string.rules_candidate_seen, c.groups)
-                            } else {
-                                stringResource(R.string.rules_candidate_unseen)
-                            },
+                    OutlinedTextField(
+                        value = state.query,
+                        onValueChange = viewModel::dragQuery,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text(stringResource(R.string.rules_search_hint)) },
+                        singleLine = true,
+                        enabled = connected,
+                    )
+                    val visible = state.visibleCandidates
+                    if (visible.isEmpty()) {
+                        Note(stringResource(R.string.rules_search_empty))
+                    }
+                    visible.forEach { c ->
+                        val seenText = if (c.groups > 0) {
+                            stringResource(R.string.rules_candidate_seen, c.groups)
+                        } else {
+                            stringResource(R.string.rules_candidate_unseen)
+                        }
+                        // 包名不能省：白名单是按包名精确匹配的配置，界面上写着「微信」而配置里是包名
+                        AppSwitchRow(
+                            pkg = c.pkg,
+                            note = c.pkg + " · " + seenText,
                             checked = c.whitelisted,
                             enabled = connected,
                             onCheckedChange = { viewModel.setWhitelist(c.pkg, it) },
                         )
                     }
-                    if (candidates.size >= RulesViewModel.CANDIDATE_MAX) {
+                    if (visible.size < all.size) {
                         Note(stringResource(R.string.rules_candidates_capped, RulesViewModel.CANDIDATE_MAX))
                     }
                 }

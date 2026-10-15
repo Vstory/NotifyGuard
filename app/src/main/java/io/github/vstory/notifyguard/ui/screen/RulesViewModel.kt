@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
@@ -16,7 +17,11 @@ import io.github.vstory.notifyguard.judge.RuleLogic
 import io.github.vstory.notifyguard.judge.RuleType
 import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.LogFetcher
+import io.github.vstory.notifyguard.ui.AppIcons
 import io.github.vstory.notifyguard.ui.UiText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 规则屏的状态与动作（M4）。
@@ -39,10 +44,25 @@ class RulesViewModel : ViewModel() {
         /** 关键词输入框的草稿。与生效值分开：它是文本，有中间态。 */
         val keywordDraft: String = "",
         val pkgDraft: String = "",
+        val query: String = "",
+        /**
+         * **全量**候选（不截断）。截断放到 [visibleCandidates] 里、过滤之后再取 —— 否则被上限挡在
+         * 列表外的应用永远搜不到。
+         */
         val candidates: List<Candidate> = emptyList(),
         val refreshing: Boolean = false,
         val notice: Notice? = null,
-    )
+    ) {
+        /** 按搜索串过滤后再截断。应用名来自系统（跟随语言），包名照旧可搜。 */
+        val visibleCandidates: List<Candidate>
+            get() {
+                val q = query.trim()
+                if (q.isEmpty()) return candidates.take(CANDIDATE_MAX)
+                return candidates
+                    .filter { it.label.contains(q, ignoreCase = true) || it.pkg.contains(q, ignoreCase = true) }
+                    .take(CANDIDATE_MAX)
+            }
+    }
 
     /** 一次性提示。带自增 id：同一条文案连发两次也要各弹一次。 */
     data class Notice(val id: Long, val text: UiText)
@@ -52,7 +72,13 @@ class RulesViewModel : ViewModel() {
      *
      * `groups` = 它在模块端回流记录里出现过的组数，0 表示只存在于白名单、还没出现在记录里。
      */
-    data class Candidate(val pkg: String, val whitelisted: Boolean, val groups: Int)
+    data class Candidate(
+        val pkg: String,
+        val whitelisted: Boolean,
+        val groups: Int,
+        /** 系统给出的应用名（跟随语言）。取不到时回落包名，见 [AppIcons.label]。 */
+        val label: String = "",
+    )
 
     var state by mutableStateOf(UiState())
         private set
@@ -73,6 +99,10 @@ class RulesViewModel : ViewModel() {
 
     fun dragKeywords(text: String) {
         state = state.copy(keywordDraft = text)
+    }
+
+    fun dragQuery(text: String) {
+        state = state.copy(query = text)
     }
 
     fun dragPkg(text: String) {
@@ -259,16 +289,27 @@ class RulesViewModel : ViewModel() {
         repaint()
     }
 
-    /** 以模块端读回的配置为准重绘（回滚、失败、服务状态变化都走这里）。 */
+    /**
+     * 以模块端读回的配置为准重绘（回滚、失败、服务状态变化都走这里）。
+     *
+     * 候选连带应用名都要查 PackageManager（每个候选一次 binder），**不能在主线程做** —— 本方法的
+     * 调用方是 LogFetcher 的广播回调，那已经在主线程上（它内部用主线程 Handler 收结果）。
+     * 顺序号只认最后一次：慢的那次回来时不能把新结果盖回去。
+     */
     private fun repaint() {
         val ctx = app ?: return
+        val seq = ++repaintSeq
         val cfg = if (state.connected) ConfigWriter.load() else null
-        state = state.copy(
-            cfg = cfg,
-            keywordDraft = draftAfterReload(cfg),
-            candidates = candidates(cfg, ctx),
-        )
+        val draft = draftAfterReload(cfg)
+        val whitelist = cfg?.whitelist.orEmpty()
+        viewModelScope.launch {
+            val list = withContext(Dispatchers.IO) { candidates(whitelist, ctx) }
+            if (seq != repaintSeq) return@launch
+            state = state.copy(cfg = cfg, keywordDraft = draft, candidates = list)
+        }
     }
+
+    private var repaintSeq = 0
 
     /**
      * 重载后输入框该显示什么：**有未保存改动时不动输入框** —— 本方法在服务状态变化、下发失败回滚、
@@ -279,12 +320,13 @@ class RulesViewModel : ViewModel() {
         return if (normalize(state.keywordDraft) == normalize(saved)) saved else state.keywordDraft
     }
 
-    private fun candidates(cfg: Config?, ctx: Context): List<Candidate> {
+    private fun candidates(whitelist: Set<String>, ctx: Context): List<Candidate> {
         val counts = HashMap<String, Int>()
         LogStore.get(ctx).recent(LogStore.MAX_RECORDS).forEach { r ->
             if (r.pkg.isNotEmpty()) counts[r.pkg] = (counts[r.pkg] ?: 0) + r.count
         }
-        return rankCandidates(cfg?.whitelist.orEmpty(), counts)
+        return rankCandidates(whitelist, counts, limit = Int.MAX_VALUE)
+            .map { it.copy(label = AppIcons.label(ctx, it.pkg)) }
     }
 
     private fun customRule(cfg: Config): Rule? =
@@ -325,7 +367,11 @@ class RulesViewModel : ViewModel() {
          * 白名单项排最前：最常被找的是「刚加进去、可能要撤掉的那个」。截断放在排序**之后** ——
          * 白名单项因此一定落在截断线内，否则用户取消不掉一个不在候选里的项。
          */
-        internal fun rankCandidates(whitelist: Set<String>, counts: Map<String, Int>): List<Candidate> =
+        internal fun rankCandidates(
+            whitelist: Set<String>,
+            counts: Map<String, Int>,
+            limit: Int = CANDIDATE_MAX,
+        ): List<Candidate> =
             (counts.keys + whitelist)
                 .map { Candidate(it, it in whitelist, counts[it] ?: 0) }
                 .sortedWith(
@@ -333,6 +379,6 @@ class RulesViewModel : ViewModel() {
                         .thenByDescending { it.groups }
                         .thenBy { it.pkg },
                 )
-                .take(CANDIDATE_MAX)
+                .take(limit)
     }
 }

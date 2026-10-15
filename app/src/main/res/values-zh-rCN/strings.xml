@@ -248,6 +248,8 @@
     <string name="rules_no_candidates">暂时没有候选：模块端还没记下任何通知，或本页与记录页都还没拉取过。\n可以直接在下面填包名。</string>
     <string name="rules_candidate_seen">记录里出现过 %1$d 次</string>
     <string name="rules_candidate_unseen">记录里还没出现过</string>
+    <string name="rules_search_hint">按应用名或包名筛选</string>
+    <string name="rules_search_empty">没有匹配的候选。</string>
     <string name="rules_candidates_capped">只列出前 %1$d 个（已放行的排在前面）。\n要放行的应用不在其中时，在下面直接填包名。</string>
     <string name="rules_pkg_hint">com.example.app</string>
     <string name="rules_add_whitelist">加入白名单</string>
