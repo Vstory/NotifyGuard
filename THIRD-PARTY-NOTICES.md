@@ -51,3 +51,17 @@ SOFTWARE.
 | 许可 | Apache License 2.0 |
 
 许可全文：https://www.apache.org/licenses/LICENSE-2.0
+
+---
+
+## 3. AppIconLoader
+
+界面上的应用图标按 AOSP `iconloaderlib` 渲染（自适应图标的阴影与 badging，即系统自己画通知栏图标的那套）。
+`me.zhanghai.android.appiconloader:appiconloader` 将该库打包并提供简易 API，随 APK 分发。
+
+| 项 | 值 |
+|---|---|
+| 来源 | https://github.com/zhanghai/AppIconLoader |
+| 许可 | Apache License 2.0（内含 AOSP iconloaderlib，Copyright 2020 Google LLC） |
+
+许可全文：https://www.apache.org/licenses/LICENSE-2.0
