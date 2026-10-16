@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.ui.AppIcon
+import io.github.vstory.notifyguard.ui.appLabel
 import io.github.vstory.notifyguard.ui.text
 
 
@@ -520,11 +521,21 @@ private fun RowHead(time: String, verdict: Verdict?, marked: Boolean?) {
 @Composable
 private fun RowBody(row: LearningViewModel.Row, onExplain: (String) -> Unit) {
     RowHead(row.time, row.verdict, row.marked)
-    Text(
-        text = row.pkg,
-        style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    // 图标 + 应用名，与样本库的组头同一套读法：包名（com.android.vending）在这一屏认不出来，
+    // 而这一屏要判的是「这条文本该不该拦」，不是「是哪个包」
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AppIcon(row.pkg, size = 20.dp)
+        Text(
+            text = appLabel(row.pkg),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
     if (row.title.isNullOrBlank() && row.text.isNullOrBlank()) {
         Text(
             text = stringResource(R.string.records_no_text),
