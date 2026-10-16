@@ -58,10 +58,10 @@ Otherwise check the framework log to confirm the verdict chain is running.</stri
     <string name="attribution_no_span">No fragment of this text stands out.</string>
     <string name="attribution_span_note">Highlighted: the fragments that pushed the score up most (relative to this notification\'s own peak).</string>
 
-    <string name="service_checking">Framework service: checking…</string>
-    <string name="service_connected">Framework service: %1$s %2$s</string>
-    <string name="service_disconnected">Framework service: not connected (enable this module in LSPosed, then reopen this page; changes cannot be delivered while disconnected, so the controls are greyed out)</string>
-    <string name="status_cfg_unreadable">Connected to the framework service, but the live config cannot be read (corrupted?). The values below are defaults; changes can still be delivered.</string>
+    <string name="service_checking">Checking the connection…</string>
+    <string name="service_connected">Connected</string>
+    <string name="service_disconnected">Not connected. Enable this module in LSPosed, then reopen this app</string>
+    <string name="status_cfg_unreadable">Current settings could not be read, so the switches below may be out of date</string>
 
     <!-- Records screen -->
     <string name="records_title">Records</string>
@@ -156,8 +156,6 @@ Otherwise check the framework log to confirm the verdict chain is running.</stri
 
     <!-- Settings screen -->
     <string name="settings_title">Settings</string>
-    <string name="settings_status_group">Module status</string>
-    <string name="settings_status_note">This reads the **module-side live state**, not a UI guess.\nSafe mode, assembly failures and a disabled verdict path all show up here.</string>
     <string name="settings_refresh_status">Refresh module status</string>
     <string name="settings_clear_safe_mode">Clear safe mode and recover</string>
     <string name="settings_assembly_show">Assembly details</string>
@@ -187,36 +185,41 @@ Otherwise check the framework log to confirm the verdict chain is running.</stri
     <string name="module_safe_mode_tail_no_watch">The flag watcher is unavailable, so restarting the system framework is still needed after clearing.</string>
 
     <string name="settings_block_group">Blocking</string>
-    <string name="settings_block_note">Switches are delivered the moment they are flicked, the threshold on release — the module applies it at once.\nThere is **no Save button** on this screen.</string>
-    <string name="settings_enabled">Enable verdicts</string>
-    <string name="settings_enabled_note">when off, the chain passes everything (records are still written)</string>
-    <string name="settings_judge_gated">Master switch is off: the verdict chain **short-circuits** and every reason stays disabled.\nThe greyed-out rows **neither take effect nor respond** — turn the master switch on first.</string>
-    <string name="settings_observe">Observe mode</string>
-    <string name="settings_observe_note">**Record only, never block**: verdicts still run, and reason still shows the AI score and the matched rule</string>
-    <string name="settings_ai_group">AI recognition</string>
-    <string name="settings_spam">Detect spam notifications</string>
-    <string name="settings_spam_note">On-device **hashed n-gram + logistic regression**, no network</string>
-    <string name="settings_threshold_note">**A score ≥ the threshold blocks**.\nThe slider is **greyed out** while the switch above or the master switch is off — the value takes no part in verdicts then.\n**Lower is more aggressive; 0 blocks everything**.</string>
+    <string name="settings_enabled">Block spam notifications</string>
+    <string name="settings_enabled_note">matching or spam-looking notifications no longer appear</string>
+    <string name="settings_judge_gated">Turn on \"Block spam notifications\" first</string>
+    <string name="settings_observe">Watch only</string>
+    <string name="settings_observe_note">still judged and recorded, but all notifications appear</string>
+    <string name="settings_ai_group">Content recognition</string>
+    <string name="settings_spam">Detect spam content</string>
+    <string name="settings_spam_note">runs on your phone, no internet needed</string>
+    <string name="settings_threshold_note">stricter blocks more, including notifications you want</string>
     <string name="threshold_line">AI score threshold %1$s (%2$s)</string>
     <string name="threshold_line_no_config">AI score threshold: no live value read (framework service not connected)</string>
     <string name="threshold_note_ai_off">AI is off, so it has no effect</string>
     <string name="threshold_note_dirty">release to deliver, currently in effect %1$s</string>
     <string name="threshold_note_effective">currently in effect</string>
     <string name="settings_protect_group">Protected kinds</string>
-    <string name="settings_protect_note">**A match passes straight through**, never reaching rules or AI — blocking one of these costs far more than missing an ad.</string>
+    <string name="settings_protect_note">these are never blocked</string>
     <string name="protect_call">Calls</string>
-    <string name="protect_call_note">incoming calls</string>
     <string name="protect_alarm">Alarms</string>
-    <string name="protect_alarm_note">alarms</string>
     <string name="protect_navigation">Navigation</string>
-    <string name="protect_navigation_note">navigation</string>
     <string name="protect_media">Media</string>
-    <string name="protect_media_note">media playback</string>
     <string name="protect_foreground_service">Foreground services</string>
-    <string name="protect_foreground_service_note">foreground services</string>
     <string name="protect_conversation">Conversations</string>
-    <string name="protect_conversation_note">messaging conversations</string>
-    <string name="settings_config_group">Live config</string>
+    <string name="settings_threshold_label">Strictness</string>
+    <string name="settings_threshold_loose">Relaxed</string>
+    <string name="settings_threshold_strict">Strict</string>
+    <string name="settings_diagnostic">Diagnostics</string>
+    <string name="settings_diagnostic_note">module state, assembly details, versions</string>
+    <string name="diag_title">Diagnostics</string>
+    <string name="diag_back">Back</string>
+    <string name="diag_connection_group">Connection</string>
+    <string name="diag_app_version">App %1$s</string>
+    <string name="diag_note">Technical state for troubleshooting. Nothing here is needed for normal use.</string>
+    <string name="diag_status_group">Module status</string>
+    <string name="diag_status_note">This reads the **module-side live state**, not a UI guess.\nSafe mode, assembly failures and a disabled verdict path all show up here.</string>
+    <string name="diag_config_group">Live config</string>
     <string name="settings_config_note">The config the module side **actually reads right now** (read-only).\nThe switches above are rendered from it — check here first when **"I changed it but nothing happened"**.</string>
     <string name="settings_config_show">Show config JSON</string>
     <string name="settings_config_hide">Hide config JSON</string>
