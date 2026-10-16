@@ -53,7 +53,7 @@ object EntryHook {
      * 明细**逐行自成一条日志**（每行已是 `boot.hook <结果> kind=… k=v` 的形式），不再拼成一个多行巨串：
      * 多行串的后续行不带版本前缀，混进日志里无法归属到哪次装配。
      */
-    class InstallReport(private val domain: String = "boot") {
+    class InstallReport {
         var okCount = 0
             private set
         var skipCount = 0
@@ -114,7 +114,15 @@ object EntryHook {
             )
         }
 
-        private fun head(result: String, kind: String) = "$domain.hook $result kind=$kind"
+        /** `[OK]   ` / `[SKIP] ` / `[FAIL] ` 定长，明细行在日志页里左对齐成一列。 */
+        private fun head(result: String, kind: String): String {
+            val label = when (result) {
+                "ok" -> "[OK]  "
+                "skip" -> "[SKIP]"
+                else -> "[FAIL]"
+            }
+            return "$label $kind"
+        }
     }
 
     /** 计数快照。整体取一份：逐项取值会在两次读之间被判定线程改掉，读出的数自相矛盾。 */
@@ -140,7 +148,7 @@ object EntryHook {
             runCatching { install(iface, cl) }
         }
 
-        val report = InstallReport(domain)
+        val report = InstallReport()
         // 先于 safe_mode 检查：标志存在时也要能看见用户把它删掉，否则恢复只剩重启一条路
         CrashGuard.attach(iface, cl, report::markOk, report::markSkip)
         if (CrashGuard.isSafeMode()) {
@@ -237,7 +245,7 @@ object EntryHook {
                 })
             )
             owner.set(Slot.FUNNEL)
-            report.markOk("funnel", desc(target), "role=fallback")
+            report.markOk("funnel", desc(target), "params=${target.parameterCount}", "role=fallback")
         } catch (t: Throwable) {
             report.markFail("funnel", desc(target), t)
         }
@@ -401,6 +409,6 @@ object EntryHook {
         }
     }
 
-    private fun desc(m: Method): String =
-        "cls=${m.declaringClass.name} method=${m.name} params=${m.parameterCount}"
+    /** 明细里的目标写全限定名（`类#方法`）：失败时靠这一串才能反查到底哪个类哪个方法没挂上。 */
+    private fun desc(m: Method): String = "${m.declaringClass.name}#${m.name}"
 }
