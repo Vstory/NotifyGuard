@@ -1,5 +1,7 @@
 package io.github.vstory.notifyguard.ui.screen
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -16,10 +18,10 @@ import io.github.vstory.notifyguard.ui.appLabel
 /**
  * 规则屏专用零件。
  *
- * 用官方 [ListItem] 的槽位分层（M3：overline 在 headline 上方、supporting 在下方，行高由最高元素
- * 决定 56 / 72 / 88dp）。**三个槽位的宽度是各自的、不互相抢** —— 早先把「记录里出现过 N 次」
- * 放进 trailing 与开关并排，那一串就占掉约 200dp，headline 只剩几十 dp，真机上应用名被截成
- * `A...`、`Ke...`，包名同样断掉。次数是「关于这一行的元信息」，规范给它的位置是 overline。
+ * 用官方 [ListItem] 的槽位分层（M3：headline 在上、supporting 在下，行高由最高元素决定
+ * 56 / 72 / 88dp）。**槽位的宽度是各自的、不互相抢** —— 早先「记录里出现过 N 次」放在 trailing
+ * 与开关并排，那一串占掉约 200dp，headline 只剩几十 dp，真机上应用名被截成 `A...`、`Ke...`；
+ * 后来放 overline 又让元信息压在应用名上方。现在 supporting 内自上而下：包名、出现次数。
  */
 
 /**
@@ -37,15 +39,6 @@ internal fun AppSwitchRow(
     seenText: String? = null,
 ) {
     ListItem(
-        overlineContent = {
-            seenText?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
         headlineContent = {
             Text(
                 text = appLabel(pkg),
@@ -55,13 +48,24 @@ internal fun AppSwitchRow(
             )
         },
         supportingContent = {
-            Text(
-                text = pkg,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = pkg,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                seenText?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
         },
         leadingContent = { AppIcon(pkg, size = 40.dp) },
         trailingContent = { Switch(checked = checked, onCheckedChange = null, enabled = enabled) },
