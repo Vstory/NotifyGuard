@@ -51,7 +51,6 @@ data class StatusReport(
      * 首页那三个数用它，记录窗口只用来算组数、事件数与排行。
      */
     val blockedTotal: Long = 0L,
-    val wouldTotal: Long = 0L,
     val passTotal: Long = 0L,
     /** 累计的起算时刻（第一条判定）；0 = 还没有过判定。 */
     val tallySince: Long = 0L,

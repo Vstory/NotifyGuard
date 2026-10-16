@@ -426,14 +426,13 @@ private fun RawLine(@StringRes label: Int, value: String) {
 }
 
 /**
- * 判定三态（展示用）。记录屏与学习屏共用一套标签与配色：同一个量在两屏有两种视觉，就是两套口径。
+ * 判定两态（展示用）。记录屏与学习屏共用一套标签与配色：同一个量在两屏有两种视觉，就是两套口径。
  *
- * 从 [LogRecord] 的 `block` / `would` 派生，不解析 `reason` 前缀 —— 技术串的形态随判定链增删而变，字段不会
+ * 从 [LogRecord] 的 `block` 派生，不解析 `reason` 前缀 —— 技术串的形态随判定链增删而变，字段不会
  * （与 `hasAiVerdict` 取 `score` 同一条口径）。
  */
 enum class Verdict(@StringRes val labelRes: Int) {
     Block(R.string.verdict_block),
-    Would(R.string.verdict_would),
     Pass(R.string.verdict_pass);
 
     /**
@@ -445,18 +444,13 @@ enum class Verdict(@StringRes val labelRes: Int) {
     val markHamAllowed: Boolean get() = this == Block
 
     companion object {
-        fun of(record: LogRecord): Verdict = when {
-            record.block -> Block
-            record.would -> Would
-            else -> Pass
-        }
+        fun of(record: LogRecord): Verdict = if (record.block) Block else Pass
     }
 }
 
 @Composable
 internal fun verdictColor(verdict: Verdict) = when (verdict) {
     Verdict.Block -> MaterialTheme.colorScheme.error
-    Verdict.Would -> MaterialTheme.colorScheme.tertiary
     Verdict.Pass -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 

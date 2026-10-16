@@ -22,7 +22,6 @@ object Judge {
     data class Decision(
         val block: Boolean,
         val reason: String,
-        val wouldBlock: Boolean = block,
         val ruleId: String? = null,
         val score: Double? = null,
     )
@@ -57,7 +56,6 @@ object Judge {
             return Decision(
                 block = true,
                 reason = "ai:${fmt(score)}",
-                wouldBlock = true,
                 score = score,
             )
         }
@@ -69,5 +67,5 @@ object Judge {
     private fun pass(reason: String) = Decision(false, reason)
 
     private fun intercept(reason: String, ruleId: String) =
-        Decision(block = true, reason = reason, wouldBlock = true, ruleId = ruleId)
+        Decision(block = true, reason = reason, ruleId = ruleId)
 }

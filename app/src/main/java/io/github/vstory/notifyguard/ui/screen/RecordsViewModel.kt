@@ -85,13 +85,11 @@ class RecordsViewModel : ViewModel() {
     /**
      * 判定筛选档。
      *
-     * 段内标签刻意用短词（`拦截` / `建议拦截` / `放行`）：四段并排在手机宽度上放不下全称，
-     * 全称由状态卡的命中行给出。
+     * 段内标签刻意用短词（`拦截` / `放行`）：全称由状态卡的命中行给出。
      */
     enum class Filter(@StringRes val labelRes: Int) {
         All(R.string.records_filter_all),
         Block(R.string.records_filter_block),
-        Would(R.string.records_filter_would),
         Pass(R.string.records_filter_pass),
     }
 
@@ -447,8 +445,7 @@ class RecordsViewModel : ViewModel() {
         private fun matches(r: LogRecord, filter: Filter): Boolean = when (filter) {
             Filter.All -> true
             Filter.Block -> r.block
-            Filter.Would -> r.would && !r.block
-            Filter.Pass -> !r.block && !r.would
+            Filter.Pass -> !r.block
         }
     }
 }
