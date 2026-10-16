@@ -21,7 +21,7 @@ import io.github.vstory.notifyguard.BuildConfig
  * - 域取有限集合：`boot` `hotreload` `assemble` `slot` `guard` `safemode` `systemui` `generation`
  *   `teardown` `context` `judge` `ai` `record` `label` `status` `config` `channel` `model` `delta`
  * - 键名与枚举值一律英文小写下划线（`on_success=takeover`），值里不带空格
- * - 一行一条、不换行；可能很长的值先截断（ClassLoader 一律走 [brief]）
+ * - 可能很长的值先截断（ClassLoader 一律走 [brief]）
  * - 中文只允许出现在 `err=` 的异常原文里 —— 那是给人读的异常信息，不参与解析
  * - 分级：I = 状态变迁 / 就绪 / 汇总；E = 失败终态 / 异常 / 拒绝；D = 高频逐条细节
  * - **级别跟着信息的性质走，不跟着打印位置走**：同一条日志的结构里混着成功与失败（装配明细、
@@ -31,6 +31,9 @@ import io.github.vstory.notifyguard.BuildConfig
  *   否则字符串常量会留在 dex 里（编译期裁剪失效）
  * - 唯一例外是 [notice] / [noticeError]：人类可读的英文小写提示语行（热重载那句话），
  *   文案受日志门禁的白名单约束
+ *
+ * **一次事件的输出聚合成一条**（见 [staged]）：LSPosed 日志页按「一条消息」折叠显示，导出成文件
+ * 才是多行；散在多处的十几行各自调用就是刷屏。首行带版本前缀，后续行缩进两格。
  */
 object ModuleLogger {
 
@@ -39,6 +42,9 @@ object ModuleLogger {
     private val PREFIX = "[" + BuildConfig.VERSION_NAME + "] "
 
     private var iface: XposedInterface? = null
+
+    /** 收敛中的聚合块；只在当前线程生效，后台线程（落盘 worker 等）照常独立输出。 */
+    private val staged = ThreadLocal<MutableList<Pair<Int, String>>?>()
 
     fun bind(target: XposedInterface) {
         iface = target
@@ -80,7 +86,37 @@ object ModuleLogger {
     private fun line(event: String, fields: Array<out String>): String =
         PREFIX + if (fields.isEmpty()) event else event + " " + fields.joinToString(" ")
 
+    /**
+     * 聚合块：块内的日志按顺序**收集**，结束时合成**一条**输出。
+     *
+     * 用法是「一次事件 = 一次调用」——装配（配置 / 模型 / 钩子 / 明细）散在好几个类里，没有这个
+     * 收敛点就只能是十几条独立日志。整块的级别取块内最坏的一条（有 E 就是 E）。
+     *
+     * 带 Throwable 的失败**不进块**（栈要在框架日志里完整保留），它在发生时立即独立输出。
+     */
+    fun <T> staged(body: () -> T): T {
+        if (staged.get() != null) return body()   // 已在块内：直接执行，不嵌套
+        val buf = ArrayList<Pair<Int, String>>()
+        staged.set(buf)
+        try {
+            return body()
+        } finally {
+            staged.set(null)
+            if (buf.isNotEmpty()) {
+                write(
+                    buf.maxOf { it.first },
+                    PREFIX + buf.first().second + buf.drop(1).joinToString("") { "\n  " + it.second },
+                )
+            }
+        }
+    }
+
     private fun write(priority: Int, msg: String) {
+        val buffer = staged.get()
+        if (buffer != null) {
+            buffer.add(priority to msg.removePrefix(PREFIX))
+            return
+        }
         runCatching { iface?.log(priority, TAG, msg) }
     }
 }
