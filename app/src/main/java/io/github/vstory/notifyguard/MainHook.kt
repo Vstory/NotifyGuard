@@ -2,6 +2,7 @@ package io.github.vstory.notifyguard
 
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface
+import io.github.vstory.notifyguard.core.CrashGuard
 import io.github.vstory.notifyguard.core.EntryHook
 import io.github.vstory.notifyguard.core.Generation
 import io.github.vstory.notifyguard.core.ModuleLogger
@@ -94,9 +95,11 @@ class MainHook : XposedModule() {
         val report = assemble(cl, "hotreload")
         ModuleLogger.info("hotreload.hooks", *hookFields(report))
         dumpDetails(report)
-        if (report.okCount == 0) {
+        if (!EntryHook.isJudgingReady()) {
+            // 新代这个空壳必须自己卸干净：留着它，旧代的钩子仍在（还没 unhook），同一条通知会被两代各判一次
+            EntryHook.reset()
             installed = false
-            ModuleLogger.error("hotreload.assemble_failed", "kept=old", "restart_required=true")
+            ModuleLogger.error("hotreload.assemble_failed", "kept=old", "hooks=old_only")
             return
         }
         param.oldHookHandles.forEach {
@@ -132,15 +135,28 @@ class MainHook : XposedModule() {
         val report = assemble(cl, "boot")
         ModuleLogger.info("boot.hooks", *hookFields(report))
         dumpDetails(report)
+        // 熔断中本来就不装钩子，不算故障；其余情况没钩子 = 模块只是个空壳，必须报出来
+        if (!EntryHook.isJudgingReady() && !CrashGuard.isSafeMode()) {
+            ModuleLogger.error("boot.assemble_failed", "owner=none", "hooks=passthrough")
+        }
     }
 
-    /** [domain] 只决定装配明细行的前缀（`boot.hook` / `hotreload.hook`），供诊断屏与日志对照。 */
+    /**
+     * [domain] 只决定装配明细行的前缀（`boot.hook` / `hotreload.hook`），供诊断屏与日志对照。
+     *
+     * 装配异常兜底成空报告：`install()` 内部多数步骤自带 runCatching，但配置/模型/句柄这些没包的
+     * 一旦抛出来，状态机会停在「已置位 installed、钩子半装」的中间态 —— 那比装配失败更难查。
+     */
     private fun assemble(cl: ClassLoader, domain: String): EntryHook.InstallReport {
         // 置位在装配之前：装配过程会回调进判定入口（配置/模型加载），重入一次就装两遍钩子
         installed = true
-        val report = EntryHook.install(this, cl, domain)
-        ModuleStatus.recordInstall(report)
-        return report
+        return runCatching { EntryHook.install(this, cl, domain) }
+            .onSuccess { ModuleStatus.recordInstall(it) }
+            .onFailure {
+                ModuleLogger.error("assemble.failed", "domain=$domain", ModuleLogger.err(it))
+                EntryHook.reset()
+            }
+            .getOrElse { EntryHook.InstallReport(domain) }
     }
 
     private fun hookFields(report: EntryHook.InstallReport): Array<String> = arrayOf(
