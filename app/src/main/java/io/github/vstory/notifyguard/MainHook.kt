@@ -88,37 +88,40 @@ class MainHook : XposedModule() {
 
         // 顺序即安全边界：**先装新、装上了才踢旧**。反过来（先 unhook 再装）一旦新代装失败，
         // 模块就彻底停摆（旧钩子已卸、新钩子没上）；这个顺序最坏也只是「仍在旧代码上跑」。
-        val report = assemble(cl, "hotreload")
-        if (!EntryHook.isJudgingReady()) {
-            // 新代这个空壳必须自己卸干净：留着它，旧代的钩子仍在（还没 unhook），同一条通知会被两代各判一次
-            EntryHook.reset()
-            installed = false
-            ModuleLogger.noticeError(
-                "hot reload failed, keeping old generation",
-                "owner=none",
+        // 整块合成一条（首行是结论，下面缩进列装配明细）：知识库《项目检查流程》⑪ 要求热重载的
+        // 提示语与 LSPosed 框架风格一致，`hot reloaded, hooks reinstalled` 就是那句。
+        ModuleLogger.staged {
+            val report = assemble(cl, "hotreload")
+            if (!EntryHook.isJudgingReady()) {
+                // 新代这个空壳必须自己卸干净：留着它，旧代的钩子仍在（还没 unhook），同一条通知会被两代各判一次
+                EntryHook.reset()
+                installed = false
+                ModuleLogger.noticeError(
+                    "hot reload failed, keeping old generation",
+                    "owner=none",
+                    "stale=$stale",
+                    "hooks=old_only",
+                )
+                dumpDetails(report)
+                return@staged
+            }
+            param.oldHookHandles.forEach {
+                runCatching { it.unhook() }
+                    .onFailure { t -> ModuleLogger.error("hotreload.unhook_failed", ModuleLogger.err(t)) }
+            }
+            val gen = Generation.publish()
+            // 新代到位的最后一步（重挂广播通道 / Context）发生在下一次通知入队时，故有 rearm
+            ModuleLogger.notice(
+                "hot reloaded, hooks reinstalled",
+                "gen=$gen",
                 "stale=$stale",
-                "hooks=old_only",
+                "cl=${cl.brief()}",
+                "hooks=ok:${report.okCount},skip:${report.skipCount},fail:${report.failCount}",
+                "owner=${EntryHook.currentSlot().wire}",
+                "rearm=on_next_enqueue",
             )
             dumpDetails(report)
-            return
         }
-        param.oldHookHandles.forEach {
-            runCatching { it.unhook() }.onFailure { t -> ModuleLogger.error("hotreload.unhook_failed", ModuleLogger.err(t)) }
-        }
-        val gen = Generation.publish()
-        // 整个热重载合成**一条**提示语行（知识库《项目检查流程》⑪ 的 `hot reloaded, hooks reinstalled`）：
-        // 装配耗时在几十毫秒内，拆成 start/hooks/done 三行只会在同一时刻堆三行、没有额外信息。
-        // 新代到位的最后一步（重挂广播通道 / Context）发生在下一次通知入队时，故有 rearm。
-        ModuleLogger.notice(
-            "hot reloaded, hooks reinstalled",
-            "gen=$gen",
-            "stale=$stale",
-            "cl=${cl.brief()}",
-            "hooks=ok:${report.okCount},skip:${report.skipCount},fail:${report.failCount}",
-            "owner=${EntryHook.currentSlot().wire}",
-            "rearm=on_next_enqueue",
-        )
-        dumpDetails(report)
     }
 
     /**
@@ -135,23 +138,26 @@ class MainHook : XposedModule() {
             ModuleLogger.error("boot.assemble_failed", "reason=null_classloader", "hooks=passthrough")
             return
         }
-        // 注入横幅：进程跑的是「注入那一刻」的那份代码，App 更新后 system_server 里可能仍是旧的，
+        // 冷启动的全部输出合成**一条**（首行是注入横幅，下面缩进列配置 / 模型 / 钩子 / 明细）：
+        // 进程跑的是「注入那一刻」的那份代码，App 更新后 system_server 里可能仍是旧的，
         // 所以 variant / API / 框架版本必须由被注入的这份代码自己报出来（模块版本另见每行前缀）
-        ModuleLogger.info(
-            "boot.start",
-            "variant=${if (BuildConfig.DEBUG) "debug" else "release"}",
-            "api=$apiVersion",
-            "framework=$frameworkName/$frameworkVersion",
-            "cl=${cl.brief()}",
-        )
-        val report = assemble(cl, "boot")
-        val bootFields = hookFields(report)
-        if (report.failCount > 0) ModuleLogger.error("boot.hooks", *bootFields)
-        else ModuleLogger.info("boot.hooks", *bootFields)
-        dumpDetails(report)
-        // 熔断中本来就不装钩子，不算故障；其余情况没钩子 = 模块只是个空壳，必须报出来
-        if (!EntryHook.isJudgingReady() && !CrashGuard.isSafeMode()) {
-            ModuleLogger.error("boot.assemble_failed", "owner=none", "hooks=passthrough")
+        ModuleLogger.staged {
+            ModuleLogger.info(
+                "boot.start",
+                "variant=${if (BuildConfig.DEBUG) "debug" else "release"}",
+                "api=$apiVersion",
+                "framework=$frameworkName/$frameworkVersion",
+                "cl=${cl.brief()}",
+            )
+            val report = assemble(cl, "boot")
+            val bootFields = hookFields(report)
+            if (report.failCount > 0) ModuleLogger.error("boot.hooks", *bootFields)
+            else ModuleLogger.info("boot.hooks", *bootFields)
+            dumpDetails(report)
+            // 熔断中本来就不装钩子，不算故障；其余情况没钩子 = 模块只是个空壳，必须报出来
+            if (!EntryHook.isJudgingReady() && !CrashGuard.isSafeMode()) {
+                ModuleLogger.error("boot.assemble_failed", "owner=none", "hooks=passthrough")
+            }
         }
     }
 
@@ -181,15 +187,11 @@ class MainHook : XposedModule() {
     )
 
     /**
-     * 成功项只在 debug 版逐条列出；release 只列 skip/fail（AGENTS.md 的 release 口径）。
+     * 逐条列出每个钩子的结果（含成功项）——它们都在 [ModuleLogger.staged] 块里，不会刷屏。
      * 级别由 [EntryHook.InstallReport.emitDetails] 按每条结果给出：失败明细走 E，其余走 I。
      */
     private fun dumpDetails(report: EntryHook.InstallReport) {
-        report.emitDetails(
-            includeOk = BuildConfig.DEBUG,
-            info = ModuleLogger::lines,
-            error = ModuleLogger::errorLine,
-        )
+        report.emitDetails(includeOk = true, info = ModuleLogger::lines, error = ModuleLogger::errorLine)
         if (BuildConfig.DEBUG) ModuleLogger.debug("slot.stats", *EntryHook.statsFields())
     }
 }
