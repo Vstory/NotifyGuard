@@ -24,6 +24,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -142,6 +145,63 @@ internal fun SectionTitle(text: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 4.dp),
+    )
+}
+
+/**
+ * 屏内间距（4dp 网格）：区块之间 24dp、屏边距 16dp、标题与首条内容 8dp。
+ *
+ * 三个数各自有出处（docs/ui-rework.md 第 7 节）：改小会让区块连成一片，改大则一屏装不下两件事。
+ */
+internal val ScreenPadding = 16.dp
+internal val SectionGap = 24.dp
+internal val ItemGap = 8.dp
+
+/**
+ * 区块标题（不带内边距的那版，供 [SectionGap] 布局的屏用；[SectionTitle] 是旧 8dp 间距布局的）。
+ */
+@Composable
+internal fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/**
+ * 可点条目：进子屏（[expanded] 传 null，尾图标是右箭头）或就地展开（true/false，上下箭头）。
+ *
+ * 展开原先用 48dp 的 `OutlinedButton`：同屏的开关行是列表项，展开按钮是大圆角按钮，两种形态混在一起
+ * 分不清哪个是「看一眼更多」、哪个是「提交」。列表里的这两种语义都归列表项。
+ */
+@Composable
+internal fun ActionRow(
+    label: String,
+    onClick: () -> Unit,
+    expanded: Boolean? = null,
+    enabled: Boolean = true,
+    note: String? = null,
+) {
+    val icon = when (expanded) {
+        null -> Icons.AutoMirrored.Filled.KeyboardArrowRight
+        true -> Icons.Filled.KeyboardArrowUp
+        false -> Icons.Filled.KeyboardArrowDown
+    }
+    ListItem(
+        headlineContent = { Text(label, style = MaterialTheme.typography.bodyLarge) },
+        supportingContent = {
+            note?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        trailingContent = { Icon(icon, contentDescription = null) },
+        modifier = Modifier.clickable(enabled = enabled, onClick = onClick),
     )
 }
 
@@ -464,12 +524,12 @@ internal fun verdictColor(verdict: Verdict) = when (verdict) {
  * 服务状态行的「事实 → 文案」映射，用到状态卡的屏共用一份。
  *
  * 两处各拼一遍的代价不是重复而是**分歧**：改文案只改到一处时，另一处就成了假话（同 FitLine 的取舍）。
+ *
+ * 只说「连上没连上」：框架名与版本是排障信息，归诊断屏（docs/ui-rework.md 第 6.1 节）。
  */
-internal fun serviceTextOf(svc: XposedService?): UiText = if (svc == null) {
-    UiText.Res(R.string.service_disconnected)
-} else {
-    UiText.Res(R.string.service_connected, listOf(svc.frameworkName, svc.frameworkVersion))
-}
+internal fun serviceTextOf(svc: XposedService?): UiText = UiText.Res(
+    if (svc == null) R.string.service_disconnected else R.string.service_connected
+)
 
 /**
  * 搜索态顶栏。记录屏与学习屏的样本库共用一份 —— 两处各写一遍，迟早有一处只改了清空按钮的位置。

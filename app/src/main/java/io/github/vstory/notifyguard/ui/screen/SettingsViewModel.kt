@@ -49,19 +49,26 @@ class SettingsViewModel : ViewModel() {
         val status: StatusReport? = null,
         val statusFetched: Boolean = false,
         val statusBusy: Boolean = false,
+        /** 框架名与版本：只在诊断屏显示（主界面说「已连接」就够，见 docs/ui-rework.md 第 6.1 节）。 */
+        val frameworkText: UiText? = null,
     )
 
     /** 一次性提示。带自增 id：同一条文案连发两次也要各弹一次。 */
     data class Notice(val id: Long, val text: UiText)
 
-    /** 六类保护开关（判定链第 3 步）。标签是界面入口，`index` 与 [ProtectSwitches] 的字段一一对应。 */
-    enum class ProtectItem(@StringRes val labelRes: Int, @StringRes val noteRes: Int) {
-        Call(R.string.protect_call, R.string.protect_call_note),
-        Alarm(R.string.protect_alarm, R.string.protect_alarm_note),
-        Navigation(R.string.protect_navigation, R.string.protect_navigation_note),
-        Media(R.string.protect_media, R.string.protect_media_note),
-        ForegroundService(R.string.protect_foreground_service, R.string.protect_foreground_service_note),
-        Conversation(R.string.protect_conversation, R.string.protect_conversation_note),
+    /**
+     * 六类保护开关（判定链第 3 步）。标签是界面入口，`index` 与 [ProtectSwitches] 的字段一一对应。
+     *
+     * 原先每类还带一条副文本，而它与标签同义（「闹钟 / 闹钟」「导航 / 导航」）—— 重复的副文本只是把
+     * 行撑高，现已删除（docs/ui-rework.md 第 5.1 节）。
+     */
+    enum class ProtectItem(@StringRes val labelRes: Int) {
+        Call(R.string.protect_call),
+        Alarm(R.string.protect_alarm),
+        Navigation(R.string.protect_navigation),
+        Media(R.string.protect_media),
+        ForegroundService(R.string.protect_foreground_service),
+        Conversation(R.string.protect_conversation),
     }
 
     var state by mutableStateOf(UiState())
@@ -188,6 +195,7 @@ class SettingsViewModel : ViewModel() {
         state = state.copy(
             connected = svc != null,
             serviceText = serviceTextOf(svc),
+            frameworkText = svc?.let { UiText.Raw("${it.frameworkName} ${it.frameworkVersion}") },
             draftThreshold = null,
         )
         // 生效值只在连上时才有得读；连不上就保持 null，界面显示「未读到」而不是默认值

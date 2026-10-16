@@ -57,10 +57,10 @@
     <string name="attribution_no_span">这段文本里没有突出的片段。</string>
     <string name="attribution_span_note">高亮的是把分数推高最多的片段（相对本条自己的峰值）。</string>
 
-    <string name="service_checking">框架服务：检查中…</string>
-    <string name="service_connected">框架服务：%1$s %2$s</string>
-    <string name="service_disconnected">框架服务：未连接（在 LSPosed 里启用本模块后重开本页；未连接时改动下发不了，控件已置灰）</string>
-    <string name="status_cfg_unreadable">连上了框架服务，但读不出生效配置（配置内容损坏？）—— 下面显示的是默认值，改动仍可下发。</string>
+    <string name="service_checking">正在检查连接…</string>
+    <string name="service_connected">已连接</string>
+    <string name="service_disconnected">未连接。请在 LSPosed 里启用本模块，然后重新打开本应用</string>
+    <string name="status_cfg_unreadable">读不到当前设置，下面的开关可能不是最新的</string>
 
     <!-- 记录屏 -->
     <string name="records_title">记录</string>
@@ -155,8 +155,6 @@
 
     <!-- 设置屏 -->
     <string name="settings_title">设置</string>
-    <string name="settings_status_group">模块状态</string>
-    <string name="settings_status_note">读的是**模块端此刻的活状态**，不是界面推断。\n熔断、装配失败、判定被停用都会在这里露出来。</string>
     <string name="settings_refresh_status">刷新模块状态</string>
     <string name="settings_clear_safe_mode">清除熔断并恢复</string>
     <string name="settings_assembly_show">本次装配明细</string>
@@ -186,36 +184,41 @@
     <string name="module_safe_mode_tail_no_watch">标志监听不可用，清除后仍需重启系统框架。</string>
 
     <string name="settings_block_group">拦截</string>
-    <string name="settings_block_note">**拨动即下发**、阈值**松手**下发，模块端立刻生效。\n这一屏**没有保存按钮**。</string>
-    <string name="settings_enabled">启用拦截判定</string>
-    <string name="settings_enabled_note">关闭后判定链直接放行（记录照写）</string>
-    <string name="settings_judge_gated">总开关关着：判定链**整体短路**（reason 只记 disabled）。\n标灰的项**既不生效也拨不动** —— 先打开「启用拦截判定」。</string>
-    <string name="settings_observe">观察模式</string>
-    <string name="settings_observe_note">**只记录、不拦截**：判定照跑，reason 里照出 AI 分数与命中规则</string>
-    <string name="settings_ai_group">AI 识别</string>
-    <string name="settings_spam">识别垃圾通知</string>
-    <string name="settings_spam_note">端侧**哈希 n-gram + 逻辑回归**，不联网</string>
-    <string name="settings_threshold_note">**分数 ≥ 阈值即拦**。\n开关关着时本滑杆**置灰** —— 这个值不参与判定。\n**调低更激进，0 等于全拦**。</string>
+    <string name="settings_enabled">拦截垃圾通知</string>
+    <string name="settings_enabled_note">符合关键词、或被判定为垃圾的通知不再弹出</string>
+    <string name="settings_judge_gated">需先打开上面的「拦截垃圾通知」</string>
+    <string name="settings_observe">只看不拦</string>
+    <string name="settings_observe_note">照常判断并记录，但所有通知都弹出</string>
+    <string name="settings_ai_group">内容识别</string>
+    <string name="settings_spam">识别垃圾内容</string>
+    <string name="settings_spam_note">在手机上运行，不需要联网</string>
+    <string name="settings_threshold_note">越严格拦得越多，也越容易拦下想看的通知</string>
     <string name="threshold_line">AI 分数阈值 %1$s（%2$s）</string>
     <string name="threshold_line_no_config">AI 分数阈值 未读到生效值（框架服务未连接）</string>
     <string name="threshold_note_ai_off">AI 未开启，不生效</string>
     <string name="threshold_note_dirty">松手下发，当前生效 %1$s</string>
     <string name="threshold_note_effective">当前生效</string>
     <string name="settings_protect_group">保护类型</string>
-    <string name="settings_protect_note">**命中即放行**，不进入规则与 AI —— 被误拦的代价远大于漏掉一条广告。</string>
+    <string name="settings_protect_note">这些通知永远不会被拦下</string>
     <string name="protect_call">通话</string>
-    <string name="protect_call_note">来电</string>
     <string name="protect_alarm">闹钟</string>
-    <string name="protect_alarm_note">闹钟</string>
     <string name="protect_navigation">导航</string>
-    <string name="protect_navigation_note">导航</string>
     <string name="protect_media">媒体</string>
-    <string name="protect_media_note">媒体播放</string>
     <string name="protect_foreground_service">前台服务</string>
-    <string name="protect_foreground_service_note">前台服务</string>
     <string name="protect_conversation">对话</string>
-    <string name="protect_conversation_note">即时通讯对话</string>
-    <string name="settings_config_group">已生效配置</string>
+    <string name="settings_threshold_label">严格程度</string>
+    <string name="settings_threshold_loose">宽松</string>
+    <string name="settings_threshold_strict">严格</string>
+    <string name="settings_diagnostic">诊断</string>
+    <string name="settings_diagnostic_note">模块状态、装配明细、版本</string>
+    <string name="diag_title">诊断</string>
+    <string name="diag_back">返回</string>
+    <string name="diag_connection_group">连接</string>
+    <string name="diag_app_version">应用 %1$s</string>
+    <string name="diag_note">这一屏是排障用的技术状态，日常使用不需要看</string>
+    <string name="diag_status_group">模块状态</string>
+    <string name="diag_status_note">读的是**模块端此刻的活状态**，不是界面推断。\n熔断、装配失败、判定被停用都会在这里露出来。</string>
+    <string name="diag_config_group">生效配置</string>
     <string name="settings_config_note">模块端**此刻实际读到**的那份配置（只读）。\n界面开关就是按它渲染的 —— 排查**「改了没生效」**先看这里。</string>
     <string name="settings_config_show">展开配置 JSON</string>
     <string name="settings_config_hide">收起配置 JSON</string>
