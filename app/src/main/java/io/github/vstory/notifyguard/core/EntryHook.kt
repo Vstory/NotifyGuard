@@ -61,7 +61,9 @@ object EntryHook {
         var failCount = 0
             private set
 
-        private val lines = ArrayList<String>()
+        private val entries = ArrayList<Entry>()
+
+        private class Entry(val result: String, val line: String)
 
         fun markOk(kind: String, vararg fields: String) = add("ok", kind, fields.toList())
 
@@ -73,13 +75,13 @@ object EntryHook {
 
         fun markFail(kind: String, fields: String, t: Throwable) {
             failCount++
-            lines.add(head("fail", kind) + " " + fields + " " + ModuleLogger.err(t))
+            entries.add(Entry("fail", head("fail", kind) + " " + fields + " " + ModuleLogger.err(t)))
         }
 
         fun markFail(kind: String, fields: List<String>, t: Throwable) {
             failCount++
-            lines.add(
-                head("fail", kind) + " " + fields.joinToString(" ") + " " + ModuleLogger.err(t)
+            entries.add(
+                Entry("fail", head("fail", kind) + " " + fields.joinToString(" ") + " " + ModuleLogger.err(t))
             )
         }
 
@@ -88,11 +90,28 @@ object EntryHook {
          * （AGENTS.md §框架日志格式的 release 口径）。装配明细本身仍全量保留给诊断屏用。
          */
         fun detailLines(includeOk: Boolean = true): List<String> =
-            if (includeOk) lines else lines.filterNot { it.startsWith("$domain.hook ok ") }
+            entries.filter { includeOk || it.result != "ok" }.map { it.line }
+
+        /**
+         * 逐条明细交给调用方输出，**级别由结果决定**：`fail` 走 [error]，其余走 [info]。
+         *
+         * 级别不按调用位置定：装配明细混着成功项与失败项，全走 I 就等于把失败抹平了；
+         * 也不该由调用点按行内字符串二次判断（那是拿格式当契约）。
+         */
+        fun emitDetails(includeOk: Boolean, info: (String) -> Unit, error: (String) -> Unit) {
+            entries.forEach {
+                when {
+                    it.result == "fail" -> error(it.line)
+                    includeOk || it.result != "ok" -> info(it.line)
+                }
+            }
+        }
 
         private fun add(result: String, kind: String, fields: List<String>) {
             if (result == "ok") okCount++ else skipCount++
-            lines.add(head(result, kind) + if (fields.isEmpty()) "" else " " + fields.joinToString(" "))
+            entries.add(
+                Entry(result, head(result, kind) + if (fields.isEmpty()) "" else " " + fields.joinToString(" "))
+            )
         }
 
         private fun head(result: String, kind: String) = "$domain.hook $result kind=$kind"

@@ -44,6 +44,9 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - 中文只允许来自 `ModuleLogger.err(t)` 的异常原文，其余一律英文
 - 级别：I = 状态变迁 / 就绪 / 汇总；E = 失败终态 / 异常 / 拒绝；D = 高频逐条细节（调用点自判
   `BuildConfig.DEBUG`，否则字符串常量会留在 dex 里）；禁 WARN
+- **级别按信息的性质定，不按打印位置定**：同一批输出里混着成功与失败时（hook 装配明细、`*.hooks`
+  汇总）按**最坏结果**分流 —— 失败明细走 `ModuleLogger.errorLine`、含 `fail` 的汇总走 E，其余走 I；
+  正常降级（扩展槽方法不存在、微调被关）仍是 I。LSPosed 日志页按级别过滤，混在 I 里的失败等于没有
 - 明细行（装配结果这类）逐行自成一条日志，不用一次调用写多行 —— 多行串的后续行不带版本前缀，无从归属
 - **release 打什么**（debug 版在同一份代码上只做加法）：`boot.start`（API / 框架 / ClassLoader）、
   `*.hooks` 汇总（hook 明细只列 `skip` / `fail`，成功项由 `ok=N` 回答）、配置生效（**内容变了才打**）、

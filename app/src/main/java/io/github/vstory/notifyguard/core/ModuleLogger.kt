@@ -24,6 +24,9 @@ import io.github.vstory.notifyguard.BuildConfig
  * - 一行一条、不换行；可能很长的值先截断（ClassLoader 一律走 [brief]）
  * - 中文只允许出现在 `err=` 的异常原文里 —— 那是给人读的异常信息，不参与解析
  * - 分级：I = 状态变迁 / 就绪 / 汇总；E = 失败终态 / 异常 / 拒绝；D = 高频逐条细节
+ * - **级别跟着信息的性质走，不跟着打印位置走**：同一条日志的结构里混着成功与失败（装配明细、
+ *   `*.hooks` 汇总）时按**最坏结果**定级 —— fail 明细走 E、含 fail 的汇总走 E；反过来，
+ *   「正常降级」（扩展槽方法不存在、微调被关）是 I，不是 E
  * - DEBUG 判定**不放在本类内**：调用点须自判 `BuildConfig.DEBUG` 后再调 [debug]，
  *   否则字符串常量会留在 dex 里（编译期裁剪失效）
  */
@@ -53,6 +56,9 @@ object ModuleLogger {
 
     /** 整行日志：调用方已按格式拼好（多行明细逐行调用，一次调用只写一行）。 */
     fun lines(line: String) = write(Log.INFO, PREFIX + line)
+
+    /** 同 [lines]，但走 E 级：装配明细里的失败项（级别由结果决定，不由位置决定）。 */
+    fun errorLine(line: String) = write(Log.ERROR, PREFIX + line)
 
     /** 失败字段的统一写法。自由文本只出现在这里。 */
     fun err(t: Throwable): String = "err=${t.javaClass.simpleName}: ${t.message}"
