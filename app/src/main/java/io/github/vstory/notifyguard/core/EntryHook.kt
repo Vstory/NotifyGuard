@@ -189,6 +189,14 @@ object EntryHook {
 
     fun currentSlot(): Slot = owner.get()
 
+    /**
+     * 判定链是否真的挂上了（`funnel` 或扩展槽装上了其一）。
+     *
+     * **不能用装配报告的 `okCount` 代替**：配置与模型两项先于钩子 `markOk`，`okCount` 恒 ≥ 2，
+     * 钩子全没挂上时它照样非零 —— 热重载拿这个判「新代装好了没」会把空壳当成功，踢掉旧代即停摆。
+     */
+    fun isJudgingReady(): Boolean = owner.get() != Slot.NONE
+
     fun isJudgingStopped(): Boolean = judgingStopped
 
     fun stopReason(): String? = stopReason
