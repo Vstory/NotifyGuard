@@ -36,7 +36,6 @@ object StatusCodec {
         put("recordsPersisted", s.recordsPersisted)
         put("recordsDropped", s.recordsDropped)
         put("blockedTotal", s.blockedTotal)
-        put("wouldTotal", s.wouldTotal)
         put("passTotal", s.passTotal)
         put("tallySince", s.tallySince)
         put("blockedToday", s.blockedToday)
@@ -73,7 +72,6 @@ object StatusCodec {
             recordsPersisted = o.optLong("recordsPersisted", d.recordsPersisted),
             recordsDropped = o.optLong("recordsDropped", d.recordsDropped),
             blockedTotal = o.optLong("blockedTotal", d.blockedTotal),
-            wouldTotal = o.optLong("wouldTotal", d.wouldTotal),
             passTotal = o.optLong("passTotal", d.passTotal),
             tallySince = o.optLong("tallySince", d.tallySince),
             blockedToday = o.optLong("blockedToday", d.blockedToday),

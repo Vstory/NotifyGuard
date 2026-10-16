@@ -70,7 +70,6 @@
     <string name="records_summary">Groups: %1$d · events: %2$d (cap: %3$d groups) · **the module side holds the authoritative copy**.</string>
     <string name="records_filter_all">All</string>
     <string name="records_filter_block">Blocked</string>
-    <string name="records_filter_would">Would block</string>
     <string name="records_filter_pass">Passed</string>
     <string name="records_filter_hit">%1$d groups in this filter (counted over the whole records window); showing the latest %2$d</string>
     <string name="records_filter_empty">Nothing in this filter — the window holds no entry with that verdict.\nWhether the verdict chain is running is in the framework log; switch back to All to see the passed ones.</string>
@@ -135,7 +134,6 @@
     <string name="action_mark_ham">Mark ham</string>
     <string name="action_undo">Undo</string>
     <string name="verdict_block">Blocked</string>
-    <string name="verdict_would">Would block</string>
     <string name="verdict_pass">Passed</string>
 
     <string name="records_fetch_timeout">Fetch timed out: the module is inactive, or the system framework has not been restarted since install (no data is lost — it is still under /data/misc/notifyguard on the module side)</string>

@@ -47,7 +47,6 @@ class LogCodecTest {
         assertNull(back.slot)
         assertNull(back.ruleId)
         assertNull(back.score)
-        assertEquals(false, back.would)
     }
 
     @Test
@@ -92,7 +91,6 @@ class LogCodecTest {
         title = "标题",
         text = "正文",
         reason = "rule:r1",
-        would = true,
         block = false,
         slot = "EXT_SLOT",
         ruleId = "r1",

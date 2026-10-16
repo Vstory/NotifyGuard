@@ -29,7 +29,7 @@ class LabelRecordTest {
         assertEquals(base, LabelRecord.keyOf(rec(ts = 101)))
         assertEquals(base, LabelRecord.keyOf(rec(pkg = "com.y")))
         assertEquals(base, LabelRecord.keyOf(rec(block = true)))
-        assertEquals(base, LabelRecord.keyOf(rec(would = true)))
+        assertEquals(base, LabelRecord.keyOf(rec()))
     }
 
     /** 内容不同必须分开；大小写差异按归一化后判同（与判定打分喂给模型的是同一份文本）。 */
@@ -109,14 +109,12 @@ class LabelRecordTest {
         count: Int = 1,
         lastTs: Long = ts,
         block: Boolean = false,
-        would: Boolean = false,
     ) = LogRecord(
         ts = ts,
         pkg = pkg,
         title = title,
         text = text,
         reason = "pass",
-        would = would,
         block = block,
         slot = "FUNNEL",
         lastTs = lastTs,

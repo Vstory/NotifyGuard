@@ -72,7 +72,7 @@ import io.github.vstory.notifyguard.ui.text
  * 看不懂「这条为什么没被判」。原始串只留一份在弹窗里，排障仍对得上框架日志（那行与弹窗由
  * [ReasonLine] / [ReasonDialog] 提供，学习屏用同一份）。
  *
- * 档位（全部 / 拦截 / 建议拦截 / 放行）记在 [RecordsFilterMemory] 里：本屏的 ViewModel 会随导航被
+ * 档位（全部 / 拦截 / 放行）记在 [RecordsFilterMemory] 里：本屏的 ViewModel 会随导航被
  * 销毁，档位不能跟着丢。首页点统计行跳进来时走那条一次性通道，不会改掉「上次用的档」。
  *
  * 行不做折叠：标定 AI 档位时要的是「一屏看全每条的判定与分数」。

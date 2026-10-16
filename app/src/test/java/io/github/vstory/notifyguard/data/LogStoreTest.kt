@@ -97,10 +97,9 @@ class LogStoreTest {
                 dup(2, text = "b"),
                 dup(3, text = "a", pkg = "com.y"),
                 dup(4, text = "a", block = true),
-                dup(5, text = "a", would = true),
             ),
         )
-        assertEquals(5, s.size())
+        assertEquals(4, s.size())
     }
 
     @Test
@@ -172,7 +171,6 @@ class LogStoreTest {
         title = "电池",
         text = "$current 平均：-622 mA",
         reason = "below_threshold:0.14",
-        would = false,
         block = false,
         slot = "EXT_SLOT",
         nkey = nkey,
@@ -220,7 +218,6 @@ class LogStoreTest {
         // 每条一个正文：同文本会被聚合，而这些用例要的是逐条独立
         text = "t$ts",
         reason = "pass",
-        would = false,
         block = false,
         slot = "FUNNEL",
     )
@@ -229,7 +226,6 @@ class LogStoreTest {
         ts: Long,
         text: String = "same",
         pkg: String = "com.x",
-        would: Boolean = false,
         block: Boolean = false,
     ) = LogRecord(
         ts = ts,
@@ -237,7 +233,6 @@ class LogStoreTest {
         title = "t",
         text = text,
         reason = "no_model",
-        would = would,
         block = block,
         slot = "EXT_SLOT",
     )
