@@ -27,9 +27,11 @@
     <string name="home_stat_no_value">—</string>
     <string name="home_stat_today_unknown">**Not reported** — the module build is older</string>
     <string name="home_stat_scope">%1$s groups · %2$s events</string>
-    <string name="home_top_scope">Ranked by counts in the **current record window**.</string>
+    <string name="home_top_scope">Ranked by **today**'s blocks.</string>
     <string name="home_top_group">Top apps (blocked)</string>
-    <string name="home_top_empty">Nothing has been blocked in this window.\n**Observe mode never blocks** — in Settings, make sure verdicts are enabled, then turn observe mode off.\nOtherwise check the framework log to confirm the verdict chain is running.</string>
+    <string name="home_top_empty">Nothing has been blocked today.
+**Observe mode never blocks** — in Settings, make sure verdicts are enabled, then turn observe mode off.
+Otherwise check the framework log to confirm the verdict chain is running.</string>
     <string name="home_top_other">Other apps: %1$d · %2$d events</string>
     <string name="home_observe_group">Observe mode</string>
     <string name="home_observe_note">**Observe mode** is on: verdicts still run and are recorded, but **nothing is blocked yet**.\nBlocked today and total blocked stay 0 until you turn it off.</string>

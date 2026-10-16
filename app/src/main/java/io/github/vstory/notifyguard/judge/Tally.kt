@@ -110,7 +110,14 @@ object Tally {
         if (todayStart.getAndSet(fresh) != fresh) todayBlocked.set(0L)
     }
 
-    private fun startOfDay(now: Long): Long = Calendar.getInstance().apply {
+    /**
+     * 本地日期的零点。
+     *
+     * **模块端的「今日拦截」与首页排行的「今日」必须用这一份**：两处各写一份 Calendar 算法时，
+     * 只要有一处把字段少清一个（比如漏了秒），两个「今日」在一天里就会各算各的，界面上表现为
+     * 首页的今日数与排行之和对不上，且只在一天中某段时间可见。
+     */
+    internal fun startOfDay(now: Long): Long = Calendar.getInstance().apply {
         timeInMillis = now
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
