@@ -65,14 +65,18 @@ object ConfigReader {
     @Volatile private var ifaceRef: XposedInterface? = null
     @Volatile private var listenerBound = false
 
-    fun start(iface: XposedInterface) {
+    /**
+     * [announce]=false 用于热重载：新代只是把配置重读一遍，内容并没有「变更」——
+     * 真变更由轮询/广播路径的 `config.applied` 回答（AGENTS.md §版本与日志）。
+     */
+    fun start(iface: XposedInterface, announce: Boolean = true) {
         ifaceRef = iface
-        attach(iface, "startup")
+        attach(iface, "startup", announce)
     }
 
     fun config(): Config = current.get()
 
-    private fun attach(iface: XposedInterface, from: String) {
+    private fun attach(iface: XposedInterface, from: String, announce: Boolean = true) {
         val prefs = runCatching { iface.getRemotePreferences(GROUP) }.getOrElse {
             ModuleLogger.error(
                 "config.prefs_failed",
@@ -83,13 +87,13 @@ object ConfigReader {
             scheduleRetry()
             return
         }
-        reload(prefs.getString(KEY, null), from)
+        reload(prefs.getString(KEY, null), from, announce)
 
         if (listenerBound) return
         runCatching {
             prefs.registerOnSharedPreferenceChangeListener { _, key ->
                 if (key == null || key == KEY) {
-                    runCatching { reload(prefs.getString(KEY, null), "push") }
+                    runCatching { reload(prefs.getString(KEY, null), "push", true) }
                         .onFailure { ModuleLogger.error("config.hot_update_failed", it, "kept=previous") }
                 }
             }
@@ -157,7 +161,7 @@ object ConfigReader {
             return
         }
         if (json == appliedJson) return
-        reload(json, "file/$trigger")
+        reload(json, "file/$trigger", true)
     }
 
     /** 单测复用同一个 object 单例，跨用例必须清干净（热重载在生产里等价于重建本 object）。 */
@@ -171,7 +175,7 @@ object ConfigReader {
         mirrorReadFailedOnce.set(false)
     }
 
-    private fun reload(json: String?, from: String) {
+    private fun reload(json: String?, from: String, announce: Boolean) {
         // 空值必须留线索：否则配置通道断了也只是「规则 0 条」，看起来像没配过规则
         if (json == null) {
             ModuleLogger.error(
@@ -197,7 +201,7 @@ object ConfigReader {
         val changed = json != appliedJson
         appliedJson = json
         // 只包住「变化才有的话」：下面的 delta 投递每次都要走，不能在这里 return
-        if (changed) {
+        if (changed && announce) {
             ModuleLogger.info(
                 "config.applied",
                 "from=$from",

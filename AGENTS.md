@@ -56,6 +56,10 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
   只需问一句：**它一天的条数会不会随通知量增长？会 → 进 debug**
 - 事件名与字段是**排障标识**：会与记录页的 `reason`、配置 JSON 对照着看。改文案要连带改
   `ModuleLogger` 的 KDoc、本节、以及知识库项目档里引用旧串的地方
+- **提示语行**（唯一不走 `<域>.<事件>` 的出口）：`ModuleLogger.notice` / `noticeError` 打人类可读的
+  英文小写短句，用于「一句话说完整件事」的场景 —— 目前只有热重载：`hot reloaded, hooks reinstalled`、
+  失败时 `hot reload failed, keeping old generation`。文案白名单在 `scripts/check_log_events.py` 的
+  `NOTICE_TEXTS`（依据：知识库《项目检查流程》⑪、api102 §19.4 —— 与 LSPosed 框架日志风格一致，便于跨模块检索）
 - 门禁：`python3 scripts/check_log_events.py .`（CI 的 Static check 档跑同一个脚本）
 
 ## 项目形状
@@ -96,7 +100,8 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **模块名与模块描述取 manifest 的资源**：`android:label` / `android:description`（现代 API 不用 `xposeddescription` 元数据），描述必须是 `@string/` 引用、只写一句话功能总结、不重复模块名（名字已由 label 显示）。
 - **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入横幅是 `boot.start`（variant / API / 框架 / ClassLoader）—— 「system_server 里跑的是哪一版代码」全靠它，模块版本另见每行前缀。
 - 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debug`，且**调用点自判 `BuildConfig.DEBUG`**（不自判则字符串常量会留在 release 的 dex 里）；门禁禁止 `debugRaw` / `[DBG]`。
-- 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。
+- 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。**内容没变不出声**（`appliedJson` 比对）：周期核对的 `file/check` 是常态，每次都打就把这行的意思冲淡了。**热重载不算上线**：新代重读同一份配置，不打这一行（`ConfigReader.start(announce=false)`），`model.ready` 同理。
+- **热重载只出三条**：旧代一句 `hotreload.accepted`、新代一句 `hot reloaded, hooks reinstalled gen=… stale=… cl=… hooks=ok:7,skip:0,fail:0 owner=…`、旧代退场一句 `teardown.done`。装配耗时几十毫秒，`start`/`hooks`/`done` 拆三行等于在同一时刻堆三行。
 - **微调版本标识 = `<下发时刻按设备时区>+<delta 文件字节 SHA-256 前 4 字节>`**（如 `2026-10-10 16:41:33+3f9a1c2b`），实现只有 `DeltaStamp` 一份，模块端日志与 App 侧界面显示的必须是同一串。时刻一律按设备当前时区显示（界面与框架日志同口径），格式化前重取默认时区。摘要是「同毫秒重发」「版本号没变而文件被重写」的唯一判据。
 
 ## 文案与界面
