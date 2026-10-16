@@ -53,7 +53,7 @@ object EntryHook {
      * 明细**逐行自成一条日志**（每行已是 `boot.hook <结果> kind=… k=v` 的形式），不再拼成一个多行巨串：
      * 多行串的后续行不带版本前缀，混进日志里无法归属到哪次装配。
      */
-    class InstallReport {
+    class InstallReport(private val domain: String = "boot") {
         var okCount = 0
             private set
         var skipCount = 0
@@ -83,14 +83,19 @@ object EntryHook {
             )
         }
 
-        fun detailLines(): List<String> = lines
+        /**
+         * [includeOk]=false 时只回 skip/fail 行：成功项由汇总里的 `ok=N` 回答，release 里不必逐条占行
+         * （AGENTS.md §框架日志格式的 release 口径）。装配明细本身仍全量保留给诊断屏用。
+         */
+        fun detailLines(includeOk: Boolean = true): List<String> =
+            if (includeOk) lines else lines.filterNot { it.startsWith("$domain.hook ok ") }
 
         private fun add(result: String, kind: String, fields: List<String>) {
             if (result == "ok") okCount++ else skipCount++
             lines.add(head(result, kind) + if (fields.isEmpty()) "" else " " + fields.joinToString(" "))
         }
 
-        private fun head(result: String, kind: String) = "boot.hook $result kind=$kind"
+        private fun head(result: String, kind: String) = "$domain.hook $result kind=$kind"
     }
 
     /** 计数快照。整体取一份：逐项取值会在两次读之间被判定线程改掉，读出的数自相矛盾。 */
@@ -106,7 +111,7 @@ object EntryHook {
     private val funnelPassHits = AtomicLong()
     private val romBlocked = AtomicLong()
 
-    fun install(iface: XposedInterface, cl: ClassLoader): InstallReport {
+    fun install(iface: XposedInterface, cl: ClassLoader, domain: String = "boot"): InstallReport {
         reset()
         CrashGuard.onStorm = { stopJudging("异常风暴") }
         CrashGuard.onTrip = { stopJudging("崩溃环路熔断") }
@@ -116,7 +121,7 @@ object EntryHook {
             runCatching { install(iface, cl) }
         }
 
-        val report = InstallReport()
+        val report = InstallReport(domain)
         // 先于 safe_mode 检查：标志存在时也要能看见用户把它删掉，否则恢复只剩重启一条路
         CrashGuard.attach(iface, cl, report::markOk, report::markSkip)
         if (CrashGuard.isSafeMode()) {
@@ -140,8 +145,7 @@ object EntryHook {
 
         installFunnel(iface, nms, report)
         installClinitTrigger(iface, nms, report)
-
-        ModuleLogger.info("assemble.done", "owner=${owner.get().wire}", "ext_hits=${extHits.get()}")
+        // 装配结果由调用方的 boot.hooks / hotreload.hooks 一行给出（含 owner），这里不再另起一行
         return report
     }
 
@@ -346,8 +350,9 @@ object EntryHook {
         val decision = Judge.decide(snapshot, ConfigReader.config())
         RecordSink.record(snapshot, decision)
         LogSink.submit(LogRecord.from(snapshot, decision, slot.name, System.currentTimeMillis()))
-        if (decision.block) {
-            ModuleLogger.info(
+        // 逐条拦截只在 debug 版留：release 的框架日志不承担明细（App 记录页能逐条看到）
+        if (decision.block && BuildConfig.DEBUG) {
+            ModuleLogger.debug(
                 "record.blocked",
                 "slot=${slot.wire}",
                 "pkg=${snapshot?.pkg}",
@@ -361,8 +366,9 @@ object EntryHook {
 
     private fun tick(counter: AtomicLong, kind: String) {
         val n = counter.incrementAndGet()
-        if (n % HIT_LOG_EVERY == 0L) {
-            ModuleLogger.info("slot.stats", "kind=$kind", "n=$n", *statsFields())
+        // 周期统计比通知量增长还快，release 里一条都不留（App 状态屏有同一组数）
+        if (BuildConfig.DEBUG && n % HIT_LOG_EVERY == 0L) {
+            ModuleLogger.debug("slot.stats", "kind=$kind", "n=$n", *statsFields())
         }
     }
 

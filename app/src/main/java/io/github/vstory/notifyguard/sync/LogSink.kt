@@ -64,7 +64,7 @@ object LogSink {
         }
         worker.execute {
             store = LogStore(ModuleDir.logs())
-            ModuleLogger.info("record.persist_ready", "dir=${dir.absolutePath}")
+            if (BuildConfig.DEBUG) ModuleLogger.debug("record.persist_ready", "dir=${dir.absolutePath}")
         }
         LogChannel.register(c)
     }

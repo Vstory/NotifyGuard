@@ -192,22 +192,28 @@ object ConfigReader {
         }
         parsed.compiledRules   // 先把正则编译掉，不能留给判定热路径
         current.set(parsed)
+        // 内容没变就不出声：周期核对（file/check）与重复广播每次都会走到这里，
+        // 而这行日志回答的是「配置什么时候真的变了」，不是「配置通道活着」
+        val changed = json != appliedJson
         appliedJson = json
-        ModuleLogger.info(
-            "config.applied",
-            "from=$from",
-            "enabled=${parsed.enabled}",
-            "rules=${parsed.rules.size}",
-            "rules_effective=${parsed.compiledRules.size}",
-            "whitelist=${parsed.whitelist.size}",
-            "delta_version=${parsed.deltaVersion}",
-        )
-        if (parsed.droppedRules > 0) {
-            ModuleLogger.error(
-                "config.rules_dropped",
-                "n=${parsed.droppedRules}",
-                "reasons=unknown_type,invalid_regex,empty_keyword",
+        // 只包住「变化才有的话」：下面的 delta 投递每次都要走，不能在这里 return
+        if (changed) {
+            ModuleLogger.info(
+                "config.applied",
+                "from=$from",
+                "enabled=${parsed.enabled}",
+                "rules=${parsed.rules.size}",
+                "rules_effective=${parsed.compiledRules.size}",
+                "whitelist=${parsed.whitelist.size}",
+                "delta_version=${parsed.deltaVersion}",
             )
+            if (parsed.droppedRules > 0) {
+                ModuleLogger.error(
+                    "config.rules_dropped",
+                    "n=${parsed.droppedRules}",
+                    "reasons=unknown_type,invalid_regex,empty_keyword",
+                )
+            }
         }
         // 版本号变了才去读 delta 文件（IO 在 DeltaHolder 的后台线程上，这里只是投递）
         DeltaHolder.onConfigVersion(parsed.deltaVersion)
