@@ -33,6 +33,40 @@ class InstallReportTest {
     }
 
     @Test
+    fun emitDetailsRoutesFailuresToTheErrorChannel() {
+        val r = EntryHook.InstallReport("boot")
+        r.markOk("funnel", "cls=x")
+        r.markSkip("ext", "reason=nms_ext_absent")
+        r.markFail("nms_clinit", "reason=resolve_after_clinit", IllegalStateException("boom"))
+
+        val info = mutableListOf<String>()
+        val error = mutableListOf<String>()
+        r.emitDetails(includeOk = true, info = info::add, error = error::add)
+
+        assertEquals(
+            listOf("boot.hook ok kind=funnel cls=x", "boot.hook skip kind=ext reason=nms_ext_absent"),
+            info,
+        )
+        assertEquals(1, error.size)
+        assertTrue(error[0].startsWith("boot.hook fail kind=nms_clinit"))
+        assertTrue(error[0].endsWith("err=IllegalStateException: boom"))
+    }
+
+    @Test
+    fun emitDetailsKeepsFailuresWhenOkIsCulled() {
+        val r = EntryHook.InstallReport("hotreload")
+        r.markOk("funnel", "cls=x")
+        r.markFail("nms_clinit", "reason=x", IllegalStateException("boom"))
+
+        val info = mutableListOf<String>()
+        val error = mutableListOf<String>()
+        r.emitDetails(includeOk = false, info = info::add, error = error::add)
+
+        assertTrue(info.isEmpty())
+        assertEquals(1, error.size)
+    }
+
+    @Test
     fun judgingIsNotReadyBeforeAnySlotIsTaken() {
         EntryHook.reset()
 

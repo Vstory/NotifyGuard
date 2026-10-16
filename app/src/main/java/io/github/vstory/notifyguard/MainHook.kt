@@ -93,7 +93,9 @@ class MainHook : XposedModule() {
         // 顺序即安全边界：**先装新、装上了才踢旧**。反过来（先 unhook 再装）一旦新代装失败，
         // 模块就彻底停摆（旧钩子已卸、新钩子没上）；这个顺序最坏也只是「仍在旧代码上跑」。
         val report = assemble(cl, "hotreload")
-        ModuleLogger.info("hotreload.hooks", *hookFields(report))
+        val hotFields = hookFields(report)
+        if (report.failCount > 0) ModuleLogger.error("hotreload.hooks", *hotFields)
+        else ModuleLogger.info("hotreload.hooks", *hotFields)
         dumpDetails(report)
         if (!EntryHook.isJudgingReady()) {
             // 新代这个空壳必须自己卸干净：留着它，旧代的钩子仍在（还没 unhook），同一条通知会被两代各判一次
@@ -120,7 +122,8 @@ class MainHook : XposedModule() {
             return
         }
         if (cl == null) {
-            ModuleLogger.info("boot.skip", "reason=null_classloader")
+            // 框架没给 classLoader = 装配根本没开始，跟「钩子没挂上」同级，不能混在 I 里
+            ModuleLogger.error("boot.assemble_failed", "reason=null_classloader", "hooks=passthrough")
             return
         }
         // 注入横幅：进程跑的是「注入那一刻」的那份代码，App 更新后 system_server 里可能仍是旧的，
@@ -133,7 +136,9 @@ class MainHook : XposedModule() {
             "cl=${cl.brief()}",
         )
         val report = assemble(cl, "boot")
-        ModuleLogger.info("boot.hooks", *hookFields(report))
+        val bootFields = hookFields(report)
+        if (report.failCount > 0) ModuleLogger.error("boot.hooks", *bootFields)
+        else ModuleLogger.info("boot.hooks", *bootFields)
         dumpDetails(report)
         // 熔断中本来就不装钩子，不算故障；其余情况没钩子 = 模块只是个空壳，必须报出来
         if (!EntryHook.isJudgingReady() && !CrashGuard.isSafeMode()) {
@@ -166,9 +171,16 @@ class MainHook : XposedModule() {
         "owner=${EntryHook.currentSlot().wire}",
     )
 
-    /** 成功项只在 debug 版逐条列出；release 只列 skip/fail（AGENTS.md 的 release 口径）。 */
+    /**
+     * 成功项只在 debug 版逐条列出；release 只列 skip/fail（AGENTS.md 的 release 口径）。
+     * 级别由 [EntryHook.InstallReport.emitDetails] 按每条结果给出：失败明细走 E，其余走 I。
+     */
     private fun dumpDetails(report: EntryHook.InstallReport) {
-        report.detailLines(includeOk = BuildConfig.DEBUG).forEach { ModuleLogger.lines(it) }
+        report.emitDetails(
+            includeOk = BuildConfig.DEBUG,
+            info = ModuleLogger::lines,
+            error = ModuleLogger::errorLine,
+        )
         if (BuildConfig.DEBUG) ModuleLogger.debug("slot.stats", *EntryHook.statsFields())
     }
 }
