@@ -12,6 +12,7 @@ import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.judge.LogRecord
+import io.github.vstory.notifyguard.judge.Tally
 import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.LogFetcher
 import io.github.vstory.notifyguard.sync.StatusClient
@@ -58,8 +59,15 @@ class HomeViewModel : ViewModel() {
     data class AppCount(val pkg: String, val events: Int)
 
     /**
-     * 窗口内的统计。三个判定数按**事件次数**（`count` 之和）算，与记录屏状态卡的「累计」同口径；
-     * 另给组数，让「上限是组数」这件事在界面上说得通。
+     * 首页统计。**两种口径同处一个类，改的时候别串**：
+     *
+     * - `groups` / `events` / `blocked` / `would` / `pass` 是**当前记录窗口**（本地留存的全量记录），
+     *   按事件次数算，与记录屏状态卡的「累计」同口径。
+     * - `top` / `otherApps` / `otherEvents` 是**今日**（按本地日期，过零点归零），与统计卡里的
+     *   「今日拦截」同一套零点算法（[Tally.startOfDay]）。排行与今日拦截的数要能互相对上，
+     *   所以它不能跟着窗口走 —— 窗口里还留着昨天的记录时，两者会差出一整天的量。
+     *
+     * 三者按事件次数（`count` 之和）算，另给组数，让「上限是组数」这件事在界面上说得通。
      */
     data class Stats(
         val groups: Int,
@@ -84,8 +92,11 @@ class HomeViewModel : ViewModel() {
              *
              * 同组记录的 `block` / `would` 必然相同 —— `LogRecord.sameGroup` 把它们纳入了聚合键，
              * 所以这里不需要处理「同组两种判定」。
+             *
+             * [todayStart] 是本地日期的零点（由 [Tally.startOfDay] 算），没有默认值：排行漏了过滤就
+             * 会静默变成窗口口径，那种错只能靠眼睛在真机上发现。
              */
-            fun of(records: List<LogRecord>): Stats {
+            fun of(records: List<LogRecord>, todayStart: Long): Stats {
                 var events = 0
                 var blocked = 0
                 var would = 0
@@ -95,7 +106,9 @@ class HomeViewModel : ViewModel() {
                     when {
                         r.block -> {
                             blocked += r.count
-                            byPkg[r.pkg] = (byPkg[r.pkg] ?: 0) + r.count
+                            // 排行按 ts（这条记录首次出现的时间）归日：与记录屏显示、排序用的时间同一个，
+                            // 跨天重复出现的同组记录会整条算在首次那天
+                            if (r.ts >= todayStart) byPkg[r.pkg] = (byPkg[r.pkg] ?: 0) + r.count
                         }
 
                         r.would -> would += r.count
@@ -160,6 +173,7 @@ class HomeViewModel : ViewModel() {
     }
 
     private fun repaint(ctx: Context) {
-        state = state.copy(stats = Stats.of(LogStore.get(ctx).all()))
+        // 零点在每次重绘时重算：跨零点后不重绘的话，排行会一直停在昨天
+        state = state.copy(stats = Stats.of(LogStore.get(ctx).all(), Tally.startOfDay(System.currentTimeMillis())))
     }
 }
