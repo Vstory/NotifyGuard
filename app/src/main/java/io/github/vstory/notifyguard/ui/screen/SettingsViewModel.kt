@@ -77,7 +77,6 @@ class SettingsViewModel : ViewModel() {
 
     fun setEnabled(value: Boolean) = push { it.copy(enabled = value) }
 
-    fun setObserve(value: Boolean) = push { it.copy(observe = value) }
 
     fun setSpam(value: Boolean) = push { it.copy(spamEnabled = value) }
 

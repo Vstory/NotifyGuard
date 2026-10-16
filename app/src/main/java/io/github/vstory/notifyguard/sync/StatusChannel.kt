@@ -143,6 +143,7 @@ object StatusChannel {
             passTotal = Tally.passTotal(),
             tallySince = Tally.sinceAt(),
             blockedToday = Tally.todayBlockedTotal(),
+            todayByPkg = Tally.todayBlockedByPkg(),
         )
     }
 }

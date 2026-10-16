@@ -8,7 +8,6 @@ import java.util.Locale
  * 判定链（设计方案.md §6）。
  *
  * 任一步「放行」即短路；配置取一次快照传入，避免热更新落在两步之间。
- * [Decision.wouldBlock] 与 [Decision.block] 分开：观察模式下判定照跑、原因照出，只有真正拦截被压掉。
  *
  * AI 段（第 8–9 步）取的是 [ModelHolder] 的快照，判定里不做任何 IO；打分异常一律放行——
  * 打分跑在 system_server 的通知入队路径上，异常穿透的代价是通知直接发不出来。
@@ -40,7 +39,7 @@ object Judge {
         val raw = s.judgeText()
         val lowered = raw.lowercase()
         RuleMatcher.firstHit(cfg.compiledRules, s.pkg, lowered, raw)
-            ?.let { return intercept(cfg, "rule:$it", it) }
+            ?.let { return intercept("rule:$it", it) }
 
         if (lowered.trim().length < MIN_AI_LEN) return pass("text_too_short")
         if (ProtectGuard.hasHardWord(lowered)) return pass("hard_word")
@@ -53,10 +52,10 @@ object Judge {
             ModuleLogger.error("ai.score_failed", t, "action=pass")
             return pass("ai_error")
         }
-        // 分数写进 reason：观察模式下没有第二个地方能看到分数分布，标定阈值全靠它
+        // 分数写进 reason：标定阈值时要看的是分数分布，界面上的「严格程度」滑杆只是它的档位
         if (score >= cfg.threshold) {
             return Decision(
-                block = !cfg.observe,
+                block = true,
                 reason = "ai:${fmt(score)}",
                 wouldBlock = true,
                 score = score,
@@ -69,6 +68,6 @@ object Judge {
 
     private fun pass(reason: String) = Decision(false, reason)
 
-    private fun intercept(cfg: Config, reason: String, ruleId: String) =
-        Decision(block = !cfg.observe, reason = reason, wouldBlock = true, ruleId = ruleId)
+    private fun intercept(reason: String, ruleId: String) =
+        Decision(block = true, reason = reason, wouldBlock = true, ruleId = ruleId)
 }

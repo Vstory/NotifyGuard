@@ -40,6 +40,7 @@ object StatusCodec {
         put("passTotal", s.passTotal)
         put("tallySince", s.tallySince)
         put("blockedToday", s.blockedToday)
+        put("todayByPkg", JSONObject(s.todayByPkg))
     }.toString()
 
     fun decode(json: String?): StatusReport? {
@@ -76,6 +77,10 @@ object StatusCodec {
             passTotal = o.optLong("passTotal", d.passTotal),
             tallySince = o.optLong("tallySince", d.tallySince),
             blockedToday = o.optLong("blockedToday", d.blockedToday),
+            // 缺字段或整块坏掉都退回空 map：排行少几行不该让整份状态判成不可用
+            todayByPkg = o.optJSONObject("todayByPkg")?.let { m ->
+                buildMap { m.keys().forEach { k -> put(k, m.optLong(k, 0L)) } }
+            } ?: d.todayByPkg,
         )
     }
 }

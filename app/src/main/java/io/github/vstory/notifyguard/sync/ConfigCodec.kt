@@ -25,7 +25,6 @@ object ConfigCodec {
         return Config(
             schema = schema,
             enabled = o.optBoolean("enabled", true),
-            observe = o.optBoolean("observe", true),
             protect = protect(o.optJSONObject("protect")),
             whitelist = stringSet(o.optJSONArray("whitelist")),
             rules = rules(o.optJSONArray("rules")),
@@ -39,7 +38,9 @@ object ConfigCodec {
         val o = JSONObject()
         o.put("schema", c.schema)
         o.put("enabled", c.enabled)
-        o.put("observe", c.observe)
+        // 固定写 false：升级后 App 已是新代码而注入进程还在跑旧代码（热重载要重启 system_server 才生效），
+        // 旧代码读的是 `optBoolean("observe", true)` —— 缺键会被默认成「只观察不拦」，那段时间通知一条都不会拦。
+        o.put("observe", false)
         o.put(
             "protect",
             JSONObject().apply {

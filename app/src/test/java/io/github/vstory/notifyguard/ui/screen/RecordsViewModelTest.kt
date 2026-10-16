@@ -52,7 +52,7 @@ class RecordsViewModelTest {
         assertEquals(rs.size, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All).size)
     }
 
-    /** 观察模式下 `would=true, block=false`：它属「建议拦截」，不许同时落进「拦截」。 */
+    /** 老记录里是 `would=true, block=false`（观察模式时期留下的）：属「建议拦截」，不许同时落进「拦截」。 */
     @Test
     fun wouldBlockIsNotCountedAsBlocked() {
         val rs = listOf(record(1, would = true), record(2, would = true, block = true))

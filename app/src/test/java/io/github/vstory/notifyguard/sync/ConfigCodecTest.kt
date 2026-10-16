@@ -20,7 +20,6 @@ class ConfigCodecTest {
     fun blankFallsBackToDefaults() {
         for (json in listOf(null, "", "   ")) {
             val c = decode(json)
-            assertTrue(c.observe)
             assertTrue(c.enabled)
             assertTrue(c.rules.isEmpty())
             assertTrue(c.protect.call)
@@ -31,7 +30,6 @@ class ConfigCodecTest {
     fun roundTripKeepsEveryField() {
         val src = Config(
             enabled = false,
-            observe = false,
             protect = ProtectSwitches(call = false, media = false),
             whitelist = setOf("com.keep.me"),
             rules = listOf(
@@ -51,7 +49,6 @@ class ConfigCodecTest {
         val back = decode(ConfigCodec.encode(src))
 
         assertEquals(src.enabled, back.enabled)
-        assertEquals(src.observe, back.observe)
         assertEquals(src.protect.call, back.protect.call)
         assertEquals(src.protect.media, back.protect.media)
         assertEquals(src.protect.navigation, back.protect.navigation)
@@ -68,6 +65,7 @@ class ConfigCodecTest {
      */
     @Test
     fun singleFieldUpdateCarriesNothingElse() {
+        // 老配置里带 observe 键（已废弃）：解码必须忽略它、其余字段照常读回
         val base = decode(
             """{"schema":1,"observe":true,"threshold":0.83,"whitelist":["com.keep.me"],
                 "protect":{"call":false},"spamEnabled":false,
@@ -76,7 +74,6 @@ class ConfigCodecTest {
         val back = decode(ConfigCodec.encode(base.copy(spamEnabled = true)))
 
         assertTrue(back.spamEnabled)
-        assertTrue(back.observe)
         assertEquals(0.83, back.threshold, 0.0)
         assertEquals(setOf("com.keep.me"), back.whitelist)
         assertFalse(back.protect.call)
@@ -98,7 +95,6 @@ class ConfigCodecTest {
     fun missingFieldsUseDefaults() {
         val c = decode("""{"schema":1}""")
         assertTrue(c.enabled)
-        assertTrue(c.observe)
         assertTrue(c.rules.isEmpty())
         assertTrue(c.whitelist.isEmpty())
         assertEquals(Config.DEFAULT_THRESHOLD, c.threshold, 0.0)
@@ -124,7 +120,6 @@ class ConfigCodecTest {
         val back = decode(ConfigCodec.encode(base.copy(deltaVersion = 1759812345678L)))
         assertEquals(1759812345678L, back.deltaVersion)
         assertTrue(back.spamEnabled)
-        assertFalse(back.observe)
         assertEquals(0.83, back.threshold, 0.0)
         assertEquals(base.rules, back.rules)
     }
