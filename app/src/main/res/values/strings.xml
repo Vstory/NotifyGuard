@@ -27,7 +27,7 @@
     <string name="home_stat_no_value">—</string>
     <string name="home_stat_today_unknown">**Not reported** — the module build is older</string>
     <string name="home_stat_scope">%1$s groups · %2$s events</string>
-    <string name="home_top_scope">Ranked by **today**'s blocks.</string>
+    <string name="home_top_scope">Ranked by counts in **today**.</string>
     <string name="home_top_group">Top apps (blocked)</string>
     <string name="home_top_empty">Nothing has been blocked today.
 **Observe mode never blocks** — in Settings, make sure verdicts are enabled, then turn observe mode off.
