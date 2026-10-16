@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.judge.Config
-import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
 
 /**
@@ -152,30 +151,6 @@ fun SettingsScreen(
                     onClick = onOpenDiagnostic,
                 )
             }
-        }
-    }
-}
-
-/**
- * 顶部一行连接状态。
- *
- * 不做成卡片：卡片是 Containment，留给首页那种「自成一块」的统计块；这里只需要回答「有没有连上、
- * 没连上怎么办」，那就一行字。连上但读不到配置时另起一行（那是另一种故障，恢复方式也不同）。
- */
-@Composable
-private fun StatusLine(serviceText: UiText, connected: Boolean, loaded: Boolean) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
-            text = serviceText.text(),
-            style = MaterialTheme.typography.bodySmall,
-            color = if (connected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
-        )
-        if (connected && !loaded) {
-            Text(
-                text = stringResource(R.string.status_cfg_unreadable),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
         }
     }
 }

@@ -1,18 +1,20 @@
 package io.github.vstory.notifyguard.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -33,7 +35,10 @@ import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.ui.text
 
 /**
- * 规则屏（M4）：关键词与白名单。
+ * 规则屏：用户自己说了算的两件事 —— 要拦的词、不要动应用。
+ *
+ * 每组只留「做什么 + 怎么改」，实现解释（候选从哪来、为什么不用申请权限、半截词为什么要按钮提交）
+ * 一律不进界面（docs/ui-rework.md 第 5.3 节）。
  *
  * 提交口径见 [RulesViewModel] —— 关键词按钮提交、白名单勾选即下发。
  */
@@ -65,28 +70,30 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
 
     // 文案先在这里求出来：LazyColumn 的 content 不是 @Composable，里面调不了 stringResource
     // （同本函数里 LaunchedEffect 那条口径）
+    val title = stringResource(R.string.rules_title)
     val keywordTitle = stringResource(R.string.rules_keyword_group)
+    val keywordFieldLabel = stringResource(R.string.rules_keyword_field_label)
+    val keywordHint = stringResource(R.string.rules_keyword_hint)
     val keywordNote = stringResource(R.string.rules_keyword_note)
     val ruleEnabledLabel = stringResource(R.string.rules_rule_enabled)
     val ruleEnabledNote = stringResource(
         if (viewModel.keywordsSaved()) R.string.rules_rule_enabled_note else R.string.rules_rule_empty_note
     )
-    val keywordHint = stringResource(R.string.rules_keyword_hint)
-    val keywordSubmitNote = stringResource(R.string.rules_keyword_submit_note)
     val saveLabel = viewModel.saveLabel().text()
+    val saveNote = stringResource(R.string.rules_keyword_submit_note)
     val whitelistTitle = stringResource(R.string.rules_whitelist_group)
     val whitelistNote = stringResource(R.string.rules_whitelist_note)
-    val candidatesNote = stringResource(R.string.rules_whitelist_candidates_note)
     val refreshLabel = stringResource(
         if (state.refreshing) R.string.rules_refreshing else R.string.rules_refresh_candidates
     )
     val noCandidates = stringResource(R.string.rules_no_candidates)
+    val searchLabel = stringResource(R.string.rules_search_label)
     val searchHint = stringResource(R.string.rules_search_hint)
     val searchEmpty = stringResource(R.string.rules_search_empty)
     val cappedNote = stringResource(R.string.rules_candidates_capped, RulesViewModel.CANDIDATE_MAX)
+    val pkgLabel = stringResource(R.string.rules_pkg_label)
     val pkgHint = stringResource(R.string.rules_pkg_hint)
     val addLabel = stringResource(R.string.rules_add_whitelist)
-    val title = stringResource(R.string.rules_title)
 
     val connected = state.connected
     val all = state.candidates
@@ -108,13 +115,12 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            contentPadding = PaddingValues(horizontal = ScreenPadding, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(ItemGap),
         ) {
-            item { StatusCard(state.serviceText, connected, state.cfg != null) }
+            item { StatusLine(state.serviceText, connected, state.cfg != null) }
 
-            item { SectionTitle(keywordTitle) }
-            item { Note(keywordNote) }
+            item { SectionLabel(keywordTitle) }
             item {
                 SwitchRow(
                     label = ruleEnabledLabel,
@@ -129,12 +135,12 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                     value = state.keywordDraft,
                     onValueChange = viewModel::dragKeywords,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text(keywordHint) },
-                    minLines = 4,
+                    label = { Text(keywordFieldLabel) },
+                    supportingText = { Text(keywordHint) },
+                    minLines = 3,
                     enabled = connected,
                 )
             }
-            item { Note(keywordSubmitNote) }
             item {
                 Button(
                     onClick = viewModel::saveKeywords,
@@ -144,19 +150,25 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                     Text(saveLabel)
                 }
             }
+            item { Note(saveNote) }
+            item { Note(keywordNote) }
 
-            item { SectionTitle(whitelistTitle) }
-            item { Note(whitelistNote) }
-            item { Note(candidatesNote) }
             item {
-                OutlinedButton(
-                    onClick = viewModel::refreshCandidates,
-                    enabled = connected && !state.refreshing,
-                    modifier = Modifier.heightIn(min = 48.dp),
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(refreshLabel)
+                    SectionLabel(whitelistTitle, Modifier.weight(1f))
+                    TooltippedIconButton(
+                        tooltip = refreshLabel,
+                        onClick = viewModel::refreshCandidates,
+                        enabled = connected && !state.refreshing,
+                    ) {
+                        Icon(Icons.Filled.Refresh, contentDescription = refreshLabel)
+                    }
                 }
             }
+            item { Note(whitelistNote) }
             if (all.isEmpty()) {
                 item { Note(noCandidates) }
             } else {
@@ -165,6 +177,7 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         value = state.query,
                         onValueChange = viewModel::dragQuery,
                         modifier = Modifier.fillMaxWidth(),
+                        label = { Text(searchLabel) },
                         placeholder = { Text(searchHint) },
                         singleLine = true,
                         enabled = connected,
@@ -203,6 +216,7 @@ fun RulesScreen(viewModel: RulesViewModel = viewModel()) {
                         value = state.pkgDraft,
                         onValueChange = viewModel::dragPkg,
                         modifier = Modifier.weight(1f),
+                        label = { Text(pkgLabel) },
                         placeholder = { Text(pkgHint) },
                         singleLine = true,
                         enabled = connected,
