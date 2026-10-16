@@ -29,6 +29,8 @@ import io.github.vstory.notifyguard.BuildConfig
  *   「正常降级」（扩展槽方法不存在、微调被关）是 I，不是 E
  * - DEBUG 判定**不放在本类内**：调用点须自判 `BuildConfig.DEBUG` 后再调 [debug]，
  *   否则字符串常量会留在 dex 里（编译期裁剪失效）
+ * - 唯一例外是 [notice] / [noticeError]：人类可读的英文小写提示语行（热重载那句话），
+ *   文案受日志门禁的白名单约束
  */
 object ModuleLogger {
 
@@ -59,6 +61,18 @@ object ModuleLogger {
 
     /** 同 [lines]，但走 E 级：装配明细里的失败项（级别由结果决定，不由位置决定）。 */
     fun errorLine(line: String) = write(Log.ERROR, PREFIX + line)
+
+    /**
+     * **提示语行**：人类可读的英文小写短句（热重载这类「一句话说完整件事」的输出）。
+     *
+     * 全项目只有这里不走 `<域>.<事件> k=v`：知识库《项目检查流程》⑪ 与 api102 §19.4 要求模块的
+     * 热重载提示语与 LSPosed 框架风格一致（`hot reloaded, hooks reinstalled`），便于跨模块检索对齐。
+     * 文案受 `scripts/check_log_events.py` 的白名单约束 —— 加新文案要同改那里，不能随手写自由文本。
+     */
+    fun notice(text: String, vararg fields: String) = write(Log.INFO, line(text, fields))
+
+    /** 同 [notice]，E 级：失败的那句提示语（如热重载被放弃）。 */
+    fun noticeError(text: String, vararg fields: String) = write(Log.ERROR, line(text, fields))
 
     /** 失败字段的统一写法。自由文本只出现在这里。 */
     fun err(t: Throwable): String = "err=${t.javaClass.simpleName}: ${t.message}"

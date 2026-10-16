@@ -27,7 +27,8 @@ object ModelHolder {
 
     private var loaded = false
 
-    fun loadBundled() {
+    /** [announce]=false 用于热重载：新代重读同一份内置模型，不是状态变迁；不可用仍照打 E。 */
+    fun loadBundled(announce: Boolean = true) {
         if (loaded) return
         synchronized(this) {
             if (loaded) return
@@ -35,7 +36,7 @@ object ModelHolder {
             val model = SpamModel.bundled()
             if (model == null) {
                 ModuleLogger.error("model.unavailable", "resource=${SpamModel.RESOURCE}", "action=pass")
-            } else {
+            } else if (announce) {
                 ModuleLogger.info(
                     "model.ready",
                     "buckets=${model.buckets}",

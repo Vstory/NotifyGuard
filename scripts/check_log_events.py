@@ -20,7 +20,14 @@ DOMAINS = {
     "teardown", "context", "judge", "ai", "record", "label", "status", "config", "channel",
     "model", "delta", "app",
 }
-CALL = re.compile(r"\b(ModuleLogger|AppLogger)\.(info|error|debug|lines)\s*\(")
+CALL = re.compile(r"\b(ModuleLogger|AppLogger)\.(info|error|debug|lines|notice|noticeError)\s*\(")
+# 提示语行（notice）：唯一不走 `<域>.<事件> k=v` 的出口，文案受这里约束 ——
+#   知识库《项目检查流程》⑪ 与 api102 §19.4 要求热重载提示语与 LSPosed 框架风格一致（英文小写）。
+NOTICE = {"notice", "noticeError"}
+NOTICE_TEXTS = (
+    "hot reloaded, hooks reinstalled",
+    "hot reload failed, keeping old generation",
+)
 EVENT = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 FIELD = re.compile(r"^[a-z][a-z0-9_]*=")
 HAN = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
@@ -79,7 +86,10 @@ def main(root):
                 problems.append(f"{rel}: {tag}.{call}() 没有参数")
                 continue
             event = literal(args[0])
-            if event is None:
+            if call in NOTICE:
+                if event is None or not event.startswith(NOTICE_TEXTS):
+                    problems.append(f"{rel}: {tag}.{call}() 的提示语不在白名单：{args[0][:60]}")
+            elif event is None:
                 if call != "lines":
                     problems.append(f"{rel}: {tag}.{call}() 的事件名不是字面量：{args[0][:40]}")
             elif call == "lines":
