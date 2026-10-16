@@ -75,7 +75,7 @@ import io.github.vstory.notifyguard.ui.text
  * 档位（全部 / 拦截 / 建议拦截 / 放行）记在 [RecordsFilterMemory] 里：本屏的 ViewModel 会随导航被
  * 销毁，档位不能跟着丢。首页点统计行跳进来时走那条一次性通道，不会改掉「上次用的档」。
  *
- * 行不做折叠、屏上不做筛选：观察模式下标定阈值要的是「一屏看全每条的判定与分数」。
+ * 行不做折叠：标定 AI 档位时要的是「一屏看全每条的判定与分数」。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

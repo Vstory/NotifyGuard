@@ -9,25 +9,17 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import io.github.libxposed.service.XposedService
 import io.github.vstory.notifyguard.R
-import io.github.vstory.notifyguard.data.LogStore
 import io.github.vstory.notifyguard.judge.Config
-import io.github.vstory.notifyguard.judge.LogRecord
-import io.github.vstory.notifyguard.judge.Tally
 import io.github.vstory.notifyguard.sync.ConfigWriter
-import io.github.vstory.notifyguard.sync.LogFetcher
 import io.github.vstory.notifyguard.sync.StatusClient
 import io.github.vstory.notifyguard.ui.UiText
 
 /**
  * 首页的状态与统计（M4g）。
  *
- * 两套数字口径并存，界面必须分开写：
- * - [Stats] 是**当前记录窗口**（模块端 `logs.json` 快照，上限 [LogStore.MAX_RECORDS] 组、按内容聚合），
- *   清空记录后归零 —— 组数、事件数与排行用它；
- * - [Totals] 是模块端的**累计账本**（`judge/Tally`，经状态通道回传），清空记录、重启系统框架都不归零 ——
- *   「一共拦了多少」用它。读不到时界面回退到窗口口径并明说。
- *
- * 与记录屏共用同一份缓存列表，所以两屏的「组数 / 事件数」不会各算一套而在某天对不上。
+ * 首页的数只有一个来源：**模块端的判定账本**（`judge/Tally`，经状态通道回传）—— 今日拦截、总拦截、
+ * 今日按包名的排行。不从记录窗口聚合：记录是按内容聚合的组且会被裁、被清，拿它算「今天拦了多少」必然
+ * 与账本对不上（首见在昨天、今天继续刷的那种组会被整组算到昨天）。
  *
  * 这里刻意不放开关：开关的生效值口径（未连接置灰、拨动即下发）在设置屏已经有一份，首页再放一份
  * 就是第二处会与真实配置分歧的地方。
@@ -37,102 +29,34 @@ class HomeViewModel : ViewModel() {
     data class UiState(
         val connected: Boolean = false,
         val serviceText: UiText = UiText.Res(R.string.service_checking),
-        /** 读回的生效配置；null = 未连接或读不出 —— 此时不提观察模式（未知不等于开着）。 */
+        /** 读回的生效配置；null = 未连接或读不出 —— 界面按「未知」处理，不当成任何开关是开着的。 */
         val cfg: Config? = null,
-        val stats: Stats = Stats.EMPTY,
-        /** 模块端累计账本；null = 模块端还没回传（未连接 / 刚装完没重启系统框架）。 */
+        /** 模块端账本；null = 模块端还没回传（未连接 / 刚装完没重启系统框架）。 */
         val totals: Totals? = null,
         val fetching: Boolean = false,
     )
 
-    /** 模块端累计账本的一行快照（次数按条算：每次判定各计一次）。 */
+    /** 模块端账本的一行快照。次数按**条**算：每次判定各计一次。 */
     data class Totals(
         val blocked: Long,
         val would: Long,
         val pass: Long,
         val since: Long,
-        /** 今日拦截（模块端按本地日期维护）；-1 = 模块端没上报这个字段。 */
+        /** 今日拦截（模块端按本地日期维护，过零点归零）；-1 = 模块端没上报这个字段。 */
         val today: Long,
+        /** 今日按包名的拦截次数（模块端过零点清零）。空 = 今天还没拦过。 */
+        val todayByPkg: Map<String, Long> = emptyMap(),
     )
 
     /** 排行里的一行。 */
-    data class AppCount(val pkg: String, val events: Int)
+    data class AppCount(val pkg: String, val events: Long)
 
-    /**
-     * 首页统计。**两种口径同处一个类，改的时候别串**：
-     *
-     * - `groups` / `events` / `blocked` / `would` / `pass` 是**当前记录窗口**（本地留存的全量记录），
-     *   按事件次数算，与记录屏状态卡的「累计」同口径。
-     * - `top` / `otherApps` / `otherEvents` 是**今日**（按本地日期，过零点归零），与统计卡里的
-     *   「今日拦截」同一套零点算法（[Tally.startOfDay]）。排行与今日拦截的数要能互相对上，
-     *   所以它不能跟着窗口走 —— 窗口里还留着昨天的记录时，两者会差出一整天的量。
-     *
-     * 三者按事件次数（`count` 之和）算，另给组数，让「上限是组数」这件事在界面上说得通。
-     */
-    data class Stats(
-        val groups: Int,
-        val events: Int,
-        val blocked: Int,
-        val would: Int,
-        val pass: Int,
-        val top: List<AppCount>,
-        val otherApps: Int,
-        val otherEvents: Int,
-    ) {
-
-        companion object {
-
-            /** 排行只到前十：长尾在手机屏幕上没有可读性，只报「其余几个应用多少次」。 */
-            const val TOP_N = 10
-
-            val EMPTY = Stats(0, 0, 0, 0, 0, emptyList(), 0, 0)
-
-            /**
-             * 纯函数，便于单测（真机上这几个分支只在特定状态下才看得到）。
-             *
-             * 同组记录的 `block` / `would` 必然相同 —— `LogRecord.sameGroup` 把它们纳入了聚合键，
-             * 所以这里不需要处理「同组两种判定」。
-             *
-             * [todayStart] 是本地日期的零点（由 [Tally.startOfDay] 算），没有默认值：排行漏了过滤就
-             * 会静默变成窗口口径，那种错只能靠眼睛在真机上发现。
-             */
-            fun of(records: List<LogRecord>, todayStart: Long): Stats {
-                var events = 0
-                var blocked = 0
-                var would = 0
-                val byPkg = HashMap<String, Int>()
-                for (r in records) {
-                    events += r.count
-                    when {
-                        r.block -> {
-                            blocked += r.count
-                            // 排行按 ts（这条记录首次出现的时间）归日：与记录屏显示、排序用的时间同一个，
-                            // 跨天重复出现的同组记录会整条算在首次那天
-                            if (r.ts >= todayStart) byPkg[r.pkg] = (byPkg[r.pkg] ?: 0) + r.count
-                        }
-
-                        r.would -> would += r.count
-                    }
-                }
-                // 同数按包名升序：只按次数排会让同数项的顺序随 HashMap 迭代顺序漂，
-                // 同一份数据两次进屏显示两种顺序
-                val ranked = byPkg.map { AppCount(it.key, it.value) }
-                    .sortedWith(compareByDescending<AppCount> { it.events }.thenBy { it.pkg })
-                val top = ranked.take(TOP_N)
-                val rest = ranked.drop(TOP_N)
-                return Stats(
-                    groups = records.size,
-                    events = events,
-                    blocked = blocked,
-                    would = would,
-                    pass = events - blocked - would,
-                    top = top,
-                    otherApps = rest.size,
-                    otherEvents = rest.sumOf { it.events },
-                )
-            }
-        }
-    }
+    /** 排行结果：前十 + 其余应用。 */
+    data class Ranking(
+        val top: List<AppCount> = emptyList(),
+        val otherApps: Int = 0,
+        val otherEvents: Long = 0L,
+    )
 
     var state by mutableStateOf(UiState())
         private set
@@ -143,23 +67,19 @@ class HomeViewModel : ViewModel() {
     /** 订阅框架服务状态；返回注销句柄，界面离开时务必调用。 */
     fun bind(): () -> Unit = ConfigWriter.observe { svc -> main.post { onService(svc) } }
 
-    /**
-     * 先渲染缓存再拉一次（与记录屏同口径）：进屏立刻有内容，拉取结果回来再覆盖。
-     * 超时不重试，刷新入口就在顶栏。
-     */
+    /** 拉一次账本。超时不重试，刷新入口就在顶栏。 */
     fun refresh(ctx: Context) {
         val app = ctx.applicationContext ?: ctx
         state = state.copy(fetching = true)
-        repaint(app)
-        LogFetcher.fetch(app) {
-            state = state.copy(fetching = false)
-            repaint(app)
-        }
         StatusClient.fetch(app) { report ->
             state = state.copy(
-                totals = report?.let { Totals(
-                        it.blockedTotal, it.wouldTotal, it.passTotal, it.tallySince, it.blockedToday,
-                    ) },
+                fetching = false,
+                totals = report?.let {
+                    Totals(
+                        it.blockedTotal, it.wouldTotal, it.passTotal, it.tallySince,
+                        it.blockedToday, it.todayByPkg,
+                    )
+                },
             )
         }
     }
@@ -172,8 +92,24 @@ class HomeViewModel : ViewModel() {
         )
     }
 
-    private fun repaint(ctx: Context) {
-        // 零点在每次重绘时重算：跨零点后不重绘的话，排行会一直停在昨天
-        state = state.copy(stats = Stats.of(LogStore.get(ctx).all(), Tally.startOfDay(System.currentTimeMillis())))
+    companion object {
+
+        /** 排行只到前十：长尾在手机屏幕上没有可读性，只报「其余几个应用多少次」。 */
+        const val TOP_N = 10
+
+        /**
+         * 今日排行（纯函数，便于单测）。
+         *
+         * 同数按包名升序：只按次数排会让同数项的顺序随 map 迭代顺序漂，同一份数据两次进屏显示两种顺序。
+         */
+        fun rank(counts: Map<String, Long>): Ranking {
+            val ranked = counts.entries
+                .filter { it.value > 0 }
+                .map { AppCount(it.key, it.value) }
+                .sortedWith(compareByDescending<AppCount> { it.events }.thenBy { it.pkg })
+            val top = ranked.take(TOP_N)
+            val rest = ranked.drop(TOP_N)
+            return Ranking(top = top, otherApps = rest.size, otherEvents = rest.sumOf { it.events })
+        }
     }
 }

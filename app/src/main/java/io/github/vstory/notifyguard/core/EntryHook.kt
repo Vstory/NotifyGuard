@@ -127,7 +127,7 @@ object EntryHook {
         // 先于 hook 装配：判定链要读配置，且框架只向「已取过该组」的进程推送变更
         DeltaHolder.start(iface)
         ConfigReader.start(iface)
-        report.markOk("config", "group=${ConfigReader.GROUP}", "observe=${ConfigReader.config().observe}")
+        report.markOk("config", "group=${ConfigReader.GROUP}")
 
         // 同步加载一次（262 KB 解析，毫秒级）：判定链里绝不做 IO，装不上就整个 AI 段放行
         ModelHolder.loadBundled()
@@ -349,14 +349,6 @@ object EntryHook {
         if (decision.block) {
             ModuleLogger.info(
                 "record.blocked",
-                "slot=${slot.wire}",
-                "pkg=${snapshot?.pkg}",
-                "reason=${decision.reason}",
-            )
-        } else if (decision.wouldBlock) {
-            // 观察模式：判定已命中但未拦，这一行就是切到拦截模式前的证据
-            ModuleLogger.info(
-                "record.observed",
                 "slot=${slot.wire}",
                 "pkg=${snapshot?.pkg}",
                 "reason=${decision.reason}",

@@ -50,12 +50,11 @@ data class ProtectSwitches(
 data class Config(
     val schema: Int = SCHEMA,
     val enabled: Boolean = true,
-    val observe: Boolean = true,
     val protect: ProtectSwitches = ProtectSwitches(),
     val whitelist: Set<String> = emptySet(),
     val rules: List<Rule> = emptyList(),
     val threshold: Double = DEFAULT_THRESHOLD,
-    /** AI 段总开关。默认关：先观察模式跑分数分布，再谈默认开（M2 验收）。 */
+    /** AI 段总开关。默认关：先在记录页看分数分布，再谈默认开（M2 验收）。 */
     val spamEnabled: Boolean = false,
     /**
      * 已下发的微调量版本号（App 写，模块端读）。0 = 无微调。
@@ -77,7 +76,7 @@ data class Config(
     companion object {
         const val SCHEMA = 1
 
-        /** 0.8 = 真机观察模式下的分数分布标定值（M2 遗留项）。改动它会改变已装用户的行为。 */
+        /** 0.8 = 真机分数分布标定出来的值（M2 遗留项）。改动它会改变已装用户的行为。 */
         const val DEFAULT_THRESHOLD = 0.8
     }
 }

@@ -19,21 +19,15 @@
     <string name="home_stats_group">拦截统计</string>
     <string name="home_stat_blocked">总拦截</string>
     <string name="home_stat_today">今日拦截</string>
-    <string name="home_stat_window_title">当前记录窗口</string>
     <string name="home_stat_today_note">**按本地日期** · 过零点归零</string>
-    <string name="home_stat_window_note">**当前记录窗口** · 清空记录即归零</string>
     <string name="home_stat_total_note">**全部时间** · 模块端累计，清空记录也不归零</string>
     <string name="home_stat_no_value">—</string>
     <string name="home_stat_today_unknown">**模块端未上报** · 模块端版本较旧</string>
-    <string name="home_stat_scope">%1$s 组 · %2$s 次</string>
+    <string name="home_top_no_report">还没读到模块端的数据 —— 未连接，或系统框架重启后还没有过判定。</string>
     <string name="home_top_scope">排行按**今日**拦截的次数排。</string>
     <string name="home_top_group">命中排行（按应用）</string>
-    <string name="home_top_empty">今天还没有拦截。
-**观察模式下不会真拦** —— 到设置屏先确认「启用拦截判定」是打开的，再关掉观察模式。
-否则请查框架日志，确认判定链在跑。</string>
+    <string name="home_top_empty">今天还没有拦截。\n到设置屏确认「拦截垃圾通知」是打开的，并确认模块已连接。</string>
     <string name="home_top_other">其余 %1$d 个应用 · %2$d 次</string>
-    <string name="home_observe_group">观察模式</string>
-    <string name="home_observe_note">当前是**观察模式**：判定照跑也照记录，但**还不拦**。\n上面的今日拦截与总拦截都是 0，关掉之后才会真的拦。</string>
     <!-- 学习屏 -->
     <string name="learning_title">学习</string>
     <string name="learning_refresh">刷新学习数据</string>
@@ -123,14 +117,14 @@
     <string name="reason_why_group_summary">这是**通知组的摘要行**。\n摘要是壳不是内容，判它等于替整组下结论。</string>
     <string name="reason_why_empty_text">标题和正文都是空的，**模块端读不到可判定的文本**。\n若通知栏上看得见内容，那是应用用了**自定义通知布局**（图标 + 快捷按钮那类）。\n文字画在布局里、不在通知的字段里，模块端拿不到 —— 这类通知**按放行处理**。</string>
     <string name="reason_why_protect">%1$s属保护类型。\n通话、闹钟、导航这类通知**被误拦的代价远大于漏一条广告**，所以**命中即放行** —— 不进规则，也不进 AI。\n哪几类受保护，在设置页的「保护类型」里改。</string>
-    <string name="reason_why_rule">命中了用户规则 %1$s。\n规则排在**保护类型之后、AI 之前**：写进规则的词是明确要求拦的，不必再问 AI。\n观察模式下这条**只记录不拦**，关掉观察模式才会真的拦下来。</string>
+    <string name="reason_why_rule">命中了用户规则 %1$s。\n规则排在**保护类型之后、AI 之前**：写进规则的词是明确要求拦的，不必再问 AI。</string>
     <string name="reason_why_text_too_short">规范化（小写、去空白、去数字）之后**不足 4 个字**。\n这么短的文本进 AI 段只会放大噪声，所以**直接放行、不参与打分**。</string>
     <string name="reason_why_hard_word">文本里出现了**验证码、一次性密码**这类硬保护词。\n它们被显式列成**一票放行**：拦掉一条验证码的后果，比漏掉一条广告严重得多。</string>
     <string name="reason_why_whitelisted">这条通知来自**白名单里的应用**。\n白名单只**跳过 AI 段**，规则照旧命中。加减白名单去设置页。</string>
     <string name="reason_why_ai_off">**AI 判定开关当时是关的**，这条只跑了规则。\n要让应用参与 AI 打分，去设置页打开 AI 判定。</string>
     <string name="reason_why_no_model">模块端当时**没有可用的模型**（还没加载，或加载失败）。\n拿不到分数就放行 —— 判定链**不设「默认拦」**。</string>
     <string name="reason_why_ai_error">打分过程中抛了异常，按既定口径**放行**。\n判定跑在 system_server 的通知入队路径上，异常穿透的代价是**通知直接发不出去** —— 所以每一步出错都落回放行。具体异常见框架日志。</string>
-    <string name="reason_why_ai_hit">AI 打分 %1$s，**达到阈值**。\n观察模式下这条**只记录不拦**（判定照跑、原因照出），关掉观察模式才会真的拦下来。</string>
+    <string name="reason_why_ai_hit">AI 打分 %1$s，**达到阈值**，这条被拦下。</string>
     <string name="reason_why_below_threshold">AI 打分 %1$s，低于阈值，放行。</string>
     <string name="reason_why_unknown">记录里的原因码是 %1$s，这一版认不出它 —— 通常是 **App 与模块版本不一致**（模块比 App 新）。\n原始码就是它本身，可拿去对框架日志。</string>
     <string name="reason_raw_reason">原因码</string>
@@ -190,8 +184,6 @@
     <string name="settings_enabled">启用拦截判定</string>
     <string name="settings_enabled_note">关闭后判定链直接放行（记录照写）</string>
     <string name="settings_judge_gated">总开关关着：判定链**整体短路**（reason 只记 disabled）。\n标灰的项**既不生效也拨不动** —— 先打开「启用拦截判定」。</string>
-    <string name="settings_observe">观察模式</string>
-    <string name="settings_observe_note">**只记录、不拦截**：判定照跑，reason 里照出 AI 分数与命中规则</string>
     <string name="settings_ai_group">AI 识别</string>
     <string name="settings_spam">识别垃圾通知</string>
     <string name="settings_spam_note">端侧**哈希 n-gram + 逻辑回归**，不联网</string>

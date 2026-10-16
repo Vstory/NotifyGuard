@@ -86,10 +86,10 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
         ) {
             val cfg = state.cfg
             val connected = state.connected
-            // README 判定链第 2 行：总开关关闭即整链短路（reason 落 `disabled`）。所以「观察模式」
-            // 「AI 开关」「AI 阈值」都是它的从属项 —— 总开关关着时判定根本不跑，这些项无处生效。
-            // 不置灰就会出现「观察模式显示为开、而它承诺的『判定照跑』并没发生」这种自相矛盾的
-            // 界面状态（官方 Settings 模式对父开关与从属控件的规定即：关闭父开关即禁用从属控件）。
+            // README 判定链第 2 行：总开关关闭即整链短路（reason 落 `disabled`）。所以「AI 开关」
+            // 与「AI 严格程度」都是它的从属项 —— 总开关关着时判定根本不跑，这些项无处生效。
+            // 不置灰就会出现「AI 显示为开、判定却从不打分」这种自相矛盾的界面状态（官方 Settings
+            // 模式对父开关与从属控件的规定即：关闭父开关即禁用从属控件）。
             val judgeOn = connected && cfg?.enabled == true
             // 用 == false 而不是 != true：cfg 为 null（连上了但配置读不到）时原因不在总开关，
             // StatusCard 已就绪地说「未读到生效值」，这里再挂一条就会把用户指错方向
@@ -178,13 +178,6 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     onCheckedChange = viewModel::setEnabled,
                 )
                 if (gated) AlertNote(stringResource(R.string.settings_judge_gated))
-                SwitchRow(
-                    label = stringResource(R.string.settings_observe),
-                    note = stringResource(R.string.settings_observe_note),
-                    checked = cfg?.observe ?: false,
-                    enabled = judgeOn,
-                    onCheckedChange = viewModel::setObserve,
-                )
             }
 
             GroupCard(stringResource(R.string.settings_ai_group)) {
@@ -201,6 +194,9 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                // 提前取出来：写成 `cfg?.spamEnabled == true` 内联在参数里时，编译器会把它当成
+                // 「此处 cfg 一定非空」而报一条不必要的安全调用警告
+                val spamOn = cfg?.spamEnabled == true
                 Slider(
                     value = state.draftThreshold
                         ?: (cfg?.threshold?.toFloat() ?: Config.DEFAULT_THRESHOLD.toFloat()),
@@ -208,7 +204,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = viewModel()) {
                     onValueChangeFinished = viewModel::commitThreshold,
                     valueRange = 0f..1f,
                     steps = SettingsViewModel.THRESHOLD_STEPS - 1,
-                    enabled = judgeOn && cfg?.spamEnabled == true,
+                    enabled = judgeOn && spamOn,
                 )
                 Note(stringResource(R.string.settings_threshold_note))
             }

@@ -61,4 +61,9 @@ data class StatusReport(
      * **-1 = 模块端没上报这个字段**（旧版本模块）—— 与「今天真的拦了 0 条」是两回事，界面要分开说。
      */
     val blockedToday: Long = -1L,
+    /**
+     * 今日按包名的拦截次数（首页排行的数据源）：模块端在判定那一刻按包名计数，过零点连同
+     * [blockedToday] 一起清零。空 map = 今天还没拦过，或模块端没上报这个字段。
+     */
+    val todayByPkg: Map<String, Long> = emptyMap(),
 )
