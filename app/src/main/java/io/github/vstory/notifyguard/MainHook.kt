@@ -83,33 +83,42 @@ class MainHook : XposedModule() {
         val cl = classLoader
             ?: param.oldHookHandles.firstNotNullOfOrNull { it.executable.declaringClass.classLoader }
             ?: javaClass.classLoader
+        val stale = param.oldHookHandles.size
         installed = false
-        ModuleLogger.info(
-            "hotreload.start",
-            "stale_handles=${param.oldHookHandles.size}",
-            "classloader=${cl.brief()}",
-        )
 
         // 顺序即安全边界：**先装新、装上了才踢旧**。反过来（先 unhook 再装）一旦新代装失败，
         // 模块就彻底停摆（旧钩子已卸、新钩子没上）；这个顺序最坏也只是「仍在旧代码上跑」。
         val report = assemble(cl, "hotreload")
-        val hotFields = hookFields(report)
-        if (report.failCount > 0) ModuleLogger.error("hotreload.hooks", *hotFields)
-        else ModuleLogger.info("hotreload.hooks", *hotFields)
-        dumpDetails(report)
         if (!EntryHook.isJudgingReady()) {
             // 新代这个空壳必须自己卸干净：留着它，旧代的钩子仍在（还没 unhook），同一条通知会被两代各判一次
             EntryHook.reset()
             installed = false
-            ModuleLogger.error("hotreload.assemble_failed", "kept=old", "hooks=old_only")
+            ModuleLogger.noticeError(
+                "hot reload failed, keeping old generation",
+                "owner=none",
+                "stale=$stale",
+                "hooks=old_only",
+            )
+            dumpDetails(report)
             return
         }
         param.oldHookHandles.forEach {
             runCatching { it.unhook() }.onFailure { t -> ModuleLogger.error("hotreload.unhook_failed", ModuleLogger.err(t)) }
         }
         val gen = Generation.publish()
-        // 新代到位的最后一步是重挂常驻资源（广播通道 / Context），它发生在下一次通知入队时
-        ModuleLogger.info("hotreload.done", "gen=$gen", "old_release=on_next_activity", "rearm=on_next_enqueue")
+        // 整个热重载合成**一条**提示语行（知识库《项目检查流程》⑪ 的 `hot reloaded, hooks reinstalled`）：
+        // 装配耗时在几十毫秒内，拆成 start/hooks/done 三行只会在同一时刻堆三行、没有额外信息。
+        // 新代到位的最后一步（重挂广播通道 / Context）发生在下一次通知入队时，故有 rearm。
+        ModuleLogger.notice(
+            "hot reloaded, hooks reinstalled",
+            "gen=$gen",
+            "stale=$stale",
+            "cl=${cl.brief()}",
+            "hooks=ok:${report.okCount},skip:${report.skipCount},fail:${report.failCount}",
+            "owner=${EntryHook.currentSlot().wire}",
+            "rearm=on_next_enqueue",
+        )
+        dumpDetails(report)
     }
 
     /**

@@ -150,11 +150,13 @@ object EntryHook {
 
         // 先于 hook 装配：判定链要读配置，且框架只向「已取过该组」的进程推送变更
         DeltaHolder.start(iface)
-        ConfigReader.start(iface)
+        // 只有冷启动才宣告配置/模型就绪：热重载重读同一份配置与模型，不是状态变迁
+        val announce = domain == "boot"
+        ConfigReader.start(iface, announce)
         report.markOk("config", "group=${ConfigReader.GROUP}")
 
         // 同步加载一次（262 KB 解析，毫秒级）：判定链里绝不做 IO，装不上就整个 AI 段放行
-        ModelHolder.loadBundled()
+        ModelHolder.loadBundled(announce)
         report.markOk("model", if (ModelHolder.current == null) "state=unavailable action=pass" else "state=ready")
 
         val nms = runCatching { cl.loadClass(NMS_CLASS) }.getOrElse {
