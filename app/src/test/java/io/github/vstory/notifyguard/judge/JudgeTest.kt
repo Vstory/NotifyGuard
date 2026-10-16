@@ -10,7 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 判定链：结构性放行、保护类、规则拦截、观察模式、总开关、AI 段。 */
+/** 判定链：结构性放行、保护类、规则拦截、总开关、AI 段。 */
 class JudgeTest {
 
     // Notification.FLAG_GROUP_SUMMARY / FLAG_FOREGROUND_SERVICE / CATEGORY_*（编译期常量，用字面量免得引 android 类）
@@ -53,15 +53,14 @@ class JudgeTest {
 
     private fun rule(vararg keywords: String) = Rule(id = "r1", keywords = keywords.toList())
 
-    private val observing = Config(observe = true)
-    private val blocking = Config(observe = false)
+    private val blocking = Config()
 
     /** 模型是全局状态，用例之间必须清干净，否则「无模型」的断言会随执行顺序飘。 */
     @After
     fun clearModel() = ModelHolder.replace(null)
 
-    private fun aiCfg(observe: Boolean = false, threshold: Double = 0.7) =
-        Config(observe = observe, spamEnabled = true, threshold = threshold)
+    private fun aiCfg(threshold: Double = 0.7) =
+        Config(spamEnabled = true, threshold = threshold)
 
     @Test
     fun nullSnapshotIsBadArgs() {
@@ -120,7 +119,7 @@ class JudgeTest {
 
     @Test
     fun disabledConfigPassesBeforeAnythingElse() {
-        val cfg = Config(enabled = false, observe = false, rules = listOf(rule("正文")))
+        val cfg = Config(enabled = false, rules = listOf(rule("正文")))
         assertEquals("disabled", Judge.decide(snap(), cfg).reason)
         assertFalse(Judge.decide(snap(), cfg).wouldBlock)
     }
@@ -129,7 +128,7 @@ class JudgeTest {
 
     @Test
     fun protectedCategoriesPassEvenWhenRuleHits() {
-        val cfg = Config(observe = false, rules = listOf(rule("正文")))
+        val cfg = Config(rules = listOf(rule("正文")))
         assertEquals("protect_call", Judge.decide(snap(category = categoryCall), cfg).reason)
         assertEquals("protect_media", Judge.decide(snap(category = categoryTransport), cfg).reason)
         assertEquals("protect_fgs", Judge.decide(snap(flags = flagForegroundService), cfg).reason)
@@ -139,7 +138,6 @@ class JudgeTest {
     @Test
     fun protectSwitchesCanBeTurnedOff() {
         val cfg = Config(
-            observe = false,
             protect = ProtectSwitches(call = false),
             rules = listOf(rule("正文")),
         )
@@ -149,8 +147,8 @@ class JudgeTest {
     // ===== 规则 =====
 
     @Test
-    fun ruleHitBlocksWhenNotObserving() {
-        val cfg = Config(observe = false, rules = listOf(rule("正文")))
+    fun ruleHitBlocks() {
+        val cfg = Config(rules = listOf(rule("正文")))
         val d = Judge.decide(snap(), cfg)
         assertTrue(d.block)
         assertTrue(d.wouldBlock)
@@ -158,25 +156,16 @@ class JudgeTest {
         assertEquals("r1", d.ruleId)
     }
 
-    @Test
-    fun observeModeKeepsDecisionButNotBlocking() {
-        val cfg = Config(observe = true, rules = listOf(rule("正文")))
-        val d = Judge.decide(snap(), cfg)
-        assertFalse(d.block)
-        assertTrue(d.wouldBlock)
-        assertEquals("rule:r1", d.reason)
-    }
 
     @Test
     fun ruleMissFallsThroughToAiSegment() {
-        val cfg = Config(observe = false, spamEnabled = true, rules = listOf(rule("不存在的词")))
+        val cfg = Config(spamEnabled = true, rules = listOf(rule("不存在的词")))
         assertEquals("no_model", Judge.decide(snap(), cfg).reason)
     }
 
     @Test
     fun packagesLimitedRuleOnlyAppliesToItsApps() {
         val cfg = Config(
-            observe = false,
             rules = listOf(Rule(id = "r1", keywords = listOf("正文"), packages = setOf("com.other.app"))),
         )
         assertEquals("ai_off", Judge.decide(snap(pkg = "com.example.app"), cfg).reason)
@@ -187,27 +176,26 @@ class JudgeTest {
 
     @Test
     fun hardWordPassesWhenNoRuleMatches() {
-        val cfg = Config(observe = false, rules = listOf(rule("不存在的词")))
+        val cfg = Config(rules = listOf(rule("不存在的词")))
         assertEquals("hard_word", Judge.decide(snap(text = "您的验证码是 1234"), cfg).reason)
     }
 
     @Test
     fun ruleBeatsHardWord() {
         // 顺序：规则在第 5 步、硬保护词在第 7 步 —— 用户把「验证码」写进规则就是要拦它
-        val cfg = Config(observe = false, rules = listOf(rule("验证码")))
+        val cfg = Config(rules = listOf(rule("验证码")))
         assertEquals("rule:r1", Judge.decide(snap(text = "您的验证码是 1234"), cfg).reason)
     }
 
     @Test
     fun tooShortTextPasses() {
-        val cfg = Config(observe = false, rules = listOf(rule("不存在的词")))
+        val cfg = Config(rules = listOf(rule("不存在的词")))
         assertEquals("text_too_short", Judge.decide(snap(title = "ab", text = null), cfg).reason)
     }
 
     @Test
     fun whitelistSkipsAiSegmentOnly() {
         val cfg = Config(
-            observe = false,
             spamEnabled = true,
             whitelist = setOf("com.example.app"),
             rules = listOf(rule("不存在的词")),
@@ -223,7 +211,7 @@ class JudgeTest {
 
     @Test
     fun onlyRuleHitsCanBeBlocked() {
-        val cfg = Config(observe = false, rules = listOf(rule("正文")))
+        val cfg = Config(rules = listOf(rule("正文")))
         assertNull(Judge.decide(snap(title = null, text = null), cfg).ruleId)
     }
 
@@ -264,18 +252,10 @@ class JudgeTest {
         assertFalse(d.block)
         assertFalse(d.wouldBlock)
         assertEquals("below_threshold:0.42", d.reason)
-        // 观察模式要靠这个分数标定阈值，放行也必须带出来
+        // 分数必须随记录带出来：界面上「严格程度」的档位与排障都看它，放行那条也要有
         assertEquals(0.42, d.score!!, 1e-9)
     }
 
-    @Test
-    fun observeModeRecordsAiHitWithoutBlocking() {
-        ModelHolder.replace(SpamScorer { 0.95 })
-        val d = Judge.decide(snap(), aiCfg(observe = true, threshold = 0.9))
-        assertFalse(d.block)
-        assertTrue(d.wouldBlock)
-        assertEquals("ai:0.95", d.reason)
-    }
 
     /** 打分跑在 system_server 的通知入队路径上：异常穿透等于通知发不出来。 */
     @Test
@@ -298,7 +278,7 @@ class JudgeTest {
     fun whitelistedPackageNeverReachesScorer() {
         var called = false
         ModelHolder.replace(SpamScorer { called = true; 1.0 })
-        val cfg = Config(observe = false, spamEnabled = true, whitelist = setOf("com.example.app"))
+        val cfg = Config(spamEnabled = true, whitelist = setOf("com.example.app"))
         assertEquals("whitelisted", Judge.decide(snap(), cfg).reason)
         assertFalse(called)
     }

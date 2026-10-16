@@ -71,7 +71,8 @@ data class LogRecord(
                     ?: s?.textLines?.firstOrNull { it.isNotBlank() }
             ),
             reason = d.reason,
-            // would/block 分开记：观察模式下 would=true, block=false，这一对就是切拦截模式的依据
+            // would/block 分开记（M2 起）：观察模式已移除，新记录里两者恒等（`block ⇒ would`）；
+            // 老记录里的 `would=true, block=false` 是当时留下的，字段不回收，记录页照旧读得懂
             would = d.wouldBlock,
             block = d.block,
             slot = slot,

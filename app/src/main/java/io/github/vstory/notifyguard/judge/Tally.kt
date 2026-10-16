@@ -5,6 +5,7 @@ import io.github.vstory.notifyguard.data.ModuleDir
 import org.json.JSONObject
 import java.io.File
 import java.util.Calendar
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -15,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong
  * 记录窗口只留最近若干组、清空即归零，而「一共拦了多少」得跨窗口、跨重启活着 —— 所以计数与记录分开存，
  * 落盘在自己那个小文件里（[ModuleDir.tally]），进程起来后从文件读回，**不从记录重算**（记录已被裁过）。
  *
- * 热路径只碰三个 AtomicLong 加一次「要不要投写盘」的判断；快照整份覆盖写（tmp + 改名），崩溃最多丢最近
+ * 热路径只碰三个 AtomicLong、一次按包名的计数与一次「要不要投写盘」的判断；快照整份覆盖写（tmp + 改名），崩溃最多丢最近
  * [FLUSH_DELAY_MS] 窗口内的增量 —— 拿这个换「每条判定都写一次盘」不值。
  */
 object Tally {
@@ -40,6 +41,15 @@ object Tally {
     private val todayBlocked = AtomicLong()
     private val todayStart = AtomicLong()
 
+    /**
+     * 今日**按包名**的拦截次数（首页排行的唯一数据源）。
+     *
+     * 首页排行不能由 App 侧从记录聚合：记录是按内容聚合的组（只留首见 [io.github.vstory.notifyguard.judge.LogRecord.ts]
+     * 与最近一次），「昨天首见、今天又拦了 3 次」这种组整组算在昨天，排行会漏掉今天那 3 次 ——
+     * 首页的「今日拦截」与排行之和就对不上。计数发生在判定那一刻，这里才拆得开。
+     */
+    private val todayByPkg = ConcurrentHashMap<String, Long>()
+
     @Volatile private var loaded = false
     @Volatile private var scheduled = false
 
@@ -48,13 +58,14 @@ object Tally {
     }
 
     /** 一条判定落下。`block` ⇒ `would`（拦下来的必然也是建议拦截的那条），两者不能各记一套。 */
-    fun add(block: Boolean, would: Boolean) {
+    fun add(block: Boolean, would: Boolean, pkg: String?) {
         ensureLoaded()
         rollToday()
         if (block) {
             blocked.incrementAndGet()
             this.would.incrementAndGet()
             todayBlocked.incrementAndGet()
+            if (!pkg.isNullOrEmpty()) todayByPkg.merge(pkg, 1L, Long::plus)
         } else if (would) {
             this.would.incrementAndGet()
         } else {
@@ -96,6 +107,13 @@ object Tally {
         return todayBlocked.get()
     }
 
+    /** 今日按包名的拦截次数（读前先滚日期，与 [todayBlockedTotal] 同口径）。 */
+    fun todayBlockedByPkg(): Map<String, Long> {
+        ensureLoaded()
+        rollToday()
+        return HashMap(todayByPkg)
+    }
+
     /**
      * 跨天就把今日计数推到今天。
      *
@@ -107,7 +125,10 @@ object Tally {
         val start = todayStart.get()
         if (start != 0L && now < start + DAY_MS) return
         val fresh = startOfDay(now)
-        if (todayStart.getAndSet(fresh) != fresh) todayBlocked.set(0L)
+        if (todayStart.getAndSet(fresh) != fresh) {
+            todayBlocked.set(0L)
+            todayByPkg.clear()
+        }
     }
 
     /**
@@ -140,6 +161,9 @@ object Tally {
             // 重启后今天还是同一天 ⇒ 今日计数接着算；跨了天 ⇒ rollToday 会把它清零
             todayBlocked.set(o.optLong("todayBlocked", 0L))
             todayStart.set(o.optLong("todayStart", 0L))
+            o.optJSONObject("todayByPkg")?.let { m ->
+                m.keys().forEach { k -> todayByPkg[k] = m.optLong(k, 0L) }
+            }
         }
     }
 
@@ -163,6 +187,7 @@ object Tally {
             put("since", since.get())
             put("todayBlocked", todayBlocked.get())
             put("todayStart", todayStart.get())
+            put("todayByPkg", JSONObject(todayByPkg.toMap()))
         }.toString()
         // 先写临时文件再改名：读方要么看到上一份完整快照、要么看到这一份，不会读到写了一半的 JSON
         runCatching {
@@ -185,6 +210,7 @@ object Tally {
         since.set(0L)
         todayBlocked.set(0L)
         todayStart.set(0L)
+        todayByPkg.clear()
         pending.set(0L)
         clock = System::currentTimeMillis
         loaded = false

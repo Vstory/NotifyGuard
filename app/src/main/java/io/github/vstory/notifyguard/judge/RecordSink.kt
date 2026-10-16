@@ -23,7 +23,7 @@ object RecordSink {
 
     fun record(s: NotifySnapshot?, d: Judge.Decision) {
         // 累计账本在这里记：判定链每次判定都会走到这个出口，而它自己的存储独立于记录（记录会被裁、会被清）
-        Tally.add(block = d.block, would = d.wouldBlock)
+        Tally.add(block = d.block, would = d.wouldBlock, pkg = s?.pkg)
         val n = total.incrementAndGet()
         byReason.computeIfAbsent(d.reason) { AtomicLong() }.incrementAndGet()
         s?.pkg?.let { byPkg.computeIfAbsent(it) { AtomicLong() }.incrementAndGet() }

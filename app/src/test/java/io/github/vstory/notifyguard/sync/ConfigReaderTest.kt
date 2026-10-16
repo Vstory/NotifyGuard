@@ -44,8 +44,8 @@ class ConfigReaderTest {
 
         ConfigReader.start(iface)
 
-        assertTrue("取 prefs 还没成功时应保持默认配置", ConfigReader.config().observe)
-        assertTrue("两次重试后应绑上并读到远端配置", waitUntil { !ConfigReader.config().observe })
+        assertTrue("取 prefs 还没成功时应保持默认配置", ConfigReader.config().enabled)
+        assertTrue("两次重试后应绑上并读到远端配置", waitUntil { !ConfigReader.config().enabled })
         assertEquals(3, iface.calls)
         assertFalse(ConfigReader.config().enabled)
         assertFalse(ConfigReader.config().protect.call)
@@ -59,29 +59,29 @@ class ConfigReaderTest {
 
         Thread.sleep(120)
         assertEquals("额度用尽后不再重试", 1 + 3, iface.calls)
-        assertTrue(ConfigReader.config().observe)
+        assertTrue(ConfigReader.config().enabled)
     }
 
     @Test
     fun pushUpdatesConfig() {
         val prefs = FakePrefs(null)
         ConfigReader.start(FakeIface(failsBefore = 0, prefs = prefs))
-        assertTrue(ConfigReader.config().observe)
+        assertTrue(ConfigReader.config().enabled)
 
         prefs.setRemote(JSON_STRICT)
 
-        assertTrue(waitUntil { !ConfigReader.config().observe })
+        assertTrue(waitUntil { !ConfigReader.config().enabled })
     }
 
     @Test
     fun brokenJsonKeepsPreviousConfig() {
         val prefs = FakePrefs(JSON_STRICT)
         ConfigReader.start(FakeIface(failsBefore = 0, prefs = prefs))
-        assertTrue(waitUntil { !ConfigReader.config().observe })
+        assertTrue(waitUntil { !ConfigReader.config().enabled })
 
         prefs.setRemote("{ 不是 json")
 
-        assertFalse("解析失败必须保留上一份有效配置", waitUntil { ConfigReader.config().observe })
+        assertFalse("解析失败必须保留上一份有效配置", waitUntil { ConfigReader.config().enabled })
         assertFalse(ConfigReader.config().enabled)
     }
 
@@ -96,7 +96,7 @@ class ConfigReaderTest {
             if (name == ConfigReader.REMOTE_FILE) JSON_ENABLED else null
         }
         ConfigReader.start(FakeIface(failsBefore = 0, prefs = prefs))
-        assertTrue(waitUntil { !ConfigReader.config().observe })
+        assertTrue(waitUntil { !ConfigReader.config().enabled })
         assertFalse("启动时读的还是 prefs 里的旧值", ConfigReader.config().enabled)
 
         ConfigReader.verifyFromFile()
@@ -110,12 +110,12 @@ class ConfigReaderTest {
         val prefs = FakePrefs(JSON_STRICT)
         ConfigReader.readRemoteFile = { _, _ -> null }
         ConfigReader.start(FakeIface(failsBefore = 0, prefs = prefs))
-        assertTrue(waitUntil { !ConfigReader.config().observe })
+        assertTrue(waitUntil { !ConfigReader.config().enabled })
 
         ConfigReader.verifyFromFile()
 
         assertFalse(ConfigReader.config().enabled)
-        assertFalse(ConfigReader.config().observe)
+        assertFalse(ConfigReader.config().enabled)
     }
 
     /**
@@ -129,7 +129,7 @@ class ConfigReaderTest {
         var body = JSON_STRICT
         ConfigReader.readRemoteFile = { _, _ -> body }
         ConfigReader.start(FakeIface(failsBefore = 0, prefs = FakePrefs(JSON_STRICT)))
-        assertTrue(waitUntil { !ConfigReader.config().observe })
+        assertTrue(waitUntil { !ConfigReader.config().enabled })
 
         // 普通核对一次：占住节流窗口（此时文件内容与已生效的相同，不会换配置）
         ConfigReader.verifyFromFile()
@@ -220,9 +220,10 @@ class ConfigReaderTest {
 
     private companion object {
         const val JSON_STRICT =
+            // 老配置里带已废弃的 observe 键：解码必须忽略它、其余字段照常生效
             """{"schema":1,"enabled":false,"observe":false,"protect":{"call":false}}"""
 
-        /** 镜像文件里的那份：enabled 与 observe 都与 [JSON_STRICT] 相反，便于断言是文件生效还是 prefs 生效。 */
+        /** 镜像文件里的那份：enabled 与 [JSON_STRICT] 相反，便于断言是文件生效还是 prefs 生效。 */
         const val JSON_ENABLED =
             """{"schema":1,"enabled":true,"observe":false,"protect":{"call":false}}"""
     }

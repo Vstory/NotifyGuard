@@ -79,7 +79,6 @@ object ConfigReader {
                 it,
                 "from=$from",
                 "fallback=default",
-                "observe=true",
             )
             scheduleRetry()
             return
@@ -180,7 +179,6 @@ object ConfigReader {
                 "from=$from",
                 "reason=empty_group",
                 "fallback=default",
-                "observe=true",
             )
         }
         val parsed = ConfigCodec.decode(json)
@@ -199,7 +197,6 @@ object ConfigReader {
             "config.applied",
             "from=$from",
             "enabled=${parsed.enabled}",
-            "observe=${parsed.observe}",
             "rules=${parsed.rules.size}",
             "rules_effective=${parsed.compiledRules.size}",
             "whitelist=${parsed.whitelist.size}",

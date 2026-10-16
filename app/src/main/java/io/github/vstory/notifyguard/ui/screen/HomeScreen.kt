@@ -36,8 +36,8 @@ import io.github.vstory.notifyguard.ui.text
  * 不放开关是有意的：开关一放进来就得连带着处理「未连接时置灰、拨动即下发、失败回滚」，那是设置屏
  * 已经有一套的生效值口径，两处各有一套时分歧的表现是「首页显示开着、判定却按关着跑」。
  *
- * 统计不只报「已拦截」一个数：观察模式下 `block` 恒为 false，只报 0 会让用户以为模块没工作。
- * 今日拦截按本地日期计、已拦截按模块端累计口径，两个数不同源，每行都跟着写口径。
+ * 每个数都跟着写口径：今日拦截与排行是**本地日期**口径（模块端过零点归零），总拦截是模块端累计
+ * （清空记录、重启系统框架都不归零）。三个数不同源，不写清就会被当成一套。
  *
  * **这一屏不用 [ListItem]**：M3 的列表项是为「可点的行」设计的，自带 72/88dp 的最小高度与触摸
  * 目标；这里统计与排行都不可交互，套上去只会把行撑高、空隙变大（真机上表现为「胖」）。不可交互的
@@ -83,20 +83,8 @@ fun HomeScreen(
         ) {
             StatusCard(state.serviceText, state.connected, state.cfg != null)
 
-            // 总开关关着时判定链不跑，这条提示就是假话（M4g 已有「未知不等于开着」的口径，同理）
-            if (state.cfg?.let { it.enabled && it.observe } == true) {
-                GroupCard(stringResource(R.string.home_observe_group)) {
-                    Note(stringResource(R.string.home_observe_note))
-                }
-            }
-
-            val stats = state.stats
             val totals = state.totals
             GroupCard(stringResource(R.string.home_stats_group)) {
-                // 口径逐行跟着数走，不在顶上写一段总结：各数不是同一套口径，一句话说完必然有人读错
-                // （同一个位置静默换数据源也一样 —— 读不到累计就把那一行标成窗口口径）
-                val totalNote = stringResource(R.string.home_stat_total_note)
-                val windowNote = stringResource(R.string.home_stat_window_note)
                 // 今日排最前：进这一屏问的是「今天拦了多少」，总量是背景
                 // -1 = 旧版模块端没上报这个字段，不能拿它当「今天拦了 0 条」
                 val today = totals?.today ?: -1L
@@ -109,42 +97,33 @@ fun HomeScreen(
                         stringResource(R.string.home_stat_today_unknown)
                     },
                 )
+                // totals 为 null 时不显示 0，也不退回别的口径：那会把「没读到」画成「拦了 0 条」
                 StatRow(
                     label = stringResource(R.string.home_stat_blocked),
-                    value = countText(totals?.blocked ?: stats.blocked.toLong()),
-                    note = if (totals == null) windowNote else totalNote,
-                )
-                HorizontalDivider(Modifier.padding(top = 12.dp, bottom = 4.dp))
-                Text(
-                    text = stringResource(R.string.home_stat_window_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Note(
-                    stringResource(
-                        R.string.home_stat_scope,
-                        countText(stats.groups.toLong()),
-                        countText(stats.events.toLong()),
-                    )
+                    value = totals?.let { countText(it.blocked) } ?: stringResource(R.string.home_stat_no_value),
+                    note = stringResource(R.string.home_stat_total_note),
                 )
             }
 
+            val rank = HomeViewModel.rank(totals?.todayByPkg ?: emptyMap())
             GroupCard(stringResource(R.string.home_top_group)) {
-                if (stats.top.isEmpty()) {
-                    Note(stringResource(R.string.home_top_empty))
-                } else {
-                    val max = stats.top.first().events
-                    stats.top.forEach {
-                        RankRow(
-                            pkg = it.pkg,
-                            countText = stringResource(R.string.records_count_badge, it.events),
-                            fraction = if (max > 0) it.events.toFloat() / max else 0f,
-                        )
+                when {
+                    totals == null -> Note(stringResource(R.string.home_top_no_report))
+                    rank.top.isEmpty() -> Note(stringResource(R.string.home_top_empty))
+                    else -> {
+                        val max = rank.top.first().events
+                        rank.top.forEach {
+                            RankRow(
+                                pkg = it.pkg,
+                                countText = stringResource(R.string.records_count_badge, it.events),
+                                fraction = if (max > 0) it.events.toFloat() / max else 0f,
+                            )
+                        }
+                        if (rank.otherApps > 0) {
+                            Note(stringResource(R.string.home_top_other, rank.otherApps, rank.otherEvents))
+                        }
+                        Note(stringResource(R.string.home_top_scope))
                     }
-                    if (stats.otherApps > 0) {
-                        Note(stringResource(R.string.home_top_other, stats.otherApps, stats.otherEvents))
-                    }
-                    // 上面那些数已经是累计口径了，排行还是窗口口径 —— 不写这句，两个口径会被当成一套
-                    Note(stringResource(R.string.home_top_scope))
                 }
             }
         }
