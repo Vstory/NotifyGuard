@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -21,6 +22,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import io.github.vstory.notifyguard.ui.screen.DIAGNOSTIC_ROUTE
+import io.github.vstory.notifyguard.ui.screen.DiagnosticScreen
 import io.github.vstory.notifyguard.ui.screen.HomeScreen
 import io.github.vstory.notifyguard.ui.screen.LearningScreen
 import io.github.vstory.notifyguard.ui.screen.RecordsFilterMemory
@@ -60,7 +63,11 @@ private fun NotifyGuardApp() {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
+    // 诊断屏是子屏（从设置进），不该带着五个 tab 的底栏 —— 子屏只留返回箭头
+    val onSuite = Destination.entries.any { it.route == currentDestination?.route }
+
     NavigationSuiteScaffold(
+        layoutType = if (onSuite) NavigationSuiteType.NavigationBar else NavigationSuiteType.None,
         navigationSuiteItems = {
             Destination.entries.forEach { destination ->
                 item(
@@ -91,7 +98,12 @@ private fun NotifyGuardApp() {
             // 记录屏不带参数：档位由 RecordsFilterMemory 决定（见那段注释）
             composable(Destination.Records.route) { RecordsScreen() }
             composable(Destination.Learning.route) { LearningScreen() }
-            composable(Destination.Settings.route) { SettingsScreen() }
+            composable(Destination.Settings.route) {
+                SettingsScreen(onOpenDiagnostic = { navController.navigate(DIAGNOSTIC_ROUTE) })
+            }
+            composable(DIAGNOSTIC_ROUTE) {
+                DiagnosticScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

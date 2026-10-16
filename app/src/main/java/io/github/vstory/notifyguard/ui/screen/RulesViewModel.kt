@@ -280,11 +280,7 @@ class RulesViewModel : ViewModel() {
     private fun onService(svc: XposedService?) {
         state = state.copy(
             connected = svc != null,
-            serviceText = if (svc == null) {
-                UiText.Res(R.string.service_disconnected)
-            } else {
-                UiText.Res(R.string.service_connected, listOf(svc.frameworkName, svc.frameworkVersion))
-            },
+            serviceText = serviceTextOf(svc),
         )
         repaint()
     }
