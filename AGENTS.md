@@ -47,13 +47,17 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **级别按信息的性质定，不按打印位置定**：同一批输出里混着成功与失败时（hook 装配明细、`*.hooks`
   汇总）按**最坏结果**分流 —— 失败明细走 `ModuleLogger.errorLine`、含 `fail` 的汇总走 E，其余走 I；
   正常降级（扩展槽方法不存在、微调被关）仍是 I。LSPosed 日志页按级别过滤，混在 I 里的失败等于没有
-- 明细行（装配结果这类）逐行自成一条日志，不用一次调用写多行 —— 多行串的后续行不带版本前缀，无从归属
-- **release 打什么**（debug 版在同一份代码上只做加法）：`boot.start`（API / 框架 / ClassLoader）、
-  `*.hooks` 汇总（hook 明细只列 `skip` / `fail`，成功项由 `ok=N` 回答）、配置生效（**内容变了才打**）、
-  模型就绪、`hotreload.*`、`safemode.*`、`slot.takeover`，以及所有 E 级失败行。其余一律只进 debug 版
-  （`slot.stats`、`record.summary`、`record.blocked`、`record.kept`、`record.persist_ready`、hook 成功明细）：
-  release 的框架日志**不承担明细**，逐条明细在 App 的记录页与诊断屏。判断一条日志该不该进 release
-  只需问一句：**它一天的条数会不会随通知量增长？会 → 进 debug**
+- **一次事件的输出聚合成一条**：装配这类散在好几个类里的输出（配置 / 模型 / 钩子 / 明细）用
+  `ModuleLogger.staged { … }` 收敛，结束时合成**一条** —— 首行带版本前缀，后续行缩进两格。
+  LSPosed 日志页按「一条消息」折叠显示（导出成文件才是多行），逐行各自调用就是刷屏。
+  带 Throwable 的失败**不进块**（栈要完整保留），在发生时立即独立输出
+- **release 打什么**（debug 版在同一份代码上只做加法）：冷启动一条聚合块（`boot.start` + 配置生效 +
+  模型就绪 + `*.hooks` + **全部 hook 明细**）、热重载一条聚合块（`hot reloaded, hooks reinstalled` + 明细）、
+  `safemode.*`、`slot.takeover`、旧代的 `hotreload.accepted` / `teardown.done`，以及所有 E 级失败行。
+  其余一律只进 debug 版（`slot.stats`、`record.summary`、`record.blocked`、`record.kept`、
+  `record.persist_ready`、`channel.request`）。判断一条日志该不该进 release 只需问一句：
+  **它一天的条数会不会随通知量增长？会 → 进 debug**（装配明细不随通知量增长，所以它留在 release，
+  靠聚合块防刷屏）
 - 事件名与字段是**排障标识**：会与记录页的 `reason`、配置 JSON 对照着看。改文案要连带改
   `ModuleLogger` 的 KDoc、本节、以及知识库项目档里引用旧串的地方
 - **提示语行**（唯一不走 `<域>.<事件>` 的出口）：`ModuleLogger.notice` / `noticeError` 打人类可读的
@@ -101,7 +105,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入横幅是 `boot.start`（variant / API / 框架 / ClassLoader）—— 「system_server 里跑的是哪一版代码」全靠它，模块版本另见每行前缀。
 - 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debug`，且**调用点自判 `BuildConfig.DEBUG`**（不自判则字符串常量会留在 release 的 dex 里）；门禁禁止 `debugRaw` / `[DBG]`。
 - 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。**内容没变不出声**（`appliedJson` 比对）：周期核对的 `file/check` 是常态，每次都打就把这行的意思冲淡了。**热重载不算上线**：新代重读同一份配置，不打这一行（`ConfigReader.start(announce=false)`），`model.ready` 同理。
-- **热重载只出三条**：旧代一句 `hotreload.accepted`、新代一句 `hot reloaded, hooks reinstalled gen=… stale=… cl=… hooks=ok:7,skip:0,fail:0 owner=…`、旧代退场一句 `teardown.done`。装配耗时几十毫秒，`start`/`hooks`/`done` 拆三行等于在同一时刻堆三行。
+- **热重载的输出**：旧代 `hotreload.accepted`（同意）＋ 新代**一条聚合块**（首行 `hot reloaded, hooks reinstalled`，缩进列 `gen` / `stale` / `cl` / `hooks` / `owner` / `rearm` 与装配明细）＋ 旧代 `teardown.done`（退场）。`slot.takeover` 是独立事件（扩展槽解析成功后才有），单独一条。旧代那两行由旧代码自己打，合并不了。
 - **微调版本标识 = `<下发时刻按设备时区>+<delta 文件字节 SHA-256 前 4 字节>`**（如 `2026-10-10 16:41:33+3f9a1c2b`），实现只有 `DeltaStamp` 一份，模块端日志与 App 侧界面显示的必须是同一串。时刻一律按设备当前时区显示（界面与框架日志同口径），格式化前重取默认时区。摘要是「同毫秒重发」「版本号没变而文件被重写」的唯一判据。
 
 ## 文案与界面
