@@ -1,6 +1,7 @@
 package io.github.vstory.notifyguard.sync
 
 import android.content.Context
+import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
 import io.github.vstory.notifyguard.data.LabelStore
 import io.github.vstory.notifyguard.data.ModuleDir
@@ -46,7 +47,7 @@ object LabelSink {
         }
         worker.execute {
             store = LabelStore(ModuleDir.labels())
-            ModuleLogger.info("label.persist_ready", "path=${ModuleDir.labels().absolutePath}")
+            if (BuildConfig.DEBUG) ModuleLogger.debug("label.persist_ready", "path=${ModuleDir.labels().absolutePath}")
         }
         LabelChannel.register(c)
     }

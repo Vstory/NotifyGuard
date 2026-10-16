@@ -6,10 +6,10 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * M0 的记录出口 = 框架日志（每条一行 + 每 [SUMMARY_EVERY] 条汇总）。
+ * 记录出口：账本（[Tally]）+ 落盘/回传（[io.github.vstory.notifyguard.sync.LogSink]）+ **debug 版**的框架日志。
  *
- * 落盘/回传在 [io.github.vstory.notifyguard.sync.LogSink]（M1d 起写 system_server 侧
- * `/data/misc/notifyguard/`）：框架日志是给人看的排查线索，两者互不替代。
+ * 这里的逐条与周期行只进 debug 版（`BuildConfig.DEBUG`）：它们的条数随通知量线性增长，而 release
+ * 的框架日志只承担状态变迁与故障 —— 逐条明细在 App 的记录页与诊断屏，两边分工见 AGENTS.md。
  */
 object RecordSink {
 
@@ -19,7 +19,6 @@ object RecordSink {
     private val total = AtomicLong()
     private val byReason = ConcurrentHashMap<String, AtomicLong>()
     private val byPkg = ConcurrentHashMap<String, AtomicLong>()
-    private var firstRecordLogged = false
 
     fun record(s: NotifySnapshot?, d: Judge.Decision) {
         // 累计账本在这里记：判定链每次判定都会走到这个出口，而它自己的存储独立于记录（记录会被裁、会被清）
@@ -28,20 +27,14 @@ object RecordSink {
         byReason.computeIfAbsent(d.reason) { AtomicLong() }.incrementAndGet()
         s?.pkg?.let { byPkg.computeIfAbsent(it) { AtomicLong() }.incrementAndGet() }
 
-        // 首条打全字段：真机核对「字段是否完整」看这一行就够
-        if (!firstRecordLogged) {
-            firstRecordLogged = true
-            ModuleLogger.info("record.kept", "n=1", *lineFields(s, d))
-        }
         if (BuildConfig.DEBUG) {
             ModuleLogger.debug("record.kept", "n=$n", *lineFields(s, d))
-        }
-        if (n % SUMMARY_EVERY == 0L) {
-            ModuleLogger.info("record.summary", *summaryFields(n))
+            // 汇总串要拼 reasons 与 top_pkgs：放在闸内，release 里连这次分配都不发生
+            if (n % SUMMARY_EVERY == 0L) ModuleLogger.debug("record.summary", *summaryFields(n))
         }
     }
 
-    /** 逐条明细的字段（首条打全字段：真机核对「字段是否完整」看这一行就够）。 */
+    /** 逐条明细的字段（debug 版的 record.kept 一行带全，真机核对「字段是否完整」看它）。 */
     private fun lineFields(s: NotifySnapshot?, d: Judge.Decision): Array<String> =
         if (s == null) {
             arrayOf(
