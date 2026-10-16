@@ -161,13 +161,41 @@ internal val ItemGap = 8.dp
  * 区块标题（不带内边距的那版，供 [SectionGap] 布局的屏用；[SectionTitle] 是旧 8dp 间距布局的）。
  */
 @Composable
-internal fun SectionLabel(text: String) {
+internal fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * 顶部一行连接状态：回答「有没有连上、没连上怎么办」，连上但读不到配置时另起一行（那是另一种故障，
+ * 恢复方式也不同）。
+ *
+ * 不做成卡片：卡片是 Containment，留给首页那种「自成一块」的统计块。
+ */
+@Composable
+internal fun StatusLine(serviceText: UiText, connected: Boolean, loaded: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = serviceText.text(),
+            style = MaterialTheme.typography.bodySmall,
+            color = if (connected) {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            } else {
+                MaterialTheme.colorScheme.error
+            },
+        )
+        if (connected && !loaded) {
+            Text(
+                text = stringResource(R.string.status_cfg_unreadable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
 }
 
 /**
