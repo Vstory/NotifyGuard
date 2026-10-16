@@ -1,5 +1,6 @@
 package io.github.vstory.notifyguard.ai
 
+import io.github.vstory.notifyguard.BuildConfig
 import io.github.vstory.notifyguard.core.ModuleLogger
 
 /**
@@ -36,8 +37,8 @@ object ModelHolder {
             val model = SpamModel.bundled()
             if (model == null) {
                 ModuleLogger.error("model.unavailable", "resource=${SpamModel.RESOURCE}", "action=pass")
-            } else if (announce) {
-                ModuleLogger.info(
+            } else if (announce && BuildConfig.DEBUG) {
+                ModuleLogger.debug(
                     "model.ready",
                     "buckets=${model.buckets}",
                     "gram=${model.ngramMin}-${model.ngramMax}",

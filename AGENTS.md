@@ -39,7 +39,8 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 
 - 域白名单：`boot` `hotreload` `assemble` `slot` `guard` `safemode` `systemui` `generation` `teardown`
   `context` `judge` `ai` `record` `label` `status` `config` `channel` `model` `delta` `app`
-- 键名与枚举值一律英文小写下划线（`on_success=takeover`），值里不带空格；一行一条、不换行
+- 键名与枚举值一律英文小写下划线（`on_success=takeover`），值里不带空格。**一条消息内的行**不换行；
+  多条信息靠聚合块分行（见下）
 - 长值先截断：ClassLoader 一律走 `ClassLoader?.brief()`
 - 中文只允许来自 `ModuleLogger.err(t)` 的异常原文，其余一律英文
 - 级别：I = 状态变迁 / 就绪 / 汇总；E = 失败终态 / 异常 / 拒绝；D = 高频逐条细节（调用点自判
@@ -47,12 +48,17 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **级别按信息的性质定，不按打印位置定**：同一批输出里混着成功与失败时（hook 装配明细、`*.hooks`
   汇总）按**最坏结果**分流 —— 失败明细走 `ModuleLogger.errorLine`、含 `fail` 的汇总走 E，其余走 I；
   正常降级（扩展槽方法不存在、微调被关）仍是 I。LSPosed 日志页按级别过滤，混在 I 里的失败等于没有
-- **一次事件的输出聚合成一条**：装配这类散在好几个类里的输出（配置 / 模型 / 钩子 / 明细）用
-  `ModuleLogger.staged { … }` 收敛，结束时合成**一条** —— 首行带版本前缀，后续行缩进两格。
-  LSPosed 日志页按「一条消息」折叠显示（导出成文件才是多行），逐行各自调用就是刷屏。
+- **一次事件的输出聚合成一条**（知识库《hook 点汇总日志格式规范》的落地方式）：装配这类散在好几个
+  类里的输出（classloader / 配置 / 模型 / 钩子 / 明细）用 `ModuleLogger.staged { … }` 收敛，结束时
+  合成**一条** —— 首行是 `staged` 回调返回的**结论/汇总**（带版本前缀），其余行缩进两格跟在后面。
+  LSPosed 日志页按「一条消息」显示成一张卡片、内容逐行（导出成文件也是多行）；散成十几次独立调用就是刷屏。
   带 Throwable 的失败**不进块**（栈要完整保留），在发生时立即独立输出
-- **release 打什么**（debug 版在同一份代码上只做加法）：冷启动一条聚合块（`boot.start` + 配置生效 +
-  模型就绪 + `*.hooks` + **全部 hook 明细**）、热重载一条聚合块（`hot reloaded, hooks reinstalled` + 明细）、
+- **明细行的格式**：`[OK]   kind 类#方法 附加字段…` / `[SKIP] kind …` / `[FAIL] kind … err=…`
+  （`[OK]  ` / `[SKIP]` / `[FAIL]` 定长，左对齐成一列；类写全限定名，失败时靠它反查是哪个方法没挂上）。
+  成功项在 release **不列**，由汇总的 `ok=N` 回答；要看逐条成功明细就装 debug 版
+- **release 打什么**（debug 版在同一份代码上只做加法）：冷启动一条聚合块（首行 `boot.hooks ok=N skip=N fail=N
+  owner=…` + 缩进的 classloader / 配置生效 / **skip·fail 明细**）、热重载一条聚合块（首行
+  `hot reloaded, hooks reinstalled` + 缩进的 generation / classloader / hooks / skip·fail 明细）、
   `safemode.*`、`slot.takeover`、旧代的 `hotreload.accepted` / `teardown.done`，以及所有 E 级失败行。
   其余一律只进 debug 版（`slot.stats`、`record.summary`、`record.blocked`、`record.kept`、
   `record.persist_ready`、`channel.request`）。判断一条日志该不该进 release 只需问一句：
@@ -102,10 +108,10 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **`versionName` 是版本唯一来源**，构建期把提交短号并进去：CI 出厂是 `1.7.0+ci-debug.b4efc10a`（渠道段由 CI 传的 `-PciVersionSuffix` 给），本地构建补成 `1.7.0+b4efc10a`（工作区**已跟踪**文件有改动时追加 `.dirty`）。一律是 semver 的构建元数据段：**一个 `+`、点分标识符**。不要再另立第二个来源（短号出现两次就会拼出两个 `+` 的串，任何工具都解析不了）。
 - 脏判定只看已跟踪文件（`--untracked-files=no`）：CI 打包前会把签名配置追加进未跟踪的 `local.properties`，按全量口径 CI 产物会带一个假 `.dirty`。
 - **模块名与模块描述取 manifest 的资源**：`android:label` / `android:description`（现代 API 不用 `xposeddescription` 元数据），描述必须是 `@string/` 引用、只写一句话功能总结、不重复模块名（名字已由 label 显示）。
-- **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入横幅是 `boot.start`（variant / API / 框架 / ClassLoader）—— 「system_server 里跑的是哪一版代码」全靠它，模块版本另见每行前缀。
+- **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。**「system_server 里跑的是哪一版代码」全靠这个前缀**（变体已含在 versionName 里：`ci-release` / `ci-debug`），所以日志里**不重复**打印 variant / API / 框架版本 —— 冷启动的辨识点是那条 `boot.hooks` 汇总块。
 - 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debug`，且**调用点自判 `BuildConfig.DEBUG`**（不自判则字符串常量会留在 release 的 dex 里）；门禁禁止 `debugRaw` / `[DBG]`。
 - 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。**内容没变不出声**（`appliedJson` 比对）：周期核对的 `file/check` 是常态，每次都打就把这行的意思冲淡了。**热重载不算上线**：新代重读同一份配置，不打这一行（`ConfigReader.start(announce=false)`），`model.ready` 同理。
-- **热重载的输出**：旧代 `hotreload.accepted`（同意）＋ 新代**一条聚合块**（首行 `hot reloaded, hooks reinstalled`，缩进列 `gen` / `stale` / `cl` / `hooks` / `owner` / `rearm` 与装配明细）＋ 旧代 `teardown.done`（退场）。`slot.takeover` 是独立事件（扩展槽解析成功后才有），单独一条。旧代那两行由旧代码自己打，合并不了。
+- **热重载的输出**：旧代 `hotreload.accepted`（同意）＋ 新代**一条聚合块**（首行 `hot reloaded, hooks reinstalled`，缩进列 `hotreload.generation` / `hotreload.classloader` / `hotreload.hooks` 与 skip·fail 明细）＋ 旧代 `teardown.done`（退场）。`slot.takeover` 是独立事件（扩展槽解析成功后才有），单独一条。旧代那两行由旧代码自己打，合并不了。
 - **微调版本标识 = `<下发时刻按设备时区>+<delta 文件字节 SHA-256 前 4 字节>`**（如 `2026-10-10 16:41:33+3f9a1c2b`），实现只有 `DeltaStamp` 一份，模块端日志与 App 侧界面显示的必须是同一串。时刻一律按设备当前时区显示（界面与框架日志同口径），格式化前重取默认时区。摘要是「同毫秒重发」「版本号没变而文件被重写」的唯一判据。
 
 ## 文案与界面

@@ -87,28 +87,29 @@ object ModuleLogger {
         PREFIX + if (fields.isEmpty()) event else event + " " + fields.joinToString(" ")
 
     /**
-     * 聚合块：块内的日志按顺序**收集**，结束时合成**一条**输出。
+     * 聚合块：块内的日志按顺序**收集**，结束时合成**一条**输出 —— [header] 的返回值是这条消息的第一行
+     * （结论 / 汇总），其余行缩进两格跟在后面。
      *
-     * 用法是「一次事件 = 一次调用」——装配（配置 / 模型 / 钩子 / 明细）散在好几个类里，没有这个
-     * 收敛点就只能是十几条独立日志。整块的级别取块内最坏的一条（有 E 就是 E）。
+     * 这是知识库《hook 点汇总日志格式规范》的落地方式：**一次 log 调用、消息内部换行** ⇒ LSPosed 日志页里
+     * 是一条卡片、内容逐行（导出成文件也是多行）。散成十几次独立调用就是刷屏。
+     * 整块的级别取块内最坏的一条（有 E 就是 E）。
      *
      * 带 Throwable 的失败**不进块**（栈要在框架日志里完整保留），它在发生时立即独立输出。
      */
-    fun <T> staged(body: () -> T): T {
-        if (staged.get() != null) return body()   // 已在块内：直接执行，不嵌套
+    fun staged(header: () -> String) {
+        if (staged.get() != null) {
+            header()   // 已在块内：直接执行，不嵌套
+            return
+        }
         val buf = ArrayList<Pair<Int, String>>()
         staged.set(buf)
-        try {
-            return body()
+        val head = try {
+            header()
         } finally {
             staged.set(null)
-            if (buf.isNotEmpty()) {
-                write(
-                    buf.maxOf { it.first },
-                    PREFIX + buf.first().second + buf.drop(1).joinToString("") { "\n  " + it.second },
-                )
-            }
         }
+        val level = buf.maxOfOrNull { it.first } ?: Log.INFO
+        write(level, PREFIX + head + buf.joinToString("") { "\n  " + it.second })
     }
 
     private fun write(priority: Int, msg: String) {

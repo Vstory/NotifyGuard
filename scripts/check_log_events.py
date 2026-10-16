@@ -28,6 +28,7 @@ NOTICE_TEXTS = (
     "hot reloaded, hooks reinstalled",
     "hot reload failed, keeping old generation",
 )
+DETAIL = re.compile(r"^\s*\[(OK|SKIP|FAIL)\]\s")
 EVENT = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 FIELD = re.compile(r"^[a-z][a-z0-9_]*=")
 HAN = re.compile(r"[\u3400-\u9fff\uf900-\ufaff]")
@@ -92,10 +93,12 @@ def main(root):
             elif event is None:
                 if call != "lines":
                     problems.append(f"{rel}: {tag}.{call}() 的事件名不是字面量：{args[0][:40]}")
-            elif call == "lines":
-                # 例外：明细行由 InstallReport 拼好整行（格式在那边的 head() 里保证），调用点传的是变量
-                if not EVENT.match(event):
-                    problems.append(f"{rel}: 明细行未按 `<域>.<事件> …` 起头：{event[:50]}")
+            elif call in ("lines", "errorLine"):
+                # 例外：明细行由 InstallReport 拼好整行（格式在那边的 head() 里保证），调用点传的是变量。
+                # 明细只有两种合法形态：`<域>.<事件> …` 与缩进后的 `[OK]/[SKIP]/[FAIL] kind target=…`
+                # 含插值的由 InstallReport 在运行期拼好（格式由它的 head() 保证），只校验字面量
+                if "$" not in event and not EVENT.match(event) and not DETAIL.match(event):
+                    problems.append(f"{rel}: 明细行既不是 `<域>.<事件> …` 也不是 `[OK]/[SKIP]/[FAIL] …`：{event[:50]}")
             else:
                 if not EVENT.match(event):
                     problems.append(f"{rel}: 事件名不合 `<域>.<事件>`：{event}")
