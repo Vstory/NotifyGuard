@@ -28,15 +28,6 @@ class LogRecordTest {
         assertEquals("信息行", LogRecord.from(snap(text = null, infoText = "信息行"), d, "FUNNEL", 1L).text)
     }
 
-    @Test
-    fun observeModeKeepsWouldWithoutBlock() {
-        val d = Judge.Decision(block = false, reason = "rule:r1", wouldBlock = true, ruleId = "r1")
-        val r = LogRecord.from(snap(title = "推广"), d, "EXT_SLOT", 5L)
-        assertEquals(true, r.would)
-        assertEquals(false, r.block)
-        assertEquals("EXT_SLOT", r.slot)
-        assertEquals("r1", r.ruleId)
-    }
 
     @Test
     fun nullSnapshotStillProducesReason() {
@@ -96,7 +87,6 @@ class LogRecordTest {
         title = "t",
         text = text,
         reason = "pass",
-        would = false,
         block = block,
         slot = "FUNNEL",
         nkey = nkey,

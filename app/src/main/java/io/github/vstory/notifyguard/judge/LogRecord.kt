@@ -15,7 +15,6 @@ data class LogRecord(
     val title: String?,
     val text: String?,
     val reason: String,
-    val would: Boolean,
     val block: Boolean,
     val slot: String?,
     val lastTs: Long = ts,
@@ -35,7 +34,7 @@ data class LogRecord(
     /**
      * 是否属同一组（聚合键见 M2b实施方案.md §二）。
      *
-     * [block]/[would] 必须一起比：同文本「拦过」与「放过」是两个事实，合并会把前者吞掉。
+     * [block] 必须进键：同文本「拦过」与「放过」是两个事实，合并会把前者吞掉。
      * reason 不能进键——它带分数，纳入即等于放弃聚合。
      *
      * 带身份时**只看身份**：同一个 `tag#id` 在系统里就是同一条通知被更新覆盖，正文里的数值
@@ -43,7 +42,7 @@ data class LogRecord(
      * 无身份时退回文本键，行为与 M2 一致。
      */
     fun sameGroup(o: LogRecord): Boolean {
-        if (pkg != o.pkg || block != o.block || would != o.would) return false
+        if (pkg != o.pkg || block != o.block) return false
         // 两边都带身份时身份说了算：同一个 tag#id 就是系统里那条通知（正文数值变了也还是它），
         // 身份不同则是两条不同通知。只有一边缺身份（老记录）才退回文本键。
         if (nkey != null && o.nkey != null) return nkey == o.nkey
@@ -71,9 +70,6 @@ data class LogRecord(
                     ?: s?.textLines?.firstOrNull { it.isNotBlank() }
             ),
             reason = d.reason,
-            // would/block 分开记（M2 起）：观察模式已移除，新记录里两者恒等（`block ⇒ would`）；
-            // 老记录里的 `would=true, block=false` 是当时留下的，字段不回收，记录页照旧读得懂
-            would = d.wouldBlock,
             block = d.block,
             slot = slot,
             ruleId = d.ruleId,

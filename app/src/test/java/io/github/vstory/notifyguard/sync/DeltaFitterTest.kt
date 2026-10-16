@@ -72,7 +72,6 @@ class DeltaFitterTest {
         title = "标题${word(ts)}",
         text = "正文${word(ts)}",
         reason = "",
-        would = block,
         block = block,
         slot = null,
         score = score,

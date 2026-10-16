@@ -39,7 +39,6 @@ class HomeViewModel : ViewModel() {
     /** 模块端账本的一行快照。次数按**条**算：每次判定各计一次。 */
     data class Totals(
         val blocked: Long,
-        val would: Long,
         val pass: Long,
         val since: Long,
         /** 今日拦截（模块端按本地日期维护，过零点归零）；-1 = 模块端没上报这个字段。 */
@@ -76,7 +75,7 @@ class HomeViewModel : ViewModel() {
                 fetching = false,
                 totals = report?.let {
                     Totals(
-                        it.blockedTotal, it.wouldTotal, it.passTotal, it.tallySince,
+                        it.blockedTotal, it.passTotal, it.tallySince,
                         it.blockedToday, it.todayByPkg,
                     )
                 },

@@ -121,7 +121,6 @@ class JudgeTest {
     fun disabledConfigPassesBeforeAnythingElse() {
         val cfg = Config(enabled = false, rules = listOf(rule("正文")))
         assertEquals("disabled", Judge.decide(snap(), cfg).reason)
-        assertFalse(Judge.decide(snap(), cfg).wouldBlock)
     }
 
     // ===== 保护类型（先于规则） =====
@@ -151,7 +150,6 @@ class JudgeTest {
         val cfg = Config(rules = listOf(rule("正文")))
         val d = Judge.decide(snap(), cfg)
         assertTrue(d.block)
-        assertTrue(d.wouldBlock)
         assertEquals("rule:r1", d.reason)
         assertEquals("r1", d.ruleId)
     }
@@ -233,7 +231,6 @@ class JudgeTest {
         ModelHolder.replace(SpamScorer { 0.91 })
         val d = Judge.decide(snap(), aiCfg(threshold = 0.9))
         assertTrue(d.block)
-        assertTrue(d.wouldBlock)
         assertEquals("ai:0.91", d.reason)
         assertEquals(0.91, d.score!!, 1e-9)
         assertNull(d.ruleId)
@@ -250,7 +247,6 @@ class JudgeTest {
         ModelHolder.replace(SpamScorer { 0.42 })
         val d = Judge.decide(snap(), aiCfg(threshold = 0.9))
         assertFalse(d.block)
-        assertFalse(d.wouldBlock)
         assertEquals("below_threshold:0.42", d.reason)
         // 分数必须随记录带出来：界面上「严格程度」的档位与排障都看它，放行那条也要有
         assertEquals(0.42, d.score!!, 1e-9)

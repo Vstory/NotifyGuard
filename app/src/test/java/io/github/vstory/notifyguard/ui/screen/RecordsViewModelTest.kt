@@ -16,7 +16,6 @@ class RecordsViewModelTest {
     private fun record(
         ts: Long,
         block: Boolean = false,
-        would: Boolean = false,
         lastTs: Long = ts,
         pkg: String = "com.example.app",
         title: String? = "t$ts",
@@ -27,24 +26,22 @@ class RecordsViewModelTest {
         title = title,
         text = text,
         reason = "ai:0.90",
-        would = would,
         block = block,
         slot = "nms",
         lastTs = lastTs,
     )
 
-    /** 三档互不重叠、合计等于全窗口：判定的三态本身是划分，筛选若重叠或漏项，界面上的数就对不上。 */
+    /** 两档互不重叠、合计等于全窗口：判定的两态本身是划分，筛选若重叠或漏项，界面上的数就对不上。 */
     @Test
     fun filtersPartitionTheWindow() {
         val rs = listOf(
             record(1, block = true),
-            record(2, would = true),
+            record(2),
             record(3),
             record(4, block = true),
         )
         val sum = listOf(
             RecordsViewModel.Filter.Block,
-            RecordsViewModel.Filter.Would,
             RecordsViewModel.Filter.Pass,
         ).sumOf { RecordsViewModel.filteredOf(rs, it).size }
 
@@ -52,14 +49,6 @@ class RecordsViewModelTest {
         assertEquals(rs.size, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All).size)
     }
 
-    /** 老记录里是 `would=true, block=false`（观察模式时期留下的）：属「建议拦截」，不许同时落进「拦截」。 */
-    @Test
-    fun wouldBlockIsNotCountedAsBlocked() {
-        val rs = listOf(record(1, would = true), record(2, would = true, block = true))
-
-        assertEquals(1, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.Block).size)
-        assertEquals(listOf(1L), RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.Would).map { it.ts })
-    }
 
     /**
      * 被拦的条目早于展示上限时仍要命中：筛的是整个窗口，截断发生在筛完之后。
@@ -121,9 +110,9 @@ class RecordsViewModelTest {
     fun manualSelectionOverridesAPendingRequest() {
         RecordsFilterMemory.reset()
         RecordsFilterMemory.request(RecordsViewModel.Filter.Block)
-        RecordsFilterMemory.remember(RecordsViewModel.Filter.Would)
+        RecordsFilterMemory.remember(RecordsViewModel.Filter.Pass)
 
-        assertEquals(RecordsViewModel.Filter.Would, RecordsFilterMemory.take())
+        assertEquals(RecordsViewModel.Filter.Pass, RecordsFilterMemory.take())
     }
 
     /** 搜索命中包名 / 标题 / 正文任一，且与档位是「与」的关系（不是「或」）。 */
@@ -161,11 +150,10 @@ class RecordsViewModelTest {
         assertEquals(0, RecordsViewModel.filteredOf(rs, RecordsViewModel.Filter.All, "抖音").size)
     }
 
-    /** 判定由 `block` / `would` 派生，与筛选口径同源。 */
+    /** 判定由 `block` 派生，与筛选口径同源。 */
     @Test
     fun verdictIsDerivedFromTheRecordFields() {
         assertEquals(Verdict.Block, Verdict.of(record(1, block = true)))
-        assertEquals(Verdict.Would, Verdict.of(record(1, would = true)))
         assertEquals(Verdict.Pass, Verdict.of(record(1)))
     }
 
@@ -181,7 +169,6 @@ class RecordsViewModelTest {
             title = null,
             text = "同一段文案",
             reason = if (block) "ai:0.91" else "below_threshold:0.20",
-            would = true,
             block = block,
             slot = null,
             count = 1,

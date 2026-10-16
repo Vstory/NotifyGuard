@@ -15,12 +15,10 @@ import org.junit.Test
  */
 class LearningViewModelTest {
 
-    /** 判定链的不变量：`block` ⇒ `would`。 */
     private fun rec(
         ts: Long = 1_000L,
         pkg: String = "a",
         block: Boolean = false,
-        would: Boolean = false,
         score: Double? = null,
         count: Int = 1,
         aiText: String? = null,
@@ -30,7 +28,6 @@ class LearningViewModelTest {
         title = null,
         text = "正文${word(ts)}",
         reason = score?.let { "ai:$it" } ?: "below_threshold:0.20",
-        would = would || block,
         block = block,
         slot = null,
         lastTs = ts,
@@ -64,9 +61,8 @@ class LearningViewModelTest {
     fun pendingKeepsOnlyBlockedAndUnlabelled() {
         val blocked = rec(ts = 1_000L, block = true)
         val passed = rec(ts = 2_000L)
-        val observeOnly = rec(ts = 3_000L, would = true)
         val labelled = rec(ts = 4_000L, block = true)
-        val records = listOf(blocked, passed, observeOnly, labelled)
+        val records = listOf(blocked, passed, labelled)
         val marks = LabelRecord.marksOf(records, listOf(label(labelled)))
 
         assertEquals(listOf(LabelRecord.keyOf(blocked)), keys(LearningViewModel.pendingOf(records, marks, 0L)))

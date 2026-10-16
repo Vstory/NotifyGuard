@@ -20,7 +20,6 @@ object LogCodec {
         r.title?.let { put("title", it) }
         r.text?.let { put("text", it) }
         put("reason", r.reason)
-        put("would", r.would)
         put("block", r.block)
         r.slot?.let { put("slot", it) }
         r.ruleId?.let { put("ruleId", it) }
@@ -40,7 +39,6 @@ object LogCodec {
             title = o.optString("title").takeIf { it.isNotEmpty() },
             text = o.optString("text").takeIf { it.isNotEmpty() },
             reason = o.optString("reason", "?"),
-            would = o.optBoolean("would", false),
             block = o.optBoolean("block", false),
             slot = o.optString("slot").takeIf { it.isNotEmpty() },
             // M2 之前的记录没有这两个键：缺省即「只出现过一次」

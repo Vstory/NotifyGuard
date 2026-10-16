@@ -139,7 +139,6 @@ object StatusChannel {
             recordsPersisted = LogSink.persistedCount(),
             recordsDropped = LogSink.droppedCount(),
             blockedTotal = Tally.blockedTotal(),
-            wouldTotal = Tally.wouldTotal(),
             passTotal = Tally.passTotal(),
             tallySince = Tally.sinceAt(),
             blockedToday = Tally.todayBlockedTotal(),

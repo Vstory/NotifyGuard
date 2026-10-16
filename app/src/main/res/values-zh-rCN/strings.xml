@@ -69,7 +69,6 @@
     <string name="records_summary">共 %1$d 组 / 累计 %2$d 次（上限 %3$d 组）· **权威源在模块端**</string>
     <string name="records_filter_all">全部</string>
     <string name="records_filter_block">拦截</string>
-    <string name="records_filter_would">建议拦截</string>
     <string name="records_filter_pass">放行</string>
     <string name="records_filter_hit">本档命中 %1$d 组（按整个记录窗口算），下列最近 %2$d 组</string>
     <string name="records_filter_empty">这一档没有记录：窗口里没有该判定的条目。\n判定链在不在跑看框架日志；切回「全部」能看到放行的那些。</string>
@@ -134,7 +133,6 @@
     <string name="action_mark_ham">标正常</string>
     <string name="action_undo">撤销</string>
     <string name="verdict_block">拦截</string>
-    <string name="verdict_would">建议拦截</string>
     <string name="verdict_pass">放行</string>
 
     <string name="records_fetch_timeout">拉取超时：模块未激活或装完还没重启过系统框架（数据本身没丢，仍在模块端的 /data/misc/notifyguard 下）</string>

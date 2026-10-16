@@ -522,7 +522,9 @@ jobs:
             # ③o App 侧记录屏判定筛选入口（M4i）。筛选整块没了 ⇒ 被拦的条目被放行的淹在混排列表里，
             #     「哪些通知被拦了」在界面上无解。首页统计那三行按用户要求取消了跳转（只读），
             #     所以本队列只认记录屏自己的筛选入口。
-            for A in records_filter_all records_filter_block records_filter_would records_filter_pass records_filter_hit; do
+            #     判定档已由四档减为三档（「建议拦截」随观察模式一起移除：判定不再有「本该拦却没拦」
+            #     这个态，那一档永远是空的），空出的这一位改断言记录屏的搜索入口。
+            for A in records_filter_all records_filter_block records_filter_pass records_filter_hit records_search_hint; do
               res_entry "$A" || { echo "::error::$NAME 缺 App 侧判定筛选资源「$A」—— 记录屏的筛选档或首页的行提示在 App 侧没了（或被 R8 裁掉）"; exit 1; }
             done
             echo "  ✅ App 侧判定筛选入口在（含中文值）"
