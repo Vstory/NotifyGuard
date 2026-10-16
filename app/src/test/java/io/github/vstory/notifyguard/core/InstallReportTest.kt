@@ -6,64 +6,51 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 装配报告的两条安全边界：release 只列 skip/fail 明细；「判定链挂上了没」不能看 `okCount`。
+ * 装配明细的格式与裁剪口径。
  *
- * `install()` 里配置与模型先于钩子 `markOk`，`okCount` 恒 ≥ 2 —— 热重载若拿它判成功，
- * 钩子全没挂上的空壳也会踢掉旧代（旧钩子已卸、新钩子没上 = 模块停摆）。
+ * 格式（知识库《hook 点汇总日志格式规范》的写法）：`[OK]/[SKIP]/[FAIL] kind 类#方法 …`；
+ * 裁剪：release 只列 skip/fail（`ok=N` 汇总已经回答了成功），debug 全列。热重载的判据不能看 `okCount`
+ * （配置与模型先于钩子 markOk，恒 ≥ 2），要判 `isJudgingReady()`。
  */
 class InstallReportTest {
 
+    private fun report() = EntryHook.InstallReport().apply {
+        markOk("funnel", "com.example.Foo#bar", "params=12")
+        markSkip("ext", "reason=nms_ext_absent")
+        markFail("nms_clinit", "reason=resolve_after_clinit", IllegalStateException("boom"))
+    }
+
     @Test
     fun detailLinesKeepsOnlyFailuresWhenOkIsExcluded() {
-        val r = EntryHook.InstallReport("hotreload")
-        r.markOk("funnel", "cls=x", "role=fallback")
-        r.markSkip("ext", "reason=nms_ext_absent")
-        r.markFail("nms_clinit", "reason=resolve_after_clinit", IllegalStateException("boom"))
+        val r = report()
 
         assertEquals(1, r.okCount)
         assertEquals(1, r.skipCount)
         assertEquals(1, r.failCount)
         assertEquals(3, r.detailLines().size)
+        assertEquals("[OK]   funnel com.example.Foo#bar params=12", r.detailLines().first())
 
         val kept = r.detailLines(includeOk = false)
-        assertEquals(2, kept.size)
-        assertTrue(kept.none { it.startsWith("hotreload.hook ok ") })
-        assertTrue(kept.any { it.startsWith("hotreload.hook skip kind=ext") })
-        assertTrue(kept.any { it.endsWith("err=IllegalStateException: boom") })
+        assertEquals(
+            listOf(
+                "[SKIP] ext reason=nms_ext_absent",
+                "[FAIL] nms_clinit reason=resolve_after_clinit err=IllegalStateException: boom",
+            ),
+            kept,
+        )
     }
 
     @Test
     fun emitDetailsRoutesFailuresToTheErrorChannel() {
-        val r = EntryHook.InstallReport("boot")
-        r.markOk("funnel", "cls=x")
-        r.markSkip("ext", "reason=nms_ext_absent")
-        r.markFail("nms_clinit", "reason=resolve_after_clinit", IllegalStateException("boom"))
-
         val info = mutableListOf<String>()
         val error = mutableListOf<String>()
-        r.emitDetails(includeOk = true, info = info::add, error = error::add)
 
-        assertEquals(
-            listOf("boot.hook ok kind=funnel cls=x", "boot.hook skip kind=ext reason=nms_ext_absent"),
-            info,
-        )
+        report().emitDetails(includeOk = true, info = info::add, error = error::add)
+
+        assertEquals(2, info.size)
+        assertTrue(info.first().startsWith("[OK]   funnel"))
         assertEquals(1, error.size)
-        assertTrue(error[0].startsWith("boot.hook fail kind=nms_clinit"))
-        assertTrue(error[0].endsWith("err=IllegalStateException: boom"))
-    }
-
-    @Test
-    fun emitDetailsKeepsFailuresWhenOkIsCulled() {
-        val r = EntryHook.InstallReport("hotreload")
-        r.markOk("funnel", "cls=x")
-        r.markFail("nms_clinit", "reason=x", IllegalStateException("boom"))
-
-        val info = mutableListOf<String>()
-        val error = mutableListOf<String>()
-        r.emitDetails(includeOk = false, info = info::add, error = error::add)
-
-        assertTrue(info.isEmpty())
-        assertEquals(1, error.size)
+        assertTrue(error.first().startsWith("[FAIL] nms_clinit"))
     }
 
     @Test
