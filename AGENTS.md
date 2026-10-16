@@ -45,6 +45,12 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - 级别：I = 状态变迁 / 就绪 / 汇总；E = 失败终态 / 异常 / 拒绝；D = 高频逐条细节（调用点自判
   `BuildConfig.DEBUG`，否则字符串常量会留在 dex 里）；禁 WARN
 - 明细行（装配结果这类）逐行自成一条日志，不用一次调用写多行 —— 多行串的后续行不带版本前缀，无从归属
+- **release 打什么**（debug 版在同一份代码上只做加法）：`boot.start`（API / 框架 / ClassLoader）、
+  `*.hooks` 汇总（hook 明细只列 `skip` / `fail`，成功项由 `ok=N` 回答）、配置生效（**内容变了才打**）、
+  模型就绪、`hotreload.*`、`safemode.*`、`slot.takeover`，以及所有 E 级失败行。其余一律只进 debug 版
+  （`slot.stats`、`record.summary`、`record.blocked`、`record.kept`、`record.persist_ready`、hook 成功明细）：
+  release 的框架日志**不承担明细**，逐条明细在 App 的记录页与诊断屏。判断一条日志该不该进 release
+  只需问一句：**它一天的条数会不会随通知量增长？会 → 进 debug**
 - 事件名与字段是**排障标识**：会与记录页的 `reason`、配置 JSON 对照着看。改文案要连带改
   `ModuleLogger` 的 KDoc、本节、以及知识库项目档里引用旧串的地方
 - 门禁：`python3 scripts/check_log_events.py .`（CI 的 Static check 档跑同一个脚本）
@@ -85,8 +91,8 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
 - **`versionName` 是版本唯一来源**，构建期把提交短号并进去：CI 出厂是 `1.7.0+ci-debug.b4efc10a`（渠道段由 CI 传的 `-PciVersionSuffix` 给），本地构建补成 `1.7.0+b4efc10a`（工作区**已跟踪**文件有改动时追加 `.dirty`）。一律是 semver 的构建元数据段：**一个 `+`、点分标识符**。不要再另立第二个来源（短号出现两次就会拼出两个 `+` 的串，任何工具都解析不了）。
 - 脏判定只看已跟踪文件（`--untracked-files=no`）：CI 打包前会把签名配置追加进未跟踪的 `local.properties`，按全量口径 CI 产物会带一个假 `.dirty`。
 - **模块名与模块描述取 manifest 的资源**：`android:label` / `android:description`（现代 API 不用 `xposeddescription` 元数据），描述必须是 `@string/` 引用、只写一句话功能总结、不重复模块名（名字已由 label 显示）。
-- **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入瞬间的横幅是全量信息行（api / 框架 / 是否 system_server / 进程名）。
-- 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debugRaw("[DBG] …")`，并用 `BuildConfig.DEBUG` 闸住。
+- **模块端每条日志都带 `[<versionName>]` 前缀**，由 `ModuleLogger` 统一加，不在调用点各写一遍；App 端同口径（`AppLogger`）。注入横幅是 `boot.start`（variant / API / 框架 / ClassLoader）—— 「system_server 里跑的是哪一版代码」全靠它，模块版本另见每行前缀。
+- 模块端日志**必须走 `XposedInterface.log`**（LSPosed 日志页不读 logcat）。调试级别用 `ModuleLogger.debug`，且**调用点自判 `BuildConfig.DEBUG`**（不自判则字符串常量会留在 release 的 dex 里）；门禁禁止 `debugRaw` / `[DBG]`。
 - 配置每次上线都要写来源：`配置生效（startup|push|file/broadcast|file/check）`。这一行回答的是「热重载走的哪条通道、是不是已经降级成兜底」。
 - **微调版本标识 = `<下发时刻按设备时区>+<delta 文件字节 SHA-256 前 4 字节>`**（如 `2026-10-10 16:41:33+3f9a1c2b`），实现只有 `DeltaStamp` 一份，模块端日志与 App 侧界面显示的必须是同一串。时刻一律按设备当前时区显示（界面与框架日志同口径），格式化前重取默认时区。摘要是「同毫秒重发」「版本号没变而文件被重写」的唯一判据。
 
