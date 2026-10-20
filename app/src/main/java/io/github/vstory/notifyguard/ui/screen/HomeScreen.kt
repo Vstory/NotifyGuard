@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.vstory.notifyguard.R
+import io.github.vstory.notifyguard.ui.UiText
 import io.github.vstory.notifyguard.ui.text
 
 /**
@@ -82,6 +85,27 @@ fun HomeScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             StatusCard(state.serviceText, state.connected, state.cfg != null)
+
+            // 熔断提示必须在统计之前：熔断时下面那些「今日 0 条」不是「今天没垃圾通知」，是模块停摆了
+            val status = state.status
+            if (status?.safeMode == true) {
+                GroupCard(stringResource(R.string.module_line_safe_mode)) {
+                    SettingsViewModel.safeModeLine(status)?.let {
+                        Text(
+                            text = it.text(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    Button(
+                        onClick = { viewModel.clearSafeMode(ctx) },
+                        enabled = !state.fetching,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Text(stringResource(R.string.settings_clear_safe_mode))
+                    }
+                }
+            }
 
             val totals = state.totals
             GroupCard(stringResource(R.string.home_stats_group)) {

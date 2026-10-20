@@ -12,6 +12,7 @@ import io.github.vstory.notifyguard.R
 import io.github.vstory.notifyguard.judge.Config
 import io.github.vstory.notifyguard.sync.ConfigWriter
 import io.github.vstory.notifyguard.sync.StatusClient
+import io.github.vstory.notifyguard.sync.StatusReport
 import io.github.vstory.notifyguard.ui.UiText
 
 /**
@@ -33,6 +34,8 @@ class HomeViewModel : ViewModel() {
         val cfg: Config? = null,
         /** 模块端账本；null = 模块端还没回传（未连接 / 刚装完没重启系统框架）。 */
         val totals: Totals? = null,
+        /** 模块端整份状态：首页只用它的熔断字段，但存整份才复用得上设置屏那套熔断文案。 */
+        val status: StatusReport? = null,
         val fetching: Boolean = false,
     )
 
@@ -73,6 +76,7 @@ class HomeViewModel : ViewModel() {
         StatusClient.fetch(app) { report ->
             state = state.copy(
                 fetching = false,
+                status = report,
                 totals = report?.let {
                     Totals(
                         it.blockedTotal, it.passTotal, it.tallySince,
@@ -80,6 +84,20 @@ class HomeViewModel : ViewModel() {
                     )
                 },
             )
+        }
+    }
+
+    /**
+     * 清除熔断标志。**回执只是清除那一刻的现读状态**（重装钩子是异步的），所以紧接着再拉一次：
+     * 用户要看到的是「恢复了吗」，而不是「标志删了」。
+     */
+    fun clearSafeMode(ctx: Context) {
+        if (state.fetching) return
+        val app = ctx.applicationContext ?: ctx
+        state = state.copy(fetching = true)
+        StatusClient.clearSafeMode(app) { r ->
+            state = state.copy(fetching = false, status = r ?: state.status)
+            refresh(app)
         }
     }
 
