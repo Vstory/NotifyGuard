@@ -1,4 +1,4 @@
-name: Build · CI
+name: Build · CI Both
 
 # CI 渠道（测试版）：任意分支 push 都出包（本项目固定 debug + release 两个包），发进固定 tag `ci` 的**同一个滚动页**，
 # 产物按时间戳追加、页面永不新增。分支本来就是用来试的 ⇒ 每次提交都该能立刻拿到包。
@@ -7,7 +7,7 @@ name: Build · CI
 # 两者同钥 ⇒ 可互相覆盖安装，不会因换签名丢掉 LSPosed 作用域状态。
 # ⚠️ push 侧必须显式写 branches：只写 paths-ignore 时**标签推送也会触发**。`[ '**' ]` 只匹配
 #   分支，恰好把标签挡在外面。
-run-name: "Build · CI · ${{ github.ref_name }}"
+run-name: "Build · CI Both · ${{ github.ref_name }}"
 
 on:
   push:
