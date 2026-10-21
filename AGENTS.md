@@ -16,7 +16,7 @@ ColorOS 的**通知拦截** LSPosed 模块（AGPL-3.0）。入口在 system_serv
   ./gradlew --offline :app:testDebugUnitTest                                # 单测，~30s
   ```
 
-  文案脚本的参数与 `.github/workflows/build-ci.yml` 的 `env`（`STR_STRICT` / `STR_RES_CALLS`）同源，改那边就要改这里；裸跑是假通过（核对 108 处 vs 带参 191 处）。
+  文案脚本的参数与 `.github/workflows/build-ci-both.yml` 的 `env`（`STR_STRICT` / `STR_RES_CALLS`）同源，改那边就要改这里；裸跑是假通过（核对 108 处 vs 带参 191 处）。
 - **打包与产物校验仍交 CI**：`assemble*` / `bundle*`、签名、APK 内断言（xposed 三件套 / scope / dex 入口）只在 CI 跑。本地只到「编得过 + 单测过」这一层。
 - 产物落在 `app/build/`、`build/`，已被 `.gitignore` 覆盖（`git status` 干净是判据）；`local.properties` 含签名口令，**别 cat 它**，也不要把它加进 git。
 - 看 CI：`python3 100_System/tools/github.py --repo Vstory/NotifyGuard --run latest`，失败看 `--run latest-failed --logs`。**轮询一次不超过 5 秒**，超时就报当前状态，不做多轮等待（CI 由用户自行监督）。
