@@ -7,7 +7,7 @@ build/
 .kotlin/
 dev-project/releases/
 *.idsig
-local.properties
+local.properties*
 
 # ==== 开发记录 / 日志箱 ====
 dev-project/
