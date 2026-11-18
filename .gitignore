@@ -12,7 +12,7 @@ local.properties*
 # ==== 开发记录 / 日志箱 ====
 dev-project/
 
-# ==== 训练环境与语料（只在本机，见 training/）====
+# ==== 训练环境与本地数据 ====
 training/.venv/
 training/data/
 training/samples/

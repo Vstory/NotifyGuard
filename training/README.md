@@ -15,9 +15,9 @@ python3 -m venv .venv && .venv/bin/pip install numpy scipy scikit-learn
 .venv/bin/python train.py
 ```
 
-约 3 秒。手机上（aarch64 PRoot）同样跑得动 —— 语料只有几千条，没有内存问题。
+约 3 秒。手机上（aarch64 PRoot）同样跑得动。
 
-叠加自采样本（列格式与 `samples/` 一致，`title,content,reason`）：
+叠加自采样本（`title,content,reason` 三列）：
 
 ```bash
 .venv/bin/python train.py --extra data/mine.csv --extra-weight 2
@@ -25,17 +25,9 @@ python3 -m venv .venv && .venv/bin/pip install numpy scipy scikit-learn
 
 ## 语料
 
-两个 CSV 由本机自备（不入库）。
+语料不入库，由本机自备。语料变了模型就变，`parity.json` 必须重新生成。
 
-
-```bash
-
-
-```
-
-语料变了模型就变，`parity.json` 必须重新生成。
-
-## 为什么不用公开短信语料
+## 为什么必须是域内语料
 
 此前用的是 80 万条中文垃圾短信（`hrwhisper/SpamMessage`，2016）+ Kaggle SMS Spam（2011）。
 量足够大，但**域不对**：短信里的正常样本是「妈妈说周末回家吃饭」这种句子，通知里的正常样本是
@@ -53,7 +45,7 @@ python3 -m venv .venv && .venv/bin/pip install numpy scipy scikit-learn
 一半以上的正常通知被判为广告。阈值往上抬也救不回来（@0.8 精确率仍只有 0.204），
 因为正负样本的分数分布整个叠在一起。新模型负样本中位数 0.060。
 
-结论：**域匹配优先于数据量**。代价是语料从 80 万条降到约 5 千条。
+结论：**域匹配优先于数据量**。代价是语料规模大幅下降。
 
 ## 关键训练配置
 
