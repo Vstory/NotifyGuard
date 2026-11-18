@@ -25,7 +25,7 @@ python3 -m venv .venv && .venv/bin/pip install numpy scipy scikit-learn
 
 ## 语料
 
-两个 CSV 由本机自备，来源与标签规则见
+两个 CSV 由本机自备（不入库）。
 
 
 ```bash

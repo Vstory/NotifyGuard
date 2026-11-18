@@ -12,9 +12,10 @@ local.properties*
 # ==== 开发记录 / 日志箱 ====
 dev-project/
 
-# ==== 训练环境与自采语料（只在本机，见 training/README.md）====
+# ==== 训练环境与语料（只在本机，见 training/）====
 training/.venv/
 training/data/
+training/samples/
 __pycache__/
 
 # ==== 项目状态标记 ====
